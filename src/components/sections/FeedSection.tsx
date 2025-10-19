@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Heart, MessageCircle, MapPin, Send, Camera, Video } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import CommentSection from '../CommentSection';
 import type { Post, Profile } from '../../types';
 
 interface FeedSectionProps {
@@ -12,6 +13,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const [newPostContent, setNewPostContent] = useState('');
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadPosts();
@@ -213,11 +215,28 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   <Heart size={20} />
                   <span className="text-sm">{post.likes_count}</span>
                 </button>
-                <button className="flex items-center gap-2 text-slate-600 hover:text-blue-500 transition-colors">
+                <button
+                  onClick={() => {
+                    const newExpanded = new Set(expandedComments);
+                    if (newExpanded.has(post.id)) {
+                      newExpanded.delete(post.id);
+                    } else {
+                      newExpanded.add(post.id);
+                    }
+                    setExpandedComments(newExpanded);
+                  }}
+                  className="flex items-center gap-2 text-slate-600 hover:text-blue-500 transition-colors"
+                >
                   <MessageCircle size={20} />
                   <span className="text-sm">{post.comments_count}</span>
                 </button>
               </div>
+
+              {expandedComments.has(post.id) && (
+                <div className="border-t border-slate-100 px-4 py-4">
+                  <CommentSection postId={post.id} currentUser={currentUser} />
+                </div>
+              )}
             </div>
           ))}
         </div>

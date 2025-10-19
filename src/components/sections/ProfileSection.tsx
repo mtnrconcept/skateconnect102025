@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Calendar, Award, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import EditProfileModal from '../EditProfileModal';
 import type { Profile, Post } from '../../types';
 
 interface ProfileSectionProps {
@@ -17,6 +18,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
     followingCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -93,7 +95,10 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
               )}
             </div>
 
-            <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
               Modifier le profil
             </button>
           </div>
@@ -191,6 +196,17 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
           )}
         </div>
       </div>
+
+      {showEditModal && profile && (
+        <EditProfileModal
+          profile={profile}
+          onClose={() => setShowEditModal(false)}
+          onSaved={() => {
+            setShowEditModal(false);
+            loadProfileData();
+          }}
+        />
+      )}
     </div>
   );
 }

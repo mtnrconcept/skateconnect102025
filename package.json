@@ -1,16 +1,31 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "skateconnect",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "cap:init": "npx cap init",
+    "cap:add:ios": "npx cap add ios",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:copy": "npx cap copy",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
+    "android": "npm run cap:sync && npx cap open android",
+    "ios": "npm run cap:sync && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/camera": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/geolocation": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/push-notifications": "^6.0.0",
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.344.0",
     "mapbox-gl": "^3.1.2",
@@ -18,6 +33,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
     "@eslint/js": "^9.9.1",
     "@types/mapbox-gl": "^3.1.0",
     "@types/react": "^18.3.5",

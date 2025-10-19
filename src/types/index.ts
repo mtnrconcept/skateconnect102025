@@ -105,4 +105,60 @@ export interface SpotMedia {
   user?: Profile;
 }
 
-export type Section = 'map' | 'feed' | 'add' | 'challenges' | 'profile';
+export interface Notification {
+  id: string;
+  user_id: string;
+  sender_id: string | null;
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'challenge' | 'message';
+  content: string;
+  related_id: string | null;
+  is_read: boolean;
+  created_at: string;
+  sender?: Profile;
+}
+
+export interface Conversation {
+  id: string;
+  participant_1_id: string;
+  participant_2_id: string;
+  last_message_at: string;
+  created_at: string;
+  participant_1?: Profile;
+  participant_2?: Profile;
+  last_message?: Message;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  media_url: string;
+  is_read: boolean;
+  created_at: string;
+  sender?: Profile;
+}
+
+export interface ChallengeSubmission {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  media_url: string;
+  media_type: 'photo' | 'video';
+  caption: string;
+  votes_count: number;
+  is_winner: boolean;
+  created_at: string;
+  user?: Profile;
+  challenge?: Challenge;
+  voted_by_user?: boolean;
+}
+
+export interface ChallengeVote {
+  id: string;
+  submission_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+export type Section = 'map' | 'feed' | 'add' | 'challenges' | 'profile' | 'messages' | 'notifications';
