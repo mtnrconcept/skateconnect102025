@@ -10,17 +10,29 @@
 
 ### 1. Install Dependencies
 
+First, install all project dependencies:
+
 ```bash
 npm install
 ```
 
-### 2. Build the Web App
+### 2. Install Capacitor Packages (for native builds only)
+
+The application currently runs as a web app. To enable native iOS and Android features, install Capacitor:
+
+```bash
+npm install @capacitor/core @capacitor/cli @capacitor/camera @capacitor/geolocation @capacitor/push-notifications @capacitor/android @capacitor/ios
+```
+
+After installing Capacitor, update `src/lib/capacitor.ts` to import from the actual packages instead of using the web fallbacks.
+
+### 3. Build the Web App
 
 ```bash
 npm run build
 ```
 
-### 3. Initialize Capacitor (First Time Only)
+### 4. Initialize Capacitor (First Time Only)
 
 Capacitor has already been configured in `capacitor.config.ts`. The configuration includes:
 - App ID: `com.skateconnect.app`

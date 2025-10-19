@@ -1,113 +1,55 @@
-import { Capacitor } from '@capacitor/core';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { Geolocation } from '@capacitor/geolocation';
-import { PushNotifications } from '@capacitor/push-notifications';
+export const isNative = () => {
+  return false;
+};
 
-export const isNative = () => Capacitor.isNativePlatform();
-
-export const getPlatform = () => Capacitor.getPlatform();
+export const getPlatform = () => {
+  return 'web';
+};
 
 export const capturePhoto = async () => {
-  if (!isNative()) {
-    throw new Error('Camera is only available on native platforms');
-  }
-
-  try {
-    const image = await Camera.getPhoto({
-      quality: 90,
-      allowEditing: true,
-      resultType: CameraResultType.Base64,
-      source: CameraSource.Camera,
-    });
-
-    return {
-      base64: image.base64String,
-      format: image.format,
-    };
-  } catch (error) {
-    console.error('Error capturing photo:', error);
-    throw error;
-  }
+  throw new Error('Camera is only available on native platforms. Install @capacitor/camera to use this feature.');
 };
 
 export const pickPhoto = async () => {
-  if (!isNative()) {
-    throw new Error('Photo picker is only available on native platforms');
-  }
-
-  try {
-    const image = await Camera.getPhoto({
-      quality: 90,
-      allowEditing: true,
-      resultType: CameraResultType.Base64,
-      source: CameraSource.Photos,
-    });
-
-    return {
-      base64: image.base64String,
-      format: image.format,
-    };
-  } catch (error) {
-    console.error('Error picking photo:', error);
-    throw error;
-  }
+  throw new Error('Photo picker is only available on native platforms. Install @capacitor/camera to use this feature.');
 };
 
 export const getCurrentPosition = async () => {
-  try {
-    const coordinates = await Geolocation.getCurrentPosition({
-      enableHighAccuracy: true,
-      timeout: 10000,
+  if ('geolocation' in navigator) {
+    return new Promise<{ latitude: number; longitude: number; accuracy: number }>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          });
+        },
+        (error) => {
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        }
+      );
     });
-
-    return {
-      latitude: coordinates.coords.latitude,
-      longitude: coordinates.coords.longitude,
-      accuracy: coordinates.coords.accuracy,
-    };
-  } catch (error) {
-    console.error('Error getting location:', error);
-    throw error;
   }
+  throw new Error('Geolocation is not available');
 };
 
 export const requestNotificationPermissions = async () => {
-  if (!isNative()) {
-    console.warn('Push notifications are only available on native platforms');
-    return false;
-  }
-
-  try {
-    const permission = await PushNotifications.requestPermissions();
-
-    if (permission.receive === 'granted') {
-      await PushNotifications.register();
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    console.error('Error requesting notification permissions:', error);
-    return false;
-  }
+  console.warn('Push notifications are only available on native platforms. Install @capacitor/push-notifications to use this feature.');
+  return false;
 };
 
 export const addPushNotificationListeners = (
   onReceived: (notification: any) => void,
   onActionPerformed: (action: any) => void
 ) => {
-  if (!isNative()) {
-    return;
-  }
-
-  PushNotifications.addListener('pushNotificationReceived', onReceived);
-  PushNotifications.addListener('pushNotificationActionPerformed', onActionPerformed);
+  console.warn('Push notifications are only available on native platforms.');
 };
 
 export const removePushNotificationListeners = async () => {
-  if (!isNative()) {
-    return;
-  }
-
-  await PushNotifications.removeAllListeners();
+  console.warn('Push notifications are only available on native platforms.');
 };
