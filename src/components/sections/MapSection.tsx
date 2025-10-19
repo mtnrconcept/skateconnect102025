@@ -4,6 +4,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase';
 import SpotDetailModal from '../SpotDetailModal';
+import AddSpotModal from '../AddSpotModal';
 import type { Spot } from '../../types';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -18,6 +19,7 @@ export default function MapSection() {
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     loadSpots();
@@ -186,7 +188,10 @@ export default function MapSection() {
       <div className="bg-white border-b border-slate-200 p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-slate-800">Spots de Skate</h2>
-          <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
             <Plus size={20} />
             <span className="hidden sm:inline">Ajouter un spot</span>
           </button>
@@ -287,6 +292,16 @@ export default function MapSection() {
         <SpotDetailModal
           spot={selectedSpot}
           onClose={() => setSelectedSpot(null)}
+        />
+      )}
+
+      {showAddModal && (
+        <AddSpotModal
+          onClose={() => setShowAddModal(false)}
+          onSpotAdded={() => {
+            loadSpots();
+            setShowAddModal(false);
+          }}
         />
       )}
     </div>
