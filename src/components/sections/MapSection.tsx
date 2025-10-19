@@ -30,7 +30,7 @@ export default function MapSection() {
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/streets-v12',
       center: [2.3522, 48.8566],
       zoom: 12,
     });
