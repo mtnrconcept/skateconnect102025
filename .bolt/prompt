@@ -1,0 +1,202 @@
+---
+
+# 🧱 STRUCTURE COMPLÈTE DU PROJET SKATECONNECT
+
+```
+skateconnect/
+│
+├── www/                        # Dossier de ton site web (base HTML/CSS/JS)
+│   ├── index.html
+│   ├── styles.css
+│   ├── script.js
+│   ├── assets/
+│   │   ├── icons/
+│   │   │   ├── icon.png
+│   │   │   ├── splash.png
+│   │   └── images/
+│   └── manifest.json           # Pour la version PWA (et icônes stores)
+│
+├── capacitor.config.ts         # Configuration Capacitor principale
+├── package.json                # Scripts, dépendances, commandes NPM
+├── tsconfig.json               # Config TypeScript (Capacitor en dépend)
+├── .env                        # Clés publiques Supabase (non commitées)
+├── README.md                   # Instructions du projet
+│
+├── android/                    # Dossier généré automatiquement (Android Studio)
+└── ios/                        # Dossier généré automatiquement (Xcode)
+```
+
+---
+
+# ⚙️ 1. **package.json**
+
+Crée ce fichier à la racine :
+
+```json
+{
+  "name": "skateconnect",
+  "version": "1.0.0",
+  "description": "Réseau social pour skateboarders - SkateConnect",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx live-server www",
+    "build": "npx cap copy && npx cap sync",
+    "android": "npm run build && npx cap open android",
+    "ios": "npm run build && npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/geolocation": "^6.0.0",
+    "@capacitor/camera": "^6.0.0",
+    "@capacitor/push-notifications": "^6.0.0",
+    "@supabase/supabase-js": "^2.39.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
+```
+
+---
+
+# ⚙️ 2. **capacitor.config.ts**
+
+Crée ce fichier (en TypeScript) à la racine :
+
+```ts
+import { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.skateconnect.app',
+  appName: 'SkateConnect',
+  webDir: 'www',
+  bundledWebRuntime: false,
+  server: {
+    androidScheme: 'https'
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      launchAutoHide: true,
+      backgroundColor: '#000000',
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: false
+    }
+  }
+};
+
+export default config;
+```
+
+---
+
+# ⚙️ 3. **.env**
+
+Crée ce fichier pour stocker tes clés (non publiées sur GitHub) :
+
+```
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6...
+```
+
+Et dans ton `script.js`, tu peux faire :
+
+```js
+const SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || 'https://xxxxx.supabase.co';
+const SUPABASE_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'clé_par_défaut';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+```
+
+---
+
+# ⚙️ 4. **manifest.json** (dans `www/`)
+
+Ce fichier aide à gérer les icônes, couleurs et splash screens :
+
+```json
+{
+  "short_name": "SkateConnect",
+  "name": "SkateConnect - Réseau Social pour Skateboarders",
+  "icons": [
+    {
+      "src": "assets/icons/icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/index.html",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "display": "standalone",
+  "orientation": "portrait"
+}
+```
+
+---
+
+# ⚙️ 5. **README.md**
+
+Tu peux ajouter ce guide rapide :
+
+````markdown
+# 🛹 SkateConnect
+
+Réseau social pour les skateboarders.
+
+## 🚀 Commandes principales
+```bash
+npm install            # Installe les dépendances
+npm run start          # Lance le serveur web local
+npm run build          # Synchronise Capacitor
+npm run android        # Ouvre Android Studio
+npm run ios            # Ouvre Xcode
+````
+
+## 🧭 Capacitor Plugins
+
+* Geolocation → géolocalisation
+* Camera → prise de photo/vidéo
+* Push Notifications → notifications natives
+
+````
+
+---
+
+# 🧪 6. **Étapes de lancement**
+
+Une fois tous les fichiers créés :
+
+```bash
+npm install
+npx cap init
+npm run build
+npm run android   # pour ouvrir Android Studio
+npm run ios       # pour ouvrir Xcode
+````
+
+➡️ Tu pourras tester sur ton smartphone directement.
+➡️ Les builds `release` se font ensuite dans Android Studio / Xcode.
+
+---
+
+# 🧩 7. **Optimisations recommandées**
+
+| Objectif                        | Action                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 📱 Icônes et splash             | Génère-les avec [https://apetools.webprofusion.com/tools/imagegorilla](https://apetools.webprofusion.com/tools/imagegorilla) |
+| 🧠 Minifier ton code            | `npm install terser cssnano` puis minifie avant build                                                                        |
+| 🔒 Sécurité                     | Supprime les clés Supabase du code avant publication                                                                         |
+| 📡 HTTPS                        | Obligatoire sur iOS (Capacitor gère ça automatiquement)                                                                      |
+| 🧾 Politique de confidentialité | Crée une page simple sur ton domaine ou GitHub Pages                                                                         |
+
+---
+
+# 🏁 8. **Prochaines étapes pour toi**
+
+1. 🔹 Copie ta structure actuelle dans `/www`
+2. 🔹 Crée les fichiers ci-dessus
+3. 🔹 Exécute `npm install` puis `npm run build`
+4. 🔹 Lance sur Android ou iOS
+5. 🔹 Une fois testé → build release et publication
