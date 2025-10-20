@@ -43,7 +43,11 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Shredloc" className="h-70 w-auto" />
+            <img
+              src="/logo.png"
+              alt="Shredloc"
+              className="h-12 w-auto object-contain m-[3px]"
+            />
             <span className="sr-only">Shredloc</span>
           </div>
         </div>
