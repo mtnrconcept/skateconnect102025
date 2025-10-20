@@ -80,19 +80,19 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden mb-6">
-        <div className="h-48 bg-gradient-to-br from-dark-700 to-dark-600 relative">
+      <div className="bg-dark-800 rounded-xl border border-dark-700 mb-6">
+        <div className="relative h-48 rounded-t-xl overflow-hidden bg-gradient-to-br from-dark-700 to-dark-600">
           {profile.cover_url && (
             <img
               src={profile.cover_url}
               alt="Cover"
-              className="w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover"
             />
           )}
         </div>
 
         <div className="px-6 pb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between -mt-16 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between -mt-16 mb-4 relative z-10">
             <div className="flex items-end gap-4 mb-4 sm:mb-0">
               {profile.avatar_url ? (
                 <img
