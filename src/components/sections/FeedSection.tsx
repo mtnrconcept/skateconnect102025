@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, MapPin, Send, Camera, Video } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Heart, MessageCircle, MapPin, Send, Camera, Video, X, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
+import { uploadFile } from '../../lib/storage';
+import { compressImage, validateMediaFile } from '../../lib/imageCompression';
 import CommentSection from '../CommentSection';
 import type { Post, Profile } from '../../types';
 
@@ -15,6 +17,11 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [uploadedMedia, setUploadedMedia] = useState<string[]>([]);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; type: 'image' | 'video' }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadPosts();
@@ -57,22 +64,87 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPostContent.trim() || !currentUser) return;
+    if ((!newPostContent.trim() && uploadedMedia.length === 0) || !currentUser) return;
 
     try {
+      const postType = uploadedMedia.length > 0
+        ? (mediaPreview[0]?.type === 'video' ? 'video' : 'photo')
+        : 'text';
+
       const { error } = await supabase.from('posts').insert({
         user_id: currentUser.id,
         content: newPostContent,
-        post_type: 'text',
+        media_urls: uploadedMedia,
+        post_type: postType,
       });
 
       if (error) throw error;
 
       setNewPostContent('');
+      setUploadedMedia([]);
+      setMediaPreview([]);
       loadPosts();
     } catch (error) {
       console.error('Error creating post:', error);
+      alert('Échec de la publication du post');
     }
+  };
+
+  const handleMediaSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        const validation = validateMediaFile(file, {
+          allowedTypes: type === 'video'
+            ? ['video/mp4', 'video/quicktime', 'video/webm']
+            : ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+          maxSizeMB: type === 'video' ? 50 : 10,
+        });
+
+        if (!validation.valid) {
+          alert(validation.error);
+          continue;
+        }
+
+        const previewUrl = URL.createObjectURL(file);
+        setMediaPreview(prev => [...prev, { url: previewUrl, type }]);
+
+        let fileToUpload = file;
+        if (type === 'image') {
+          const compressed = await compressImage(file, {
+            maxWidth: 1920,
+            maxHeight: 1920,
+            quality: 0.85,
+            maxSizeMB: 5,
+          });
+          fileToUpload = compressed.file;
+        }
+
+        const result = await uploadFile('posts', fileToUpload);
+        setUploadedMedia(prev => [...prev, result.url]);
+      }
+    } catch (error) {
+      console.error('Error uploading media:', error);
+      alert('Échec du téléchargement du média');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (videoInputRef.current) videoInputRef.current.value = '';
+    }
+  };
+
+  const removeMedia = (index: number) => {
+    setMediaPreview(prev => {
+      URL.revokeObjectURL(prev[index].url);
+      return prev.filter((_, i) => i !== index);
+    });
+    setUploadedMedia(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleLike = async (postId: string) => {
@@ -177,21 +249,86 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   className="w-full border-0 focus:ring-0 resize-none text-slate-700"
                   rows={3}
                 />
+
+                {mediaPreview.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    {mediaPreview.map((preview, index) => (
+                      <div key={index} className="relative aspect-video rounded-lg overflow-hidden bg-slate-100">
+                        {preview.type === 'image' ? (
+                          <img
+                            src={preview.url}
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <video
+                            src={preview.url}
+                            className="w-full h-full object-cover"
+                            controls
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeMedia(index)}
+                          className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 transition-colors shadow-lg"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {uploading && (
+                  <div className="mt-3 flex items-center gap-2 text-blue-600 text-sm">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Téléchargement en cours...</span>
+                  </div>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  onChange={(e) => handleMediaSelect(e, 'image')}
+                  className="hidden"
+                />
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/webm"
+                  onChange={(e) => handleMediaSelect(e, 'video')}
+                  className="hidden"
+                />
+
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
                   <div className="flex gap-2">
-                    <button type="button" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600">
-                      <Camera size={20} />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading || mediaPreview.length >= 4}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Ajouter des photos"
+                    >
+                      <ImageIcon size={20} />
                     </button>
-                    <button type="button" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600">
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      disabled={uploading || mediaPreview.length >= 1}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Ajouter une vidéo"
+                    >
                       <Video size={20} />
                     </button>
-                    <button type="button" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600">
+                    <button type="button" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Localisation">
                       <MapPin size={20} />
                     </button>
                   </div>
                   <button
                     type="submit"
-                    disabled={!newPostContent.trim()}
+                    disabled={(!newPostContent.trim() && uploadedMedia.length === 0) || uploading}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     <Send size={18} />
@@ -237,7 +374,32 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   </div>
                 </div>
 
-                <p className="text-slate-700 mb-3 whitespace-pre-wrap">{post.content}</p>
+                {post.content && (
+                  <p className="text-slate-700 mb-3 whitespace-pre-wrap">{post.content}</p>
+                )}
+
+                {post.media_urls && post.media_urls.length > 0 && (
+                  <div className={`grid gap-2 mb-3 ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                    {post.media_urls.map((url, index) => (
+                      <div key={index} className="relative rounded-lg overflow-hidden bg-slate-100">
+                        {post.post_type === 'video' ? (
+                          <video
+                            src={url}
+                            className="w-full aspect-video object-cover"
+                            controls
+                            playsInline
+                          />
+                        ) : (
+                          <img
+                            src={url}
+                            alt={`Media ${index + 1}`}
+                            className="w-full aspect-auto object-cover"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {post.spot && (
                   <div className="flex items-center gap-2 text-sm text-blue-600 mb-3">
