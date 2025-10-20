@@ -115,14 +115,14 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                         path={profile.id}
                         onUploadComplete={(url) => {
                           setCoverUrl(url);
-                          setUploadingCover(false);
                           setShowCoverUploader(false);
                         }}
                         onError={(error) => {
                           alert(error);
-                          setUploadingCover(false);
                           setShowCoverUploader(false);
                         }}
+                        onUploadStart={() => setUploadingCover(true)}
+                        onUploadEnd={() => setUploadingCover(false)}
                         enableCrop={true}
                         cropAspectRatio={3}
                         compressionOptions={{
@@ -139,7 +139,6 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                       type="button"
                       onClick={() => {
                         setShowCoverUploader(true);
-                        setUploadingCover(true);
                       }}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg"
                     >
@@ -180,14 +179,14 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                         path={profile.id}
                         onUploadComplete={(url) => {
                           setAvatarUrl(url);
-                          setUploadingAvatar(false);
                           setShowAvatarUploader(false);
                         }}
                         onError={(error) => {
                           alert(error);
-                          setUploadingAvatar(false);
                           setShowAvatarUploader(false);
                         }}
+                        onUploadStart={() => setUploadingAvatar(true)}
+                        onUploadEnd={() => setUploadingAvatar(false)}
                         enableCrop={true}
                         cropAspectRatio={1}
                         compressionOptions={{
@@ -211,7 +210,6 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                         type="button"
                         onClick={() => {
                           setShowAvatarUploader(true);
-                          setUploadingAvatar(true);
                         }}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 w-full justify-center"
                       >
