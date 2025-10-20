@@ -13,8 +13,6 @@ import {
   Gift,
   TrendingUp,
   Settings,
-  ShieldCheck,
-  FileText,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
@@ -168,28 +166,6 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
             >
               <Settings size={20} />
               <span>Paramètres</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('privacy')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'privacy'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <ShieldCheck size={20} />
-              <span>Confidentialité</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('terms')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'terms'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <FileText size={20} />
-              <span>Conditions</span>
             </button>
           </nav>
         )}
