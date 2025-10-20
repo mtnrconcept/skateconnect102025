@@ -52,6 +52,28 @@ export default function MediaUploader({
   const [showCropModal, setShowCropModal] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const getCropOutputFormat = (file: File): 'image/jpeg' | 'image/png' | 'image/webp' => {
+    switch (file.type) {
+      case 'image/png':
+        return 'image/png';
+      case 'image/webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
+  };
+
+  const getFileExtensionFromMime = (mime: string): string => {
+    switch (mime) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      default:
+        return 'jpg';
+    }
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadMedia = async (file: File) => {
@@ -154,8 +176,15 @@ export default function MediaUploader({
 
     if (!pendingFile) return;
 
-    const croppedFile = new File([croppedBlob], pendingFile.name, {
-      type: 'image/jpeg',
+    const blobType = croppedBlob.type || pendingFile.type || 'image/jpeg';
+    const extension = getFileExtensionFromMime(blobType);
+    const baseName = pendingFile.name.replace(/\.[^/.]+$/, '');
+    const fileName = `${baseName}.${extension}`;
+
+    const normalizedBlob = croppedBlob.type === blobType ? croppedBlob : new Blob([croppedBlob], { type: blobType });
+
+    const croppedFile = new File([normalizedBlob], fileName, {
+      type: blobType,
       lastModified: Date.now(),
     });
 
@@ -330,6 +359,7 @@ export default function MediaUploader({
           aspectRatio={cropAspectRatio}
           onCrop={handleCropComplete}
           onCancel={handleCropCancel}
+          outputFormat={pendingFile ? getCropOutputFormat(pendingFile) : undefined}
         />
       )}
     </>
