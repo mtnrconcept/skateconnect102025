@@ -11,6 +11,7 @@ import ProfileSection from './components/sections/ProfileSection';
 import BadgesSection from './components/sections/BadgesSection';
 import RewardsSection from './components/sections/RewardsSection';
 import LeaderboardSection from './components/sections/LeaderboardSection';
+import AchievementNotification from './components/AchievementNotification';
 import type { Profile, Section } from './types';
 
 function App() {
@@ -100,12 +101,14 @@ function App() {
         {currentSection === 'map' && <MapSection />}
         {currentSection === 'feed' && <FeedSection currentUser={profile} />}
         {currentSection === 'add' && <AddSection onNavigate={setCurrentSection} />}
-        {currentSection === 'challenges' && <ChallengesSection />}
+        {currentSection === 'challenges' && <ChallengesSection profile={profile} />}
         {currentSection === 'profile' && <ProfileSection profile={profile} />}
         {currentSection === 'badges' && <BadgesSection profile={profile} />}
         {currentSection === 'rewards' && <RewardsSection profile={profile} />}
         {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
       </main>
+
+      {profile && <AchievementNotification profile={profile} />}
 
       <Navigation currentSection={currentSection} onSectionChange={setCurrentSection} />
     </div>

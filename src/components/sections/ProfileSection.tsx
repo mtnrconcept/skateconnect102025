@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import EditProfileModal from '../EditProfileModal';
 import XPProgressBar from '../XPProgressBar';
+import StatsDisplay from '../StatsDisplay';
+import XPHistory from '../XPHistory';
 import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
@@ -61,9 +63,9 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
   const tabs = [
     { id: 'posts', label: 'Posts' },
-    { id: 'spots', label: 'Spots' },
-    { id: 'tricks', label: 'Tricks' },
-    { id: 'achievements', label: 'Achievements' },
+    { id: 'stats', label: 'Statistiques' },
+    { id: 'xp', label: 'Historique XP' },
+    { id: 'badges', label: 'Badges' },
   ];
 
   if (!profile) {
@@ -198,6 +200,30 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
         <div className="p-2">
           {loading ? (
             <div className="text-center py-8 text-gray-400">Chargement...</div>
+          ) : activeTab === 'stats' ? (
+            <StatsDisplay profile={profile} />
+          ) : activeTab === 'xp' ? (
+            <XPHistory profile={profile} />
+          ) : activeTab === 'badges' ? (
+            <div className="p-4">
+              <div className="flex flex-wrap gap-3">
+                {userBadges.map((userBadge) => (
+                  <div
+                    key={userBadge.id}
+                    className="bg-dark-900 rounded-lg p-4 border-2 border-orange-500 text-center"
+                  >
+                    <div className="text-4xl mb-2">{userBadge.badge?.icon}</div>
+                    <div className="text-sm font-semibold text-white">{userBadge.badge?.name}</div>
+                  </div>
+                ))}
+              </div>
+              {userBadges.length === 0 && (
+                <div className="text-center py-12 text-gray-400">
+                  <Award size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>Aucun badge débloqué</p>
+                </div>
+              )}
+            </div>
           ) : activeTab === 'posts' ? (
             userPosts.length === 0 ? (
               <div className="grid grid-cols-3 gap-1">
