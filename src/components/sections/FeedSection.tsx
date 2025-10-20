@@ -3,6 +3,7 @@ import { Heart, MessageCircle, MapPin, Send, Camera, Video, X, Image as ImageIco
 import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { uploadFile } from '../../lib/storage';
+import { filterOutProfileMediaPosts } from '../../lib/postUtils';
 import { compressImage, validateMediaFile } from '../../lib/imageCompression';
 import CommentSection from '../CommentSection';
 import type { Post, Profile } from '../../types';
@@ -38,8 +39,10 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
 
       if (error) throw error;
 
-      if (currentUser && data) {
-        const postIds = data.map(p => p.id);
+      const filteredData = filterOutProfileMediaPosts(data || []);
+
+      if (currentUser && filteredData.length > 0) {
+        const postIds = filteredData.map(p => p.id);
         const { data: likes } = await supabase
           .from('likes')
           .select('post_id')
@@ -47,13 +50,13 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           .in('post_id', postIds);
 
         const likedIds = new Set(likes?.map(l => l.post_id) || []);
-        const postsWithLikes = data.map(p => ({
+        const postsWithLikes = filteredData.map(p => ({
           ...p,
           liked_by_user: likedIds.has(p.id),
         }));
         setPosts(postsWithLikes);
       } else {
-        setPosts(data || []);
+        setPosts(filteredData);
       }
     } catch (error) {
       console.error('Error loading posts:', error);

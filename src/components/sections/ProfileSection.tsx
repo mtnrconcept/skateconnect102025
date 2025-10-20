@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapPin, Calendar, Award, Users, TrendingUp, Gift } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
+import { filterOutProfileMediaPosts } from '../../lib/postUtils';
 import EditProfileModal from '../EditProfileModal';
 import XPProgressBar from '../XPProgressBar';
 import StatsDisplay from '../StatsDisplay';
@@ -46,9 +47,10 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
         supabase.from('user_badges').select('*, badge:badges(*)').eq('user_id', profile.id).eq('is_displayed', true).limit(5),
       ]);
 
-      setUserPosts(postsResult.data || []);
+      const filteredPosts = filterOutProfileMediaPosts(postsResult.data || []);
+      setUserPosts(filteredPosts);
       setStats({
-        postsCount: postsResult.count || 0,
+        postsCount: filteredPosts.length,
         spotsCount: spotsResult.count || 0,
         followersCount: followersResult.count || 0,
         followingCount: followingResult.count || 0,
