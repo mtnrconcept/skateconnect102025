@@ -11,13 +11,6 @@ interface ImageCropModalProps {
   outputFormat?: CropOutputFormat;
 }
 
-interface CropArea {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 export default function ImageCropModal({
   image,
   aspectRatio = 1,
@@ -27,12 +20,47 @@ export default function ImageCropModal({
 }: ImageCropModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const dragStateRef = useRef({
+    startX: 0,
+    startY: 0,
+    initialOffsetX: 0,
+    initialOffsetY: 0,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
-  const [cropArea, setCropArea] = useState<CropArea>({ x: 0, y: 0, width: 200, height: 200 });
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [frame, setFrame] = useState({ x: 0, y: 0, width: 200, height: 200 });
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
+  const baseScaleRef = useRef(1);
+
+  const clampOffset = (
+    nextOffset: { x: number; y: number },
+    zoomValue = zoom,
+    rotationValue = rotation
+  ) => {
+    const img = imageRef.current;
+    if (!img || frame.width === 0 || frame.height === 0) {
+      return nextOffset;
+    }
+
+    const scale = baseScaleRef.current * zoomValue;
+    const imgWidth = img.width * scale;
+    const imgHeight = img.height * scale;
+    const rad = (rotationValue * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const rotatedWidth = Math.abs(imgWidth * cos) + Math.abs(imgHeight * sin);
+    const rotatedHeight = Math.abs(imgWidth * sin) + Math.abs(imgHeight * cos);
+
+    const maxOffsetX = Math.max(0, (rotatedWidth - frame.width) / 2);
+    const maxOffsetY = Math.max(0, (rotatedHeight - frame.height) / 2);
+
+    return {
+      x: Math.min(Math.max(nextOffset.x, -maxOffsetX), maxOffsetX),
+      y: Math.min(Math.max(nextOffset.y, -maxOffsetY), maxOffsetY),
+    };
+  };
 
   useEffect(() => {
     const img = new Image();
@@ -47,16 +75,29 @@ export default function ImageCropModal({
         canvas.width = containerWidth;
         canvas.height = containerHeight;
 
-        const cropSize = Math.min(containerWidth, containerHeight) * 0.7;
-        const cropWidth = aspectRatio >= 1 ? cropSize : cropSize * aspectRatio;
-        const cropHeight = aspectRatio >= 1 ? cropSize / aspectRatio : cropSize;
+        const maxFrameWidth = containerWidth * 0.9;
+        const maxFrameHeight = containerHeight * 0.9;
 
-        setCropArea({
-          x: (containerWidth - cropWidth) / 2,
-          y: (containerHeight - cropHeight) / 2,
-          width: cropWidth,
-          height: cropHeight,
+        let frameWidth = maxFrameWidth;
+        let frameHeight = maxFrameWidth / aspectRatio;
+
+        if (frameHeight > maxFrameHeight) {
+          frameHeight = maxFrameHeight;
+          frameWidth = frameHeight * aspectRatio;
+        }
+
+        setFrame({
+          x: (containerWidth - frameWidth) / 2,
+          y: (containerHeight - frameHeight) / 2,
+          width: frameWidth,
+          height: frameHeight,
         });
+
+        const baseScale = Math.max(frameWidth / img.width, frameHeight / img.height);
+        baseScaleRef.current = baseScale;
+        setOffset({ x: 0, y: 0 });
+        setZoom(1);
+        setRotation(0);
       }
 
       drawCanvas();
@@ -68,7 +109,12 @@ export default function ImageCropModal({
     if (imageLoaded) {
       drawCanvas();
     }
-  }, [zoom, rotation, cropArea, imageLoaded]);
+  }, [zoom, rotation, frame, offset, imageLoaded]);
+
+  useEffect(() => {
+    if (!imageLoaded) return;
+    setOffset((current) => clampOffset(current));
+  }, [zoom, rotation, frame.width, frame.height, imageLoaded]);
 
   const drawCanvas = () => {
     const canvas = canvasRef.current;
@@ -80,40 +126,36 @@ export default function ImageCropModal({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    const scale = baseScaleRef.current * zoom;
+    const frameCenterX = frame.x + frame.width / 2;
+    const frameCenterY = frame.y + frame.height / 2;
+
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.beginPath();
+    ctx.rect(frame.x, frame.y, frame.width, frame.height);
+    ctx.clip();
+
+    ctx.translate(frameCenterX + offset.x, frameCenterY + offset.y);
     ctx.rotate((rotation * Math.PI) / 180);
-    ctx.scale(zoom, zoom);
-
-    const imgWidth = img.width;
-    const imgHeight = img.height;
-    const scale = Math.min(canvas.width / imgWidth, canvas.height / imgHeight) * 0.8;
-
-    ctx.drawImage(
-      img,
-      (-imgWidth * scale) / 2,
-      (-imgHeight * scale) / 2,
-      imgWidth * scale,
-      imgHeight * scale
-    );
-
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
     ctx.restore();
 
     ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+    ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
     ctx.restore();
 
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 3;
-    ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+    ctx.strokeRect(frame.x, frame.y, frame.width, frame.height);
 
     ctx.setLineDash([5, 5]);
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
-    ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+    ctx.strokeRect(frame.x, frame.y, frame.width, frame.height);
     ctx.setLineDash([]);
   };
 
@@ -126,13 +168,18 @@ export default function ImageCropModal({
     const y = e.clientY - rect.top;
 
     if (
-      x >= cropArea.x &&
-      x <= cropArea.x + cropArea.width &&
-      y >= cropArea.y &&
-      y <= cropArea.y + cropArea.height
+      x >= frame.x &&
+      x <= frame.x + frame.width &&
+      y >= frame.y &&
+      y <= frame.y + frame.height
     ) {
       setIsDragging(true);
-      setDragStart({ x: x - cropArea.x, y: y - cropArea.y });
+      dragStateRef.current = {
+        startX: x,
+        startY: y,
+        initialOffsetX: offset.x,
+        initialOffsetY: offset.y,
+      };
     }
   };
 
@@ -145,14 +192,65 @@ export default function ImageCropModal({
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
-    const newX = Math.max(0, Math.min(x - dragStart.x, canvas.width - cropArea.width));
-    const newY = Math.max(0, Math.min(y - dragStart.y, canvas.height - cropArea.height));
-
-    setCropArea({ ...cropArea, x: newX, y: newY });
+    const { startX, startY, initialOffsetX, initialOffsetY } = dragStateRef.current;
+    const deltaX = x - startX;
+    const deltaY = y - startY;
+    setOffset(clampOffset({ x: initialOffsetX + deltaX, y: initialOffsetY + deltaY }));
   };
 
   const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    if (
+      x >= frame.x &&
+      x <= frame.x + frame.width &&
+      y >= frame.y &&
+      y <= frame.y + frame.height
+    ) {
+      setIsDragging(true);
+      dragStateRef.current = {
+        startX: x,
+        startY: y,
+        initialOffsetX: offset.x,
+        initialOffsetY: offset.y,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!isDragging) return;
+
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    const { startX, startY, initialOffsetX, initialOffsetY } = dragStateRef.current;
+    const deltaX = x - startX;
+    const deltaY = y - startY;
+    setOffset(clampOffset({ x: initialOffsetX + deltaX, y: initialOffsetY + deltaY }));
+  };
+
+  const handleTouchEnd = () => {
     setIsDragging(false);
   };
 
@@ -174,46 +272,17 @@ export default function ImageCropModal({
     if (!canvas || !img) return;
 
     const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = cropArea.width;
-    cropCanvas.height = cropArea.height;
+    cropCanvas.width = frame.width;
+    cropCanvas.height = frame.height;
     const cropCtx = cropCanvas.getContext('2d');
     if (!cropCtx) return;
 
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) return;
-
-    tempCtx.save();
-    tempCtx.translate(canvas.width / 2, canvas.height / 2);
-    tempCtx.rotate((rotation * Math.PI) / 180);
-    tempCtx.scale(zoom, zoom);
-
-    const imgWidth = img.width;
-    const imgHeight = img.height;
-    const scale = Math.min(canvas.width / imgWidth, canvas.height / imgHeight) * 0.8;
-
-    tempCtx.drawImage(
-      img,
-      (-imgWidth * scale) / 2,
-      (-imgHeight * scale) / 2,
-      imgWidth * scale,
-      imgHeight * scale
-    );
-    tempCtx.restore();
-
-    cropCtx.drawImage(
-      tempCanvas,
-      cropArea.x,
-      cropArea.y,
-      cropArea.width,
-      cropArea.height,
-      0,
-      0,
-      cropArea.width,
-      cropArea.height
-    );
+    cropCtx.save();
+    cropCtx.translate(cropCanvas.width / 2 + offset.x, cropCanvas.height / 2 + offset.y);
+    cropCtx.rotate((rotation * Math.PI) / 180);
+    cropCtx.scale(baseScaleRef.current * zoom, baseScaleRef.current * zoom);
+    cropCtx.drawImage(img, -img.width / 2, -img.height / 2);
+    cropCtx.restore();
 
     const quality = outputFormat === 'image/jpeg' || outputFormat === 'image/webp' ? 0.95 : undefined;
 
@@ -232,7 +301,7 @@ export default function ImageCropModal({
     <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <h3 className="text-lg font-semibold text-white">Crop Image</h3>
+          <h3 className="text-lg font-semibold text-white">Ajuster l'image</h3>
           <button
             onClick={onCancel}
             className="text-gray-400 hover:text-white transition-colors"
@@ -249,6 +318,10 @@ export default function ImageCropModal({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
           />
         </div>
 
@@ -283,21 +356,21 @@ export default function ImageCropModal({
                 onClick={onCancel}
                 className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
               >
-                Cancel
+                Annuler
               </button>
               <button
                 onClick={handleCrop}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <Check className="w-4 h-4" />
-                Apply Crop
+                Appliquer
               </button>
             </div>
           </div>
 
           <div className="text-sm text-gray-400">
-            <p>Drag the crop area to reposition</p>
-            <p className="mt-1">Zoom: {Math.round(zoom * 100)}% | Rotation: {rotation}°</p>
+            <p>Déplacez l'image pour ajuster le cadrage.</p>
+            <p className="mt-1">Zoom : {Math.round(zoom * 100)}% | Rotation : {rotation}°</p>
           </div>
         </div>
       </div>
