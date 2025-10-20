@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MapPin, Calendar, Award, Users, TrendingUp, Gift } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
@@ -15,6 +15,7 @@ interface ProfileSectionProps {
 }
 
 export default function ProfileSection({ profile }: ProfileSectionProps) {
+  const [profileData, setProfileData] = useState<Profile | null>(profile);
   const [activeTab, setActiveTab] = useState('posts');
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [stats, setStats] = useState({
@@ -29,40 +30,79 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
   const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
-    if (profile) {
-      loadProfileData();
-    }
+    setProfileData(profile);
   }, [profile]);
 
-  const loadProfileData = async () => {
-    if (!profile) return;
+  const loadProfileData = useCallback(
+    async (profileId: string) => {
+      try {
+        const [
+          postsResult,
+          spotsResult,
+          followersResult,
+          followingResult,
+          xpResult,
+          badgesResult,
+        ] = await Promise.all([
+          supabase.from('posts').select('*', { count: 'exact' }).eq('user_id', profileId),
+          supabase.from('spots').select('*', { count: 'exact' }).eq('created_by', profileId),
+          supabase.from('follows').select('*', { count: 'exact' }).eq('following_id', profileId),
+          supabase.from('follows').select('*', { count: 'exact' }).eq('follower_id', profileId),
+          supabase.from('user_xp').select('*').eq('user_id', profileId).maybeSingle(),
+          supabase
+            .from('user_badges')
+            .select('*, badge:badges(*)')
+            .eq('user_id', profileId)
+            .eq('is_displayed', true)
+            .limit(5),
+        ]);
 
-    try {
-      const [postsResult, spotsResult, followersResult, followingResult, xpResult, badgesResult] = await Promise.all([
-        supabase.from('posts').select('*', { count: 'exact' }).eq('user_id', profile.id),
-        supabase.from('spots').select('*', { count: 'exact' }).eq('created_by', profile.id),
-        supabase.from('follows').select('*', { count: 'exact' }).eq('following_id', profile.id),
-        supabase.from('follows').select('*', { count: 'exact' }).eq('follower_id', profile.id),
-        supabase.from('user_xp').select('*').eq('user_id', profile.id).maybeSingle(),
-        supabase.from('user_badges').select('*, badge:badges(*)').eq('user_id', profile.id).eq('is_displayed', true).limit(5),
-      ]);
+        const filteredPosts = filterOutProfileMediaPosts(postsResult.data || []);
+        setUserPosts(filteredPosts);
+        setStats({
+          postsCount: filteredPosts.length,
+          spotsCount: spotsResult.count || 0,
+          followersCount: followersResult.count || 0,
+          followingCount: followingResult.count || 0,
+        });
+        setUserXP(xpResult.data);
+        setUserBadges(badgesResult.data || []);
+      } catch (error) {
+        console.error('Error loading profile data:', error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
-      const filteredPosts = filterOutProfileMediaPosts(postsResult.data || []);
-      setUserPosts(filteredPosts);
-      setStats({
-        postsCount: filteredPosts.length,
-        spotsCount: spotsResult.count || 0,
-        followersCount: followersResult.count || 0,
-        followingCount: followingResult.count || 0,
-      });
-      setUserXP(xpResult.data);
-      setUserBadges(badgesResult.data || []);
-    } catch (error) {
-      console.error('Error loading profile data:', error);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (profileData?.id) {
+      setLoading(true);
+      loadProfileData(profileData.id);
     }
-  };
+  }, [profileData?.id, loadProfileData]);
+
+  const refreshProfile = useCallback(
+    async (profileId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', profileId)
+          .maybeSingle();
+
+        if (error) throw error;
+        setProfileData(data);
+        return data;
+      } catch (error) {
+        console.error('Error refreshing profile:', error);
+      }
+
+      return null;
+    },
+    [],
+  );
 
   const tabs = [
     { id: 'posts', label: 'Posts' },
@@ -72,7 +112,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
     { id: 'test', label: 'Test Gamification' },
   ];
 
-  if (!profile) {
+  if (!profileData) {
     return (
       <div className="text-center py-12 text-gray-400">
         Chargement du profil...
@@ -85,12 +125,12 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
       <div className="bg-dark-800 rounded-xl border border-dark-700 mb-6">
         <div
           className={`relative h-48 rounded-t-xl overflow-hidden ${
-            profile.cover_url ? '' : 'bg-gradient-to-br from-dark-700 to-dark-600'
+            profileData.cover_url ? '' : 'bg-gradient-to-br from-dark-700 to-dark-600'
           }`}
         >
-          {profile.cover_url ? (
+          {profileData.cover_url ? (
             <img
-              src={profile.cover_url}
+              src={profileData.cover_url}
               alt="Cover"
               className="absolute inset-0 w-full h-full object-cover"
             />
@@ -100,15 +140,15 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
         <div className="px-6 pb-6">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between -mt-16 mb-4 relative z-10">
             <div className="flex items-end gap-4 mb-4 sm:mb-0">
-              {profile.avatar_url ? (
+              {profileData.avatar_url ? (
                 <img
-                  src={profile.avatar_url}
-                  alt={getUserDisplayName(profile)}
+                  src={profileData.avatar_url}
+                  alt={getUserDisplayName(profileData)}
                   className="w-32 h-32 rounded-full border-4 border-orange-500 object-cover shadow-lg"
                 />
               ) : (
                 <div className="w-32 h-32 rounded-full border-4 border-orange-500 bg-orange-500 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
-                  {getUserInitial(profile)}
+                  {getUserInitial(profileData)}
                 </div>
               )}
             </div>
@@ -123,14 +163,14 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              {getUserDisplayName(profile)}
+              {getUserDisplayName(profileData)}
               <MapPin size={20} className="text-orange-500" />
             </h1>
-            <p className="text-gray-400">{profile.location || 'Los Angeles, CA'}</p>
+            <p className="text-gray-400">{profileData.location || 'Los Angeles, CA'}</p>
           </div>
 
-          {profile.bio && (
-            <p className="text-gray-300 mb-4">{profile.bio}</p>
+          {profileData.bio && (
+            <p className="text-gray-300 mb-4">{profileData.bio}</p>
           )}
 
           {userXP && (
@@ -209,9 +249,9 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
           {loading ? (
             <div className="text-center py-8 text-gray-400">Chargement...</div>
           ) : activeTab === 'stats' ? (
-            <StatsDisplay profile={profile} />
+            <StatsDisplay profile={profileData} />
           ) : activeTab === 'xp' ? (
-            <XPHistory profile={profile} />
+            <XPHistory profile={profileData} />
           ) : activeTab === 'badges' ? (
             <div className="p-4">
               <div className="flex flex-wrap gap-3">
@@ -234,7 +274,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
             </div>
           ) : activeTab === 'test' ? (
             <div className="p-4">
-              <GamificationTester profile={profile} />
+              <GamificationTester profile={profileData} />
             </div>
           ) : activeTab === 'posts' ? (
             userPosts.length === 0 ? (
@@ -270,13 +310,17 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
         </div>
       </div>
 
-      {showEditModal && profile && (
+      {showEditModal && profileData && (
         <EditProfileModal
-          profile={profile}
+          profile={profileData}
           onClose={() => setShowEditModal(false)}
-          onSaved={() => {
+          onSaved={async () => {
             setShowEditModal(false);
-            loadProfileData();
+            const updatedProfile = await refreshProfile(profileData.id);
+            if (updatedProfile) {
+              setLoading(true);
+              await loadProfileData(updatedProfile.id);
+            }
           }}
         />
       )}
