@@ -295,27 +295,49 @@ export default function MapSection() {
       };
 
       let popup: mapboxgl.Popup | null = null;
+      let popupTimeout: NodeJS.Timeout | null = null;
 
-      marker.setPopup(createPopupWithSmartAnchor()!);
+      const showPopup = () => {
+        if (popupTimeout) {
+          clearTimeout(popupTimeout);
+          popupTimeout = null;
+        }
 
-      el.addEventListener('mouseenter', () => {
+        if (popup) {
+          popup.remove();
+        }
+
         popup = createPopupWithSmartAnchor();
         if (popup && map.current) {
           popup.setLngLat([spot.longitude, spot.latitude]).addTo(map.current);
         }
-      });
+      };
 
-      el.addEventListener('mouseleave', () => {
-        setTimeout(() => {
+      const hidePopup = () => {
+        if (popupTimeout) {
+          clearTimeout(popupTimeout);
+        }
+
+        popupTimeout = setTimeout(() => {
           if (popup) {
             popup.remove();
+            popup = null;
           }
-        }, 100);
-      });
+        }, 150);
+      };
 
-      el.addEventListener('click', () => {
+      el.addEventListener('mouseenter', showPopup);
+      el.addEventListener('mouseleave', hidePopup);
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (popupTimeout) {
+          clearTimeout(popupTimeout);
+          popupTimeout = null;
+        }
         if (popup) {
           popup.remove();
+          popup = null;
         }
         setSelectedSpot(spot);
       });
