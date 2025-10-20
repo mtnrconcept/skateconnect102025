@@ -75,10 +75,9 @@ function App() {
     return (
       <div className="min-h-screen bg-dark-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-full mb-4 animate-bounce">
-            <span className="text-3xl">🛹</span>
+          <div className="flex justify-center mb-6">
+            <img src="/logo.png" alt="Shredloc" className="h-16 w-auto animate-pulse" />
           </div>
-          <h3 className="text-white text-xl font-bold mb-2">SHREDLOC</h3>
           <p className="text-gray-400">Chargement...</p>
         </div>
       </div>
