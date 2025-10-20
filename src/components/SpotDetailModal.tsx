@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, MapPin, Star, Users, Upload } from 'lucide-react';
+import { X, MapPin, Star, Users, Upload, Heart, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import LazyImage from './LazyImage';
 import SpotMediaGallery from './SpotMediaGallery';
 import MediaDetailModal from './MediaDetailModal';
+import SpotCommentSection from './SpotCommentSection';
 import type { Spot, SpotMedia } from '../types';
 
 interface SpotDetailModalProps {
@@ -20,15 +21,92 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const [showMediaDetail, setShowMediaDetail] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [spotData, setSpotData] = useState<Spot>(spot);
+  const [userLiked, setUserLiked] = useState(false);
 
   useEffect(() => {
     loadSpotMedia();
     loadCurrentUser();
+    loadSpotData();
   }, [spot.id]);
 
   const loadCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
+    if (user) {
+      checkUserLike(user.id);
+    }
+  };
+
+  const loadSpotData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('spots')
+        .select('*')
+        .eq('id', spot.id)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setSpotData(data);
+      }
+    } catch (error) {
+      console.error('Error loading spot data:', error);
+    }
+  };
+
+  const checkUserLike = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('spot_likes')
+        .select('id')
+        .eq('spot_id', spot.id)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      setUserLiked(!!data);
+    } catch (error) {
+      console.error('Error checking like:', error);
+    }
+  };
+
+  const handleSpotLike = async () => {
+    if (!currentUser) {
+      alert('Vous devez être connecté pour aimer un spot');
+      return;
+    }
+
+    try {
+      if (userLiked) {
+        await supabase
+          .from('spot_likes')
+          .delete()
+          .eq('spot_id', spot.id)
+          .eq('user_id', currentUser.id);
+
+        setUserLiked(false);
+        setSpotData(prev => ({
+          ...prev,
+          likes_count: Math.max(0, (prev.likes_count || 0) - 1),
+        }));
+      } else {
+        await supabase
+          .from('spot_likes')
+          .insert({
+            spot_id: spot.id,
+            user_id: currentUser.id,
+          });
+
+        setUserLiked(true);
+        setSpotData(prev => ({
+          ...prev,
+          likes_count: (prev.likes_count || 0) + 1,
+        }));
+      }
+    } catch (error) {
+      console.error('Error liking spot:', error);
+      alert('Échec de l\'action');
+    }
   };
 
   const loadSpotMedia = async () => {
@@ -172,7 +250,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="bg-slate-50 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">
                   Difficulté
@@ -195,6 +273,36 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                 </h3>
                 <p className="text-2xl font-bold text-slate-800">{media.length}</p>
               </div>
+            </div>
+
+            <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-200">
+              <button
+                onClick={handleSpotLike}
+                disabled={!currentUser}
+                className={`flex items-center gap-2 transition-colors ${
+                  userLiked
+                    ? 'text-red-500'
+                    : 'text-slate-600 hover:text-red-500'
+                }`}
+              >
+                <Heart size={22} className={userLiked ? 'fill-current' : ''} />
+                <span className="text-base font-semibold">{spotData.likes_count || 0} j'aime</span>
+              </button>
+              <div className="flex items-center gap-2 text-slate-600">
+                <MessageCircle size={22} />
+                <span className="text-base font-semibold">{spotData.comments_count || 0} commentaires</span>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-3">Commentaires</h3>
+              <SpotCommentSection
+                spotId={spot.id}
+                currentUser={currentUser}
+                onCommentCountChange={(count) => {
+                  setSpotData(prev => ({ ...prev, comments_count: count }));
+                }}
+              />
             </div>
 
             {spot.modules && Array.isArray(spot.modules) && spot.modules.length > 0 && (
@@ -233,7 +341,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
               </div>
             )}
 
-            <div className="mt-6">
+            <div className="mt-4">
               <input
                 ref={fileInputRef}
                 type="file"

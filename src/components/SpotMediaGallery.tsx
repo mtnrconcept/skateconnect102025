@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, Eye, Filter, Image as ImageIcon, Video, Clock } from 'lucide-react';
+import { Heart, Eye, Filter, Image as ImageIcon, Video, Clock, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import LazyImage from './LazyImage';
 import type { SpotMedia } from '../types';
@@ -15,6 +15,7 @@ type FilterType = 'recent' | 'oldest' | 'most_liked' | 'most_viewed' | 'photos' 
 interface MediaWithStats extends SpotMedia {
   likes_count: number;
   views_count: number;
+  comments_count: number;
   user_liked?: boolean;
 }
 
@@ -344,6 +345,10 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
                     <div className="flex items-center gap-1">
                       <Heart size={12} className={item.user_liked ? 'fill-red-500 text-red-500' : ''} />
                       <span>{item.likes_count || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MessageCircle size={12} />
+                      <span>{item.comments_count || 0}</span>
                     </div>
                   </div>
                 </div>

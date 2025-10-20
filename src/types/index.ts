@@ -24,9 +24,12 @@ export interface Spot {
   surfaces: string[];
   modules: string[];
   is_verified: boolean;
+  likes_count: number;
+  comments_count: number;
   created_at: string;
   updated_at: string;
   creator?: Profile;
+  liked_by_user?: boolean;
 }
 
 export interface Post {
@@ -101,9 +104,13 @@ export interface SpotMedia {
   media_type: 'photo' | 'video';
   caption: string;
   is_cover_photo: boolean;
+  likes_count: number;
+  views_count: number;
+  comments_count: number;
   created_at: string;
   updated_at: string;
   user?: Profile;
+  user_liked?: boolean;
 }
 
 export interface Notification {
@@ -160,6 +167,33 @@ export interface ChallengeVote {
   submission_id: string;
   user_id: string;
   created_at: string;
+}
+
+export interface SpotLike {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface SpotComment {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  user?: Profile;
+}
+
+export interface SpotMediaComment {
+  id: string;
+  media_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  user?: Profile;
 }
 
 export type Section = 'map' | 'feed' | 'add' | 'challenges' | 'profile' | 'messages' | 'notifications';

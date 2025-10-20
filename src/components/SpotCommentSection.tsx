@@ -1,23 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { Comment, Profile } from '../types';
+import type { SpotComment, Profile } from '../types';
 
-interface CommentSectionProps {
-  postId: string;
+interface SpotCommentSectionProps {
+  spotId: string;
   currentUser: Profile | null;
   showAll?: boolean;
   onCommentCountChange?: (count: number) => void;
 }
 
-export default function CommentSection({
-  postId,
+export default function SpotCommentSection({
+  spotId,
   currentUser,
   showAll = false,
   onCommentCountChange
-}: CommentSectionProps) {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [displayedComments, setDisplayedComments] = useState<Comment[]>([]);
+}: SpotCommentSectionProps) {
+  const [comments, setComments] = useState<SpotComment[]>([]);
+  const [displayedComments, setDisplayedComments] = useState<SpotComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -27,7 +27,7 @@ export default function CommentSection({
 
   useEffect(() => {
     loadComments();
-  }, [postId]);
+  }, [spotId]);
 
   useEffect(() => {
     updateDisplayedComments();
@@ -36,9 +36,9 @@ export default function CommentSection({
   const loadComments = async () => {
     try {
       const { data, error } = await supabase
-        .from('comments')
+        .from('spot_comments')
         .select('*, user:profiles(*)')
-        .eq('post_id', postId)
+        .eq('spot_id', spotId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -67,9 +67,9 @@ export default function CommentSection({
 
     try {
       const { data, error } = await supabase
-        .from('comments')
+        .from('spot_comments')
         .insert({
-          post_id: postId,
+          spot_id: spotId,
           user_id: currentUser.id,
           content: newComment,
         })
@@ -94,7 +94,10 @@ export default function CommentSection({
     if (!confirm('Supprimer ce commentaire ?')) return;
 
     try {
-      const { error } = await supabase.from('comments').delete().eq('id', commentId);
+      const { error } = await supabase
+        .from('spot_comments')
+        .delete()
+        .eq('id', commentId);
 
       if (error) throw error;
 
@@ -129,55 +132,57 @@ export default function CommentSection({
   const hasMoreComments = comments.length > INITIAL_DISPLAY_COUNT && !showAllComments;
 
   return (
-    <div className="comment-section">
-      <div className="space-y-3 mb-4">
-        {displayedComments.map((comment) => (
-          <div key={comment.id} className="flex gap-3">
-            {comment.user?.avatar_url ? (
-              <img
-                src={comment.user.avatar_url}
-                alt={comment.user.display_name}
-                className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                {comment.user?.display_name.charAt(0).toUpperCase()}
-              </div>
-            )}
-
-            <div className="flex-1 min-w-0">
-              <div className="bg-slate-100 rounded-2xl px-3 py-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-sm text-slate-800">
-                    {comment.user?.display_name}
-                  </span>
-                  <span className="text-xs text-slate-500">{formatDate(comment.created_at)}</span>
+    <div className="space-y-4">
+      {displayedComments.length > 0 && (
+        <div className="space-y-3">
+          {displayedComments.map((comment) => (
+            <div key={comment.id} className="flex gap-3">
+              {comment.user?.avatar_url ? (
+                <img
+                  src={comment.user.avatar_url}
+                  alt={comment.user.display_name}
+                  className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                  {comment.user?.display_name.charAt(0).toUpperCase()}
                 </div>
-                <p className="text-slate-700 text-sm break-words">{comment.content}</p>
-              </div>
-
-              {currentUser?.id === comment.user_id && (
-                <button
-                  onClick={() => handleDelete(comment.id)}
-                  className="mt-1 text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
-                >
-                  <Trash2 size={12} />
-                  Supprimer
-                </button>
               )}
-            </div>
-          </div>
-        ))}
 
-        {hasMoreComments && (
-          <button
-            onClick={() => setShowAllComments(true)}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Voir plus de commentaires ({comments.length - INITIAL_DISPLAY_COUNT} de plus)
-          </button>
-        )}
-      </div>
+              <div className="flex-1 min-w-0">
+                <div className="bg-slate-100 rounded-2xl px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-sm text-slate-800">
+                      {comment.user?.display_name}
+                    </span>
+                    <span className="text-xs text-slate-500">{formatDate(comment.created_at)}</span>
+                  </div>
+                  <p className="text-slate-700 text-sm break-words">{comment.content}</p>
+                </div>
+
+                {currentUser?.id === comment.user_id && (
+                  <button
+                    onClick={() => handleDelete(comment.id)}
+                    className="mt-1 text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                  >
+                    <Trash2 size={12} />
+                    Supprimer
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {hasMoreComments && (
+            <button
+              onClick={() => setShowAllComments(true)}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Voir plus de commentaires ({comments.length - INITIAL_DISPLAY_COUNT} de plus)
+            </button>
+          )}
+        </div>
+      )}
 
       {currentUser && (
         <form onSubmit={handleSubmit} className="flex gap-2">

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Heart, Share2, Eye, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import LazyImage from './LazyImage';
-import CommentSection from './CommentSection';
+import SpotMediaCommentSection from './SpotMediaCommentSection';
 import type { SpotMedia } from '../types';
 
 interface MediaDetailModalProps {
@@ -14,6 +14,7 @@ interface MediaDetailModalProps {
 interface MediaWithStats extends SpotMedia {
   likes_count: number;
   views_count: number;
+  comments_count: number;
   user_liked?: boolean;
 }
 
@@ -45,7 +46,7 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
 
       const { data: mediaData, error } = await supabase
         .from('spot_media')
-        .select('likes_count, views_count')
+        .select('likes_count, views_count, comments_count')
         .eq('id', mediaItem.id)
         .single();
 
@@ -63,6 +64,7 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
           ...mediaItem,
           likes_count: mediaData.likes_count || 0,
           views_count: mediaData.views_count || 0,
+          comments_count: mediaData.comments_count || 0,
           user_liked: !!likeData,
         } as MediaWithStats);
       } else {
@@ -70,6 +72,7 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
           ...mediaItem,
           likes_count: mediaData.likes_count || 0,
           views_count: mediaData.views_count || 0,
+          comments_count: mediaData.comments_count || 0,
         } as MediaWithStats);
       }
     } catch (error) {
@@ -287,6 +290,10 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
                   <Heart size={16} className={currentMedia.user_liked ? 'fill-red-500 text-red-500' : ''} />
                   <span>{currentMedia.likes_count || 0} j'aime</span>
                 </div>
+                <div className="flex items-center gap-1">
+                  <MessageCircle size={16} />
+                  <span>{currentMedia.comments_count || 0} commentaires</span>
+                </div>
               </div>
             </div>
 
@@ -326,9 +333,12 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
             <div className="flex-1 overflow-y-auto">
               {showComments ? (
                 <div className="p-4">
-                  <CommentSection
-                    postId={currentMedia.id}
+                  <SpotMediaCommentSection
+                    mediaId={currentMedia.id}
                     currentUser={currentUser}
+                    onCommentCountChange={(count) => {
+                      setCurrentMedia(prev => ({ ...prev, comments_count: count }));
+                    }}
                   />
                 </div>
               ) : (

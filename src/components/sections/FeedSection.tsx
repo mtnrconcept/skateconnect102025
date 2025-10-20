@@ -29,7 +29,24 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       const { data, error } = await query;
 
       if (error) throw error;
-      setPosts(data || []);
+
+      if (currentUser && data) {
+        const postIds = data.map(p => p.id);
+        const { data: likes } = await supabase
+          .from('likes')
+          .select('post_id')
+          .eq('user_id', currentUser.id)
+          .in('post_id', postIds);
+
+        const likedIds = new Set(likes?.map(l => l.post_id) || []);
+        const postsWithLikes = data.map(p => ({
+          ...p,
+          liked_by_user: likedIds.has(p.id),
+        }));
+        setPosts(postsWithLikes);
+      } else {
+        setPosts(data || []);
+      }
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -60,14 +77,36 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const handleLike = async (postId: string) => {
     if (!currentUser) return;
 
-    try {
-      const { error } = await supabase.from('likes').insert({
-        user_id: currentUser.id,
-        post_id: postId,
-      });
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
 
-      if (error) throw error;
-      loadPosts();
+    try {
+      if (post.liked_by_user) {
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', currentUser.id);
+
+        setPosts(posts.map(p =>
+          p.id === postId
+            ? { ...p, liked_by_user: false, likes_count: Math.max(0, p.likes_count - 1) }
+            : p
+        ));
+      } else {
+        await supabase
+          .from('likes')
+          .insert({
+            user_id: currentUser.id,
+            post_id: postId,
+          });
+
+        setPosts(posts.map(p =>
+          p.id === postId
+            ? { ...p, liked_by_user: true, likes_count: p.likes_count + 1 }
+            : p
+        ));
+      }
     } catch (error) {
       console.error('Error liking post:', error);
     }
@@ -210,10 +249,14 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
               <div className="border-t border-slate-100 px-4 py-2 flex items-center gap-4">
                 <button
                   onClick={() => handleLike(post.id)}
-                  className="flex items-center gap-2 text-slate-600 hover:text-red-500 transition-colors"
+                  className={`flex items-center gap-2 transition-colors ${
+                    post.liked_by_user
+                      ? 'text-red-500'
+                      : 'text-slate-600 hover:text-red-500'
+                  }`}
                 >
-                  <Heart size={20} />
-                  <span className="text-sm">{post.likes_count}</span>
+                  <Heart size={20} className={post.liked_by_user ? 'fill-current' : ''} />
+                  <span className="text-sm font-medium">{post.likes_count || 0}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -228,13 +271,21 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   className="flex items-center gap-2 text-slate-600 hover:text-blue-500 transition-colors"
                 >
                   <MessageCircle size={20} />
-                  <span className="text-sm">{post.comments_count}</span>
+                  <span className="text-sm font-medium">{post.comments_count || 0}</span>
                 </button>
               </div>
 
               {expandedComments.has(post.id) && (
                 <div className="border-t border-slate-100 px-4 py-4">
-                  <CommentSection postId={post.id} currentUser={currentUser} />
+                  <CommentSection
+                    postId={post.id}
+                    currentUser={currentUser}
+                    onCommentCountChange={(count) => {
+                      setPosts(posts.map(p =>
+                        p.id === post.id ? { ...p, comments_count: count } : p
+                      ));
+                    }}
+                  />
                 </div>
               )}
             </div>
