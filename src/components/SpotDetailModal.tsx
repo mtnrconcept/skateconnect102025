@@ -5,6 +5,7 @@ import MediaUploader from './MediaUploader';
 import CommentSection from './CommentSection';
 import LazyImage from './LazyImage';
 import SpotMediaGallery from './SpotMediaGallery';
+import MediaDetailModal from './MediaDetailModal';
 import type { Spot, SpotMedia } from '../types';
 
 interface SpotDetailModalProps {
@@ -14,11 +15,13 @@ interface SpotDetailModalProps {
 
 export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps) {
   const [media, setMedia] = useState<SpotMedia[]>([]);
+  const [coverPhoto, setCoverPhoto] = useState<SpotMedia | null>(null);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showGallery, setShowGallery] = useState(true);
+  const [showMediaDetail, setShowMediaDetail] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,23 +44,14 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      const cover = data?.find(m => m.is_cover_photo) || data?.[0] || null;
+      setCoverPhoto(cover);
       setMedia(data || []);
     } catch (error) {
       console.error('Error loading spot media:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const nextMedia = () => {
-    if (media.length > 0) {
-      setCurrentMediaIndex((prev) => (prev + 1) % media.length);
-    }
-  };
-
-  const prevMedia = () => {
-    if (media.length > 0) {
-      setCurrentMediaIndex((prev) => (prev - 1 + media.length) % media.length);
     }
   };
 
@@ -104,59 +98,32 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
             <div className="h-96 bg-slate-200 flex items-center justify-center">
               <div className="text-slate-500">Chargement des médias...</div>
             </div>
-          ) : media.length > 0 ? (
+          ) : coverPhoto ? (
             <div className="relative h-96 bg-slate-900">
-              {media[currentMediaIndex].media_type === 'video' ? (
+              {coverPhoto.media_type === 'video' ? (
                 <video
-                  src={media[currentMediaIndex].media_url}
+                  src={coverPhoto.media_url}
                   controls
                   className="w-full h-full object-cover"
                 />
               ) : (
                 <LazyImage
-                  src={media[currentMediaIndex].media_url}
-                  alt={media[currentMediaIndex].caption || spot.name}
+                  src={coverPhoto.media_url}
+                  alt={coverPhoto.caption || spot.name}
                   className="w-full h-full object-cover"
                 />
               )}
 
-              {media.length > 1 && (
-                <>
-                  <button
-                    onClick={prevMedia}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 bg-white bg-opacity-80 rounded-full p-2 hover:bg-opacity-100 transition-all"
-                  >
-                    <ChevronLeft size={24} className="text-slate-700" />
-                  </button>
-                  <button
-                    onClick={nextMedia}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 bg-white bg-opacity-80 rounded-full p-2 hover:bg-opacity-100 transition-all"
-                  >
-                    <ChevronRight size={24} className="text-slate-700" />
-                  </button>
+              <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                Photo de couverture
+              </div>
 
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                    {media.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentMediaIndex(index)}
-                        className={`w-2 h-2 rounded-full transition-all ${
-                          index === currentMediaIndex
-                            ? 'bg-white w-8'
-                            : 'bg-white bg-opacity-50'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {media[currentMediaIndex].caption && (
-                <div className="absolute bottom-12 left-4 right-4 bg-black bg-opacity-60 text-white px-4 py-2 rounded-lg">
-                  <p className="text-sm">{media[currentMediaIndex].caption}</p>
-                  {media[currentMediaIndex].user && (
+              {coverPhoto.caption && (
+                <div className="absolute bottom-4 left-4 right-4 bg-black bg-opacity-60 text-white px-4 py-2 rounded-lg">
+                  <p className="text-sm">{coverPhoto.caption}</p>
+                  {coverPhoto.user && (
                     <p className="text-xs text-slate-300 mt-1">
-                      Par @{media[currentMediaIndex].user!.username}
+                      Par @{coverPhoto.user!.username}
                     </p>
                   )}
                 </div>
@@ -340,31 +307,27 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                 <SpotMediaGallery
                   spotId={spot.id}
                   onMediaClick={(mediaItem, index) => {
-                    const allMedia = media;
-                    const clickedIndex = allMedia.findIndex(m => m.id === mediaItem.id);
+                    const clickedIndex = media.findIndex(m => m.id === mediaItem.id);
                     if (clickedIndex !== -1) {
                       setCurrentMediaIndex(clickedIndex);
-                      setShowGallery(false);
+                      setShowMediaDetail(true);
                     }
                   }}
                   onUploadClick={() => fileInputRef.current?.click()}
                 />
               )}
             </div>
-
-            {!showGallery && media.length > 0 && (
-              <div className="mt-4">
-                <button
-                  onClick={() => setShowGallery(true)}
-                  className="text-blue-600 hover:text-blue-700 font-semibold text-sm"
-                >
-                  ← Retour à la galerie
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      {showMediaDetail && media.length > 0 && (
+        <MediaDetailModal
+          media={media}
+          initialIndex={currentMediaIndex}
+          onClose={() => setShowMediaDetail(false)}
+        />
+      )}
     </div>
   );
 }

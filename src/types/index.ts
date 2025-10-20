@@ -100,6 +100,7 @@ export interface SpotMedia {
   media_url: string;
   media_type: 'photo' | 'video';
   caption: string;
+  is_cover_photo: boolean;
   created_at: string;
   updated_at: string;
   user?: Profile;
