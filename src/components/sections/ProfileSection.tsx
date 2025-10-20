@@ -83,14 +83,18 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       <div className="bg-dark-800 rounded-xl border border-dark-700 mb-6">
-        <div className="relative h-48 rounded-t-xl overflow-hidden bg-gradient-to-br from-dark-700 to-dark-600">
-          {profile.cover_url && (
+        <div
+          className={`relative h-48 rounded-t-xl overflow-hidden ${
+            profile.cover_url ? '' : 'bg-gradient-to-br from-dark-700 to-dark-600'
+          }`}
+        >
+          {profile.cover_url ? (
             <img
               src={profile.cover_url}
               alt="Cover"
               className="absolute inset-0 w-full h-full object-cover"
             />
-          )}
+          ) : null}
         </div>
 
         <div className="px-6 pb-6">

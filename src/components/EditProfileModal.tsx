@@ -93,60 +93,92 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Photo de couverture
               </label>
-              <div className="relative h-40 bg-gradient-to-br from-slate-200 to-slate-300 rounded-xl overflow-hidden group">
+              <div className="relative h-40 bg-gradient-to-br from-slate-200 to-slate-300 rounded-xl overflow-hidden">
                 {coverUrl ? (
-                  <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                  <>
+                    <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                    <div className="absolute top-3 right-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowCoverUploader(true)}
+                        className="bg-white/90 backdrop-blur-sm text-slate-700 px-3 py-1.5 text-sm rounded-md font-medium hover:bg-white flex items-center gap-2"
+                      >
+                        <Camera size={16} />
+                        <span>Changer</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCoverUrl(null)}
+                        className="bg-white/70 backdrop-blur-sm text-red-600 px-3 py-1.5 text-sm rounded-md font-medium hover:bg-white"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </>
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
-                    <ImageIcon size={48} className="mb-2" />
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-3">
+                    <ImageIcon size={48} />
                     <p className="text-sm">Aucune photo de couverture</p>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  {uploadingCover ? (
-                    <div className="flex flex-col items-center gap-2 text-white">
-                      <Loader2 className="w-8 h-8 animate-spin" />
-                      <p className="text-sm">Téléchargement...</p>
-                    </div>
-                  ) : showCoverUploader ? (
-                    <div className="bg-white rounded-lg p-4">
-                      <MediaUploader
-                        bucket="covers"
-                        path={profile.id}
-                        onUploadComplete={(url) => {
-                          setCoverUrl(url);
-                          setShowCoverUploader(false);
-                        }}
-                        onError={(error) => {
-                          alert(error);
-                          setShowCoverUploader(false);
-                        }}
-                        onUploadStart={() => setUploadingCover(true)}
-                        onUploadEnd={() => setUploadingCover(false)}
-                        enableCrop={true}
-                        cropAspectRatio={3}
-                        compressionOptions={{
-                          maxWidth: 1920,
-                          maxHeight: 640,
-                          quality: 0.9,
-                          maxSizeMB: 5,
-                        }}
-                        className="w-full"
-                      />
-                    </div>
-                  ) : (
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowCoverUploader(true);
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg"
+                      onClick={() => setShowCoverUploader(true)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg"
                     >
-                      <Camera size={20} />
-                      {coverUrl ? 'Changer la photo' : 'Ajouter une photo'}
+                      <Camera size={18} />
+                      Ajouter une photo
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {showCoverUploader && (
+                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-lg p-4 w-full max-w-xl">
+                      {uploadingCover ? (
+                        <div className="flex flex-col items-center gap-2 text-slate-600">
+                          <Loader2 className="w-8 h-8 animate-spin" />
+                          <p className="text-sm">Téléchargement...</p>
+                        </div>
+                      ) : (
+                        <>
+                          <MediaUploader
+                            bucket="covers"
+                            path={profile.id}
+                            onUploadComplete={(url) => {
+                              setCoverUrl(url);
+                              setShowCoverUploader(false);
+                            }}
+                            onError={(error) => {
+                              alert(error);
+                              setShowCoverUploader(false);
+                              setUploadingCover(false);
+                            }}
+                            onUploadStart={() => setUploadingCover(true)}
+                            onUploadEnd={() => setUploadingCover(false)}
+                            enableCrop={true}
+                            cropAspectRatio={3}
+                            compressionOptions={{
+                              maxWidth: 1920,
+                              maxHeight: 640,
+                              quality: 0.9,
+                              maxSizeMB: 5,
+                            }}
+                            className="w-full"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowCoverUploader(false);
+                              setUploadingCover(false);
+                            }}
+                            className="mt-3 text-sm text-slate-600 hover:text-slate-800"
+                          >
+                            Annuler
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -155,7 +187,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                 Photo de profil
               </label>
               <div className="flex items-center gap-6">
-                <div className="relative w-32 h-32 rounded-full overflow-hidden bg-slate-200 shadow-lg group">
+                <div className="relative w-32 h-32 rounded-full overflow-hidden bg-slate-200 shadow-lg">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
@@ -163,13 +195,15 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                       {getUserInitial({ display_name: displayName, username } as any)}
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    {uploadingAvatar ? (
-                      <Loader2 className="w-8 h-8 text-white animate-spin" />
-                    ) : (
-                      <Upload size={32} className="text-white" />
-                    )}
-                  </div>
+                  {(!avatarUrl || uploadingAvatar) && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      {uploadingAvatar ? (
+                        <Loader2 className="w-8 h-8 text-white animate-spin" />
+                      ) : (
+                        <Upload size={32} className="text-white" />
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1">
                   {showAvatarUploader ? (
