@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
+import Footer from './components/Footer';
 import MapSection from './components/sections/MapSection';
 import FeedSection from './components/sections/FeedSection';
 import AddSection from './components/sections/AddSection';
@@ -116,6 +117,8 @@ function App() {
       </main>
 
       {profile && <AchievementNotification profile={profile} />}
+
+      <Footer onSectionChange={setCurrentSection} />
 
       <Navigation currentSection={currentSection} onSectionChange={setCurrentSection} />
     </div>
