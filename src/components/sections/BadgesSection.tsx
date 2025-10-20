@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Award, Lock, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import BadgeIcon from '../BadgeIcon';
 import type { Badge, UserBadge, Profile } from '../../types';
 
 interface BadgesSectionProps {

@@ -6,6 +6,7 @@ import EditProfileModal from '../EditProfileModal';
 import XPProgressBar from '../XPProgressBar';
 import StatsDisplay from '../StatsDisplay';
 import XPHistory from '../XPHistory';
+import GamificationTester from '../GamificationTester';
 import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
@@ -66,6 +67,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
     { id: 'stats', label: 'Statistiques' },
     { id: 'xp', label: 'Historique XP' },
     { id: 'badges', label: 'Badges' },
+    { id: 'test', label: 'Test Gamification' },
   ];
 
   if (!profile) {
@@ -223,6 +225,10 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
                   <p>Aucun badge débloqué</p>
                 </div>
               )}
+            </div>
+          ) : activeTab === 'test' ? (
+            <div className="p-4">
+              <GamificationTester profile={profile} />
             </div>
           ) : activeTab === 'posts' ? (
             userPosts.length === 0 ? (
