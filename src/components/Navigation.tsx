@@ -1,4 +1,4 @@
-import { Map, Home, Plus, Trophy, User } from 'lucide-react';
+import { Map, Home, Plus, Trophy, User, Settings } from 'lucide-react';
 import type { Section } from '../types';
 
 interface NavigationProps {
@@ -13,6 +13,7 @@ export default function Navigation({ currentSection, onSectionChange }: Navigati
     { id: 'add' as Section, icon: Plus, label: 'Ajouter' },
     { id: 'challenges' as Section, icon: Trophy, label: 'Défis' },
     { id: 'profile' as Section, icon: User, label: 'Profil' },
+    { id: 'settings' as Section, icon: Settings, label: 'Paramètres' },
   ];
 
   return (
