@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Filter, Plus, Navigation } from 'lucide-react';
+import { MapPin, Filter, Plus, Navigation, Star } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase';
 import SpotDetailModal from '../SpotDetailModal';
 import AddSpotModal from '../AddSpotModal';
-import type { Spot } from '../../types';
+import type { Spot, SpotMedia } from '../../types';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
@@ -15,6 +15,7 @@ export default function MapSection() {
   const markersRef = useRef<mapboxgl.Marker[]>([]);
 
   const [spots, setSpots] = useState<Spot[]>([]);
+  const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
@@ -64,10 +65,40 @@ export default function MapSection() {
 
       if (error) throw error;
       setSpots(data || []);
+
+      if (data && data.length > 0) {
+        loadCoverPhotos(data.map(spot => spot.id));
+      }
     } catch (error) {
       console.error('Error loading spots:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCoverPhotos = async (spotIds: string[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('spot_media')
+        .select('spot_id, media_url, is_cover_photo, created_at')
+        .in('spot_id', spotIds)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const coverMap: Record<string, string> = {};
+
+      spotIds.forEach(spotId => {
+        const spotMedia = data?.filter(m => m.spot_id === spotId) || [];
+        const coverPhoto = spotMedia.find(m => m.is_cover_photo) || spotMedia[0];
+        if (coverPhoto) {
+          coverMap[spotId] = coverPhoto.media_url;
+        }
+      });
+
+      setSpotCoverPhotos(coverMap);
+    } catch (error) {
+      console.error('Error loading cover photos:', error);
     }
   };
 
@@ -96,17 +127,54 @@ export default function MapSection() {
         .setLngLat([spot.longitude, spot.latitude])
         .addTo(map.current!);
 
-      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
-        .setHTML(`
-          <div class="p-2">
-            <h3 class="font-bold text-sm">${spot.name}</h3>
-            <p class="text-xs text-slate-600">${getSpotTypeLabel(spot.spot_type)}</p>
+      const coverPhotoUrl = spotCoverPhotos[spot.id];
+      const stars = Array.from({ length: 5 }, (_, i) =>
+        i < spot.difficulty ? '★' : '☆'
+      ).join('');
+
+      const popup = new mapboxgl.Popup({
+        offset: 35,
+        closeButton: false,
+        className: 'spot-hover-popup',
+        maxWidth: '280px'
+      }).setHTML(`
+        <div class="spot-hover-card">
+          ${coverPhotoUrl ? `
+            <div class="spot-hover-image">
+              <img src="${coverPhotoUrl}" alt="${spot.name}" />
+            </div>
+          ` : `
+            <div class="spot-hover-image spot-hover-no-image">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+          `}
+          <div class="spot-hover-content">
+            <h3 class="spot-hover-title">${spot.name}</h3>
+            <div class="spot-hover-rating">
+              <span class="spot-hover-stars">${stars}</span>
+            </div>
+            <p class="spot-hover-address">${spot.address || 'Adresse non spécifiée'}</p>
           </div>
-        `);
+        </div>
+      `);
 
       marker.setPopup(popup);
 
+      el.addEventListener('mouseenter', () => {
+        popup.addTo(map.current!);
+      });
+
+      el.addEventListener('mouseleave', () => {
+        setTimeout(() => {
+          popup.remove();
+        }, 100);
+      });
+
       el.addEventListener('click', () => {
+        popup.remove();
         setSelectedSpot(spot);
       });
 
