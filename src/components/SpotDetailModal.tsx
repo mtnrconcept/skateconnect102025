@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, MapPin, Star, Users, ChevronLeft, ChevronRight, Upload, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import MediaUploader from './MediaUploader';
 import CommentSection from './CommentSection';
 import LazyImage from './LazyImage';
+import SpotMediaGallery from './SpotMediaGallery';
 import type { Spot, SpotMedia } from '../types';
 
 interface SpotDetailModalProps {
@@ -17,7 +18,9 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showGallery, setShowGallery] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadSpotMedia();
@@ -267,67 +270,96 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
               </div>
             )}
 
-            <div className="mt-6 flex gap-2">
+            <div className="mt-6">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0 || !currentUser) return;
+
+                  setShowGallery(false);
+                  setShowComments(false);
+
+                  try {
+                    for (let i = 0; i < files.length; i++) {
+                      const file = files[i];
+                      const fileExt = file.name.split('.').pop();
+                      const fileName = `${currentUser.id}/${Date.now()}-${i}.${fileExt}`;
+
+                      const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('spots')
+                        .upload(fileName, file);
+
+                      if (uploadError) throw uploadError;
+
+                      const { data: { publicUrl } } = supabase.storage
+                        .from('spots')
+                        .getPublicUrl(fileName);
+
+                      const { error: insertError } = await supabase.from('spot_media').insert({
+                        spot_id: spot.id,
+                        user_id: currentUser.id,
+                        media_url: publicUrl,
+                        media_type: file.type.startsWith('video') ? 'video' : 'photo',
+                      });
+
+                      if (insertError) throw insertError;
+                    }
+
+                    loadSpotMedia();
+                    setShowGallery(true);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  } catch (error) {
+                    console.error('Error uploading media:', error);
+                    alert('Erreur lors de l\'ajout du média');
+                  }
+                }}
+              />
+
               <button
-                onClick={() => setShowUpload(!showUpload)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                onClick={() => {
+                  if (!currentUser) {
+                    alert('Vous devez être connecté pour ajouter une photo');
+                    return;
+                  }
+                  fileInputRef.current?.click();
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold mb-4"
               >
                 <Upload size={20} />
                 Ajouter une photo/vidéo
               </button>
-              <button
-                onClick={() => setShowComments(!showComments)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-semibold"
-              >
-                <MessageCircle size={20} />
-                Commentaires
-              </button>
-            </div>
 
-            {showUpload && currentUser && (
-              <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">
-                  Partager une photo ou vidéo du spot
-                </h3>
-                <MediaUploader
-                  bucket="spots"
-                  acceptVideo={true}
-                  maxFiles={3}
-                  onUploadComplete={async (url) => {
-                    try {
-                      const { error } = await supabase.from('spot_media').insert({
-                        spot_id: spot.id,
-                        user_id: currentUser.id,
-                        media_url: url,
-                        media_type: url.includes('video') ? 'video' : 'photo',
-                      });
-
-                      if (error) throw error;
-                      loadSpotMedia();
-                      setShowUpload(false);
-                    } catch (error) {
-                      console.error('Error adding spot media:', error);
-                      alert('Erreur lors de l\'ajout du média');
+              {showGallery && (
+                <SpotMediaGallery
+                  spotId={spot.id}
+                  onMediaClick={(mediaItem, index) => {
+                    const allMedia = media;
+                    const clickedIndex = allMedia.findIndex(m => m.id === mediaItem.id);
+                    if (clickedIndex !== -1) {
+                      setCurrentMediaIndex(clickedIndex);
+                      setShowGallery(false);
                     }
                   }}
-                  onError={(error) => alert(error)}
-                  compressionOptions={{
-                    maxWidth: 1920,
-                    maxHeight: 1920,
-                    quality: 0.85,
-                    maxSizeMB: 5,
-                  }}
+                  onUploadClick={() => fileInputRef.current?.click()}
                 />
-              </div>
-            )}
+              )}
+            </div>
 
-            {showComments && (
+            {!showGallery && media.length > 0 && (
               <div className="mt-4">
-                <CommentSection
-                  postId={spot.id}
-                  commentCount={0}
-                  onCommentAdded={() => {}}
-                />
+                <button
+                  onClick={() => setShowGallery(true)}
+                  className="text-blue-600 hover:text-blue-700 font-semibold text-sm"
+                >
+                  ← Retour à la galerie
+                </button>
               </div>
             )}
           </div>
