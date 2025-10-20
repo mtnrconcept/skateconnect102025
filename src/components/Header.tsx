@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mail, LogOut, Map, Home, Plus, Trophy, User, Camera, Award, Gift, TrendingUp } from 'lucide-react';
+import { Search, Bell, Mail, LogOut, Map, Home, Plus, Trophy, User, Award, Gift, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
@@ -43,8 +43,8 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Camera className="text-orange-500" size={24} />
-            <span className="font-bold text-xl text-white hidden sm:inline">SHREDLOC</span>
+            <img src="/logo.png" alt="Shredloc" className="h-8 w-auto" />
+            <span className="sr-only">Shredloc</span>
           </div>
         </div>
 

@@ -64,10 +64,10 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
       <div className="max-w-md w-full">
         <div className="bg-dark-800 rounded-2xl shadow-2xl overflow-hidden border border-dark-700">
           <div className="bg-dark-800 px-8 py-12 text-center border-b border-dark-700">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-full mb-4">
-              <span className="text-3xl">🛹</span>
+            <div className="flex justify-center mb-4">
+              <img src="/logo.png" alt="Shredloc" className="h-16 w-auto" />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">SHREDLOC</h1>
+            <h1 className="sr-only">Shredloc</h1>
             <p className="text-gray-400">Le réseau social des skateboarders</p>
           </div>
 
