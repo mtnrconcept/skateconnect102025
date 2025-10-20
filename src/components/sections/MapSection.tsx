@@ -144,6 +144,14 @@ export default function MapSection() {
         const POPUP_MARGIN = 20;
         const MARKER_OFFSET = 40;
 
+        const centerX = mapRect.width / 2;
+        const centerY = mapRect.height / 2;
+
+        const isAboveCenter = point.y < centerY;
+        const isBelowCenter = point.y > centerY;
+        const isLeftOfCenter = point.x < centerX;
+        const isRightOfCenter = point.x > centerX;
+
         const distanceFromTop = point.y;
         const distanceFromBottom = mapRect.height - point.y;
         const distanceFromLeft = point.x;
@@ -152,33 +160,43 @@ export default function MapSection() {
         let anchor: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom';
         let offset = 35;
 
-        const canFitBottom = distanceFromBottom > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
-        const canFitTop = distanceFromTop > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
-        const canFitLeft = distanceFromLeft > (POPUP_WIDTH / 2 + POPUP_MARGIN);
-        const canFitRight = distanceFromRight > (POPUP_WIDTH / 2 + POPUP_MARGIN);
+        const canFitBelow = distanceFromBottom > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
+        const canFitAbove = distanceFromTop > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
+        const canFitRight = distanceFromRight > (POPUP_WIDTH + POPUP_MARGIN);
+        const canFitLeft = distanceFromLeft > (POPUP_WIDTH + POPUP_MARGIN);
 
-        if (canFitBottom && canFitLeft && canFitRight) {
-          anchor = 'bottom';
-        } else if (canFitTop && canFitLeft && canFitRight) {
+        if (isAboveCenter && canFitBelow) {
           anchor = 'top';
-        } else if (canFitBottom && !canFitLeft) {
-          anchor = 'bottom-left';
-          offset = 15;
-        } else if (canFitBottom && !canFitRight) {
-          anchor = 'bottom-right';
-          offset = 15;
-        } else if (canFitTop && !canFitLeft) {
-          anchor = 'top-left';
-          offset = 15;
-        } else if (canFitTop && !canFitRight) {
-          anchor = 'top-right';
-          offset = 15;
-        } else if (distanceFromRight > POPUP_WIDTH + POPUP_MARGIN) {
+          offset = 35;
+          if (isLeftOfCenter && distanceFromLeft < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
+            anchor = 'top-left';
+            offset = 15;
+          } else if (isRightOfCenter && distanceFromRight < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
+            anchor = 'top-right';
+            offset = 15;
+          }
+        } else if (isBelowCenter && canFitAbove) {
+          anchor = 'bottom';
+          offset = 35;
+          if (isLeftOfCenter && distanceFromLeft < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
+            anchor = 'bottom-left';
+            offset = 15;
+          } else if (isRightOfCenter && distanceFromRight < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
+            anchor = 'bottom-right';
+            offset = 15;
+          }
+        } else if (isLeftOfCenter && canFitRight) {
           anchor = 'left';
           offset = 15;
-        } else if (distanceFromLeft > POPUP_WIDTH + POPUP_MARGIN) {
+        } else if (isRightOfCenter && canFitLeft) {
           anchor = 'right';
           offset = 15;
+        } else if (canFitBelow) {
+          anchor = 'top';
+          offset = 35;
+        } else if (canFitAbove) {
+          anchor = 'bottom';
+          offset = 35;
         } else {
           anchor = 'top';
           offset = 10;
