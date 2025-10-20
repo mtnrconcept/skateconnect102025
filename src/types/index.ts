@@ -1,12 +1,12 @@
 export interface Profile {
   id: string;
   username: string;
-  display_name: string;
-  bio: string;
-  avatar_url: string;
-  cover_url: string;
-  skill_level: string;
-  stance: string;
+  display_name: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  cover_url: string | null;
+  skill_level: string | null;
+  stance: string | null;
   created_at: string;
   updated_at: string;
 }

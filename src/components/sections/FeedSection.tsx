@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Heart, MessageCircle, MapPin, Send, Camera, Video } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import CommentSection from '../CommentSection';
 import type { Post, Profile } from '../../types';
 
@@ -160,12 +161,12 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
               {currentUser?.avatar_url ? (
                 <img
                   src={currentUser.avatar_url}
-                  alt={currentUser.display_name}
+                  alt={getUserDisplayName(currentUser)}
                   className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                  {currentUser?.display_name.charAt(0).toUpperCase()}
+                  {getUserInitial(currentUser)}
                 </div>
               )}
               <div className="flex-1">
@@ -219,17 +220,17 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   {post.user?.avatar_url ? (
                     <img
                       src={post.user.avatar_url}
-                      alt={post.user.display_name}
+                      alt={getUserDisplayName(post.user)}
                       className="w-10 h-10 rounded-full object-cover"
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
-                      {post.user?.display_name.charAt(0).toUpperCase()}
+                      {getUserInitial(post.user)}
                     </div>
                   )}
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-800">{post.user?.display_name}</span>
+                      <span className="font-semibold text-slate-800">{getUserDisplayName(post.user)}</span>
                       <span className="text-slate-500">@{post.user?.username}</span>
                     </div>
                     <div className="text-xs text-slate-500">{formatDate(post.created_at)}</div>

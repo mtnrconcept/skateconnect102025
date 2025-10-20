@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Send, ArrowLeft, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import type { Conversation, Message, Profile } from '../../types';
 
 interface MessagesSectionProps {
@@ -176,17 +177,17 @@ export default function MessagesSection({ currentUser }: MessagesSectionProps) {
                   {otherUser.avatar_url ? (
                     <img
                       src={otherUser.avatar_url}
-                      alt={otherUser.display_name}
+                      alt={getUserDisplayName(otherUser)}
                       className="w-12 h-12 rounded-full object-cover flex-shrink-0"
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      {otherUser.display_name.charAt(0).toUpperCase()}
+                      {getUserInitial(otherUser)}
                     </div>
                   )}
                   <div className="flex-1 min-w-0 text-left">
                     <div className="font-semibold text-slate-800 truncate">
-                      {otherUser.display_name}
+                      {getUserDisplayName(otherUser)}
                     </div>
                     <div className="text-sm text-slate-500 truncate">@{otherUser.username}</div>
                   </div>
@@ -216,16 +217,16 @@ export default function MessagesSection({ currentUser }: MessagesSectionProps) {
                     {otherUser.avatar_url ? (
                       <img
                         src={otherUser.avatar_url}
-                        alt={otherUser.display_name}
+                        alt={getUserDisplayName(otherUser)}
                         className="w-10 h-10 rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
-                        {otherUser.display_name.charAt(0).toUpperCase()}
+                        {getUserInitial(otherUser)}
                       </div>
                     )}
                     <div>
-                      <div className="font-semibold text-slate-800">{otherUser.display_name}</div>
+                      <div className="font-semibold text-slate-800">{getUserDisplayName(otherUser)}</div>
                       <div className="text-sm text-slate-500">@{otherUser.username}</div>
                     </div>
                   </>
@@ -245,12 +246,12 @@ export default function MessagesSection({ currentUser }: MessagesSectionProps) {
                     {!isOwn && message.sender?.avatar_url ? (
                       <img
                         src={message.sender.avatar_url}
-                        alt={message.sender.display_name}
+                        alt={getUserDisplayName(message.sender)}
                         className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                       />
                     ) : !isOwn ? (
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                        {message.sender?.display_name.charAt(0).toUpperCase()}
+                        {getUserInitial(message.sender)}
                       </div>
                     ) : null}
                     <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Calendar, Award, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import EditProfileModal from '../EditProfileModal';
 import type { Profile, Post } from '../../types';
 
@@ -85,12 +86,12 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
-                  alt={profile.display_name}
+                  alt={getUserDisplayName(profile)}
                   className="w-32 h-32 rounded-full border-4 border-white object-cover shadow-lg"
                 />
               ) : (
                 <div className="w-32 h-32 rounded-full border-4 border-white bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
-                  {profile.display_name.charAt(0).toUpperCase()}
+                  {getUserInitial(profile)}
                 </div>
               )}
             </div>
@@ -104,7 +105,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
           </div>
 
           <div className="mb-4">
-            <h1 className="text-2xl font-bold text-slate-800">{profile.display_name}</h1>
+            <h1 className="text-2xl font-bold text-slate-800">{getUserDisplayName(profile)}</h1>
             <p className="text-slate-600">@{profile.username}</p>
           </div>
 

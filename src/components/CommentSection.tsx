@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import type { Comment, Profile } from '../types';
 
 interface CommentSectionProps {
@@ -136,12 +137,12 @@ export default function CommentSection({
             {comment.user?.avatar_url ? (
               <img
                 src={comment.user.avatar_url}
-                alt={comment.user.display_name}
+                alt={getUserDisplayName(comment.user)}
                 className="w-8 h-8 rounded-full object-cover flex-shrink-0"
               />
             ) : (
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                {comment.user?.display_name.charAt(0).toUpperCase()}
+                {getUserInitial(comment.user)}
               </div>
             )}
 
@@ -149,7 +150,7 @@ export default function CommentSection({
               <div className="bg-slate-100 rounded-2xl px-3 py-2">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-semibold text-sm text-slate-800">
-                    {comment.user?.display_name}
+                    {getUserDisplayName(comment.user)}
                   </span>
                   <span className="text-xs text-slate-500">{formatDate(comment.created_at)}</span>
                 </div>
@@ -184,12 +185,12 @@ export default function CommentSection({
           {currentUser.avatar_url ? (
             <img
               src={currentUser.avatar_url}
-              alt={currentUser.display_name}
+              alt={getUserDisplayName(currentUser)}
               className="w-8 h-8 rounded-full object-cover flex-shrink-0"
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-              {currentUser.display_name.charAt(0).toUpperCase()}
+              {getUserInitial(currentUser)}
             </div>
           )}
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Bell, Mail, LogOut, Map, Home, Plus, Trophy, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
+import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import NotificationsPanel from './NotificationsPanel';
 import type { Profile, Section } from '../types';
 
@@ -141,15 +142,15 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
                 {profile.avatar_url ? (
                   <img
                     src={profile.avatar_url}
-                    alt={profile.display_name}
+                    alt={getUserDisplayName(profile)}
                     className="w-8 h-8 rounded-full object-cover"
                   />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
-                    {profile.display_name.charAt(0).toUpperCase()}
+                    {getUserInitial(profile)}
                   </div>
                 )}
-                <span className="font-medium text-slate-700">{profile.display_name}</span>
+                <span className="font-medium text-slate-700">{getUserDisplayName(profile)}</span>
               </div>
             )}
             <button
