@@ -132,49 +132,90 @@ export default function MapSection() {
         i < spot.difficulty ? '★' : '☆'
       ).join('');
 
-      const popup = new mapboxgl.Popup({
-        offset: 35,
-        closeButton: false,
-        className: 'spot-hover-popup',
-        maxWidth: '280px'
-      }).setHTML(`
-        <div class="spot-hover-card">
-          ${coverPhotoUrl ? `
-            <div class="spot-hover-image">
-              <img src="${coverPhotoUrl}" alt="${spot.name}" />
-            </div>
-          ` : `
-            <div class="spot-hover-image spot-hover-no-image">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                <circle cx="12" cy="10" r="3"></circle>
-              </svg>
-            </div>
-          `}
-          <div class="spot-hover-content">
-            <h3 class="spot-hover-title">${spot.name}</h3>
-            <div class="spot-hover-rating">
-              <span class="spot-hover-stars">${stars}</span>
-            </div>
-            <p class="spot-hover-address">${spot.address || 'Adresse non spécifiée'}</p>
-          </div>
-        </div>
-      `);
+      const createPopupWithSmartAnchor = () => {
+        if (!map.current) return null;
 
-      marker.setPopup(popup);
+        const point = map.current.project([spot.longitude, spot.latitude]);
+        const mapContainer = map.current.getContainer();
+        const mapRect = mapContainer.getBoundingClientRect();
+
+        const distanceFromTop = point.y;
+        const distanceFromBottom = mapRect.height - point.y;
+        const distanceFromLeft = point.x;
+        const distanceFromRight = mapRect.width - point.x;
+
+        let anchor: 'top' | 'bottom' | 'left' | 'right' = 'bottom';
+        let offset = 35;
+
+        if (distanceFromTop < 250) {
+          anchor = 'top';
+        } else if (distanceFromBottom < 250) {
+          anchor = 'bottom';
+        } else if (distanceFromLeft < 150) {
+          anchor = 'left';
+          offset = 15;
+        } else if (distanceFromRight < 150) {
+          anchor = 'right';
+          offset = 15;
+        }
+
+        return new mapboxgl.Popup({
+          offset,
+          closeButton: false,
+          closeOnClick: false,
+          className: 'spot-hover-popup',
+          maxWidth: '280px',
+          anchor
+        })
+          .setMaxWidth('280px')
+          .setHTML(`
+          <div class="spot-hover-card">
+            ${coverPhotoUrl ? `
+              <div class="spot-hover-image">
+                <img src="${coverPhotoUrl}" alt="${spot.name}" />
+              </div>
+            ` : `
+              <div class="spot-hover-image spot-hover-no-image">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+              </div>
+            `}
+            <div class="spot-hover-content">
+              <h3 class="spot-hover-title">${spot.name}</h3>
+              <div class="spot-hover-rating">
+                <span class="spot-hover-stars">${stars}</span>
+              </div>
+              <p class="spot-hover-address">${spot.address || 'Adresse non spécifiée'}</p>
+            </div>
+          </div>
+        `);
+      };
+
+      let popup: mapboxgl.Popup | null = null;
+
+      marker.setPopup(createPopupWithSmartAnchor()!);
 
       el.addEventListener('mouseenter', () => {
-        popup.addTo(map.current!);
+        popup = createPopupWithSmartAnchor();
+        if (popup && map.current) {
+          popup.setLngLat([spot.longitude, spot.latitude]).addTo(map.current);
+        }
       });
 
       el.addEventListener('mouseleave', () => {
         setTimeout(() => {
-          popup.remove();
+          if (popup) {
+            popup.remove();
+          }
         }, 100);
       });
 
       el.addEventListener('click', () => {
-        popup.remove();
+        if (popup) {
+          popup.remove();
+        }
         setSelectedSpot(spot);
       });
 

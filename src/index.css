@@ -12,15 +12,26 @@
   height: 100%;
 }
 
+.mapboxgl-popup {
+  z-index: 1000 !important;
+}
+
+.spot-hover-popup {
+  z-index: 9999 !important;
+  position: relative !important;
+}
+
 .spot-hover-popup .mapboxgl-popup-content {
   padding: 0 !important;
   border-radius: 12px !important;
   overflow: hidden;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  pointer-events: auto !important;
 }
 
 .spot-hover-popup .mapboxgl-popup-tip {
   border-top-color: white !important;
+  z-index: 9998 !important;
 }
 
 .spot-hover-card {
