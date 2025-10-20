@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, MapPin, Star, Users, ChevronLeft, ChevronRight, Upload, MessageCircle } from 'lucide-react';
+import { X, MapPin, Star, Users, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import MediaUploader from './MediaUploader';
-import CommentSection from './CommentSection';
 import LazyImage from './LazyImage';
 import SpotMediaGallery from './SpotMediaGallery';
 import MediaDetailModal from './MediaDetailModal';
@@ -18,8 +16,6 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const [coverPhoto, setCoverPhoto] = useState<SpotMedia | null>(null);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showComments, setShowComments] = useState(false);
   const [showGallery, setShowGallery] = useState(true);
   const [showMediaDetail, setShowMediaDetail] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -79,11 +75,11 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+        className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl my-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">
@@ -249,7 +245,6 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                   if (!files || files.length === 0 || !currentUser) return;
 
                   setShowGallery(false);
-                  setShowComments(false);
 
                   try {
                     for (let i = 0; i < files.length; i++) {
@@ -257,7 +252,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                       const fileExt = file.name.split('.').pop();
                       const fileName = `${currentUser.id}/${Date.now()}-${i}.${fileExt}`;
 
-                      const { data: uploadData, error: uploadError } = await supabase.storage
+                      const { error: uploadError } = await supabase.storage
                         .from('spots')
                         .upload(fileName, file);
 
@@ -306,7 +301,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
               {showGallery && (
                 <SpotMediaGallery
                   spotId={spot.id}
-                  onMediaClick={(mediaItem, index) => {
+                  onMediaClick={(mediaItem) => {
                     const clickedIndex = media.findIndex(m => m.id === mediaItem.id);
                     if (clickedIndex !== -1) {
                       setCurrentMediaIndex(clickedIndex);

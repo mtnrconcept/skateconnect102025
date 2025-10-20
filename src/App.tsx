@@ -87,7 +87,11 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Header profile={profile} />
+      <Header
+        profile={profile}
+        currentSection={currentSection}
+        onSectionChange={setCurrentSection}
+      />
 
       <main className="pt-16 pb-20 md:pb-6">
         {currentSection === 'map' && <MapSection />}

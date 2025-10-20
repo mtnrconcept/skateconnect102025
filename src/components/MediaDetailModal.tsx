@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Heart, Share2, Eye, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import LazyImage from './LazyImage';
@@ -159,9 +159,24 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
     return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   };
 
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+    if (e.key === 'ArrowLeft') prevMedia();
+    if (e.key === 'ArrowRight') nextMedia();
+  }, [currentIndex, media.length]);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center"
+      className="fixed inset-0 bg-black bg-opacity-95 z-[60] flex items-center justify-center"
       onClick={onClose}
     >
       <div
@@ -313,8 +328,7 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
                 <div className="p-4">
                   <CommentSection
                     postId={currentMedia.id}
-                    commentCount={0}
-                    onCommentAdded={() => {}}
+                    currentUser={currentUser}
                   />
                 </div>
               ) : (

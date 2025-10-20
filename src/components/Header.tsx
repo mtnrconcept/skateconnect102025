@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mail, LogOut } from 'lucide-react';
+import { Search, Bell, Mail, LogOut, Map, Home, Plus, Trophy, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
 import NotificationsPanel from './NotificationsPanel';
-import type { Profile } from '../types';
+import type { Profile, Section } from '../types';
 
 interface HeaderProps {
   profile: Profile | null;
+  currentSection?: Section;
+  onSectionChange?: (section: Section) => void;
 }
 
-export default function Header({ profile }: HeaderProps) {
+export default function Header({ profile, currentSection, onSectionChange }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -45,7 +47,67 @@ export default function Header({ profile }: HeaderProps) {
           </div>
         </div>
 
-        <div className="flex-1 max-w-xl mx-4 hidden md:block">
+        {onSectionChange && (
+          <nav className="hidden md:flex items-center gap-1 mx-6">
+            <button
+              onClick={() => onSectionChange('map')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'map'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Map size={20} />
+              <span>Carte</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('feed')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'feed'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Home size={20} />
+              <span>Feed</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('add')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'add'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Plus size={20} />
+              <span>Ajouter</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('challenges')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'challenges'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Trophy size={20} />
+              <span>Défis</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('profile')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'profile'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <User size={20} />
+              <span>Profil</span>
+            </button>
+          </nav>
+        )}
+
+        <div className="flex-1 max-w-xl mx-4 hidden lg:block">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
