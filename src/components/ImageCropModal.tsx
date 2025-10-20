@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, RotateCw, ZoomIn, ZoomOut, Check } from 'lucide-react';
 
+type CropOutputFormat = 'image/jpeg' | 'image/png' | 'image/webp';
+
 interface ImageCropModalProps {
   image: string;
   aspectRatio?: number;
   onCrop: (croppedImage: Blob) => void;
   onCancel: () => void;
+  outputFormat?: CropOutputFormat;
 }
 
 interface CropArea {
@@ -20,6 +23,7 @@ export default function ImageCropModal({
   aspectRatio = 1,
   onCrop,
   onCancel,
+  outputFormat = 'image/jpeg',
 }: ImageCropModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -211,11 +215,17 @@ export default function ImageCropModal({
       cropArea.height
     );
 
-    cropCanvas.toBlob((blob) => {
-      if (blob) {
-        onCrop(blob);
-      }
-    }, 'image/jpeg', 0.95);
+    const quality = outputFormat === 'image/jpeg' || outputFormat === 'image/webp' ? 0.95 : undefined;
+
+    cropCanvas.toBlob(
+      (blob) => {
+        if (blob) {
+          onCrop(blob);
+        }
+      },
+      outputFormat,
+      quality,
+    );
   };
 
   return (
