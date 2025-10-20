@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, Upload } from 'lucide-react';
+import { X, Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getUserInitial } from '../lib/userUtils';
 import MediaUploader from './MediaUploader';
 import type { Profile } from '../types';
 
@@ -21,6 +22,8 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [showAvatarUploader, setShowAvatarUploader] = useState(false);
+  const [showCoverUploader, setShowCoverUploader] = useState(false);
 
   const skillLevels = [
     { value: 'beginner', label: 'Débutant' },
@@ -75,7 +78,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Edit Profile</h2>
+          <h2 className="text-2xl font-bold">Modifier le profil</h2>
           <button
             onClick={onClose}
             className="bg-white bg-opacity-20 rounded-full p-2 hover:bg-opacity-30 transition-colors"
@@ -88,108 +91,179 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Cover Photo
+                Photo de couverture
               </label>
-              <div className="relative h-32 bg-slate-200 rounded-lg overflow-hidden">
+              <div className="relative h-40 bg-gradient-to-br from-slate-200 to-slate-300 rounded-xl overflow-hidden group">
                 {coverUrl ? (
                   <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-400">
-                    <Upload size={32} />
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                    <ImageIcon size={48} className="mb-2" />
+                    <p className="text-sm">Aucune photo de couverture</p>
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                  <MediaUploader
-                    bucket="covers"
-                    path={profile.id}
-                    onUploadComplete={(url) => {
-                      setCoverUrl(url);
-                      setUploadingCover(false);
-                    }}
-                    onError={(error) => {
-                      alert(error);
-                      setUploadingCover(false);
-                    }}
-                    enableCrop={true}
-                    cropAspectRatio={3}
-                    compressionOptions={{
-                      maxWidth: 1920,
-                      maxHeight: 640,
-                      quality: 0.9,
-                      maxSizeMB: 5,
-                    }}
-                    className="w-full"
-                  />
+                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {uploadingCover ? (
+                    <div className="flex flex-col items-center gap-2 text-white">
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                      <p className="text-sm">Téléchargement...</p>
+                    </div>
+                  ) : showCoverUploader ? (
+                    <div className="bg-white rounded-lg p-4">
+                      <MediaUploader
+                        bucket="covers"
+                        path={profile.id}
+                        onUploadComplete={(url) => {
+                          setCoverUrl(url);
+                          setUploadingCover(false);
+                          setShowCoverUploader(false);
+                        }}
+                        onError={(error) => {
+                          alert(error);
+                          setUploadingCover(false);
+                          setShowCoverUploader(false);
+                        }}
+                        enableCrop={true}
+                        cropAspectRatio={3}
+                        compressionOptions={{
+                          maxWidth: 1920,
+                          maxHeight: 640,
+                          quality: 0.9,
+                          maxSizeMB: 5,
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCoverUploader(true);
+                        setUploadingCover(true);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg"
+                    >
+                      <Camera size={20} />
+                      {coverUrl ? 'Changer la photo' : 'Ajouter une photo'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Profile Photo
+                Photo de profil
               </label>
-              <div className="flex items-center gap-4">
-                <div className="relative w-24 h-24 rounded-full overflow-hidden bg-slate-200">
+              <div className="flex items-center gap-6">
+                <div className="relative w-32 h-32 rounded-full overflow-hidden bg-slate-200 shadow-lg group">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-cyan-500 text-white text-3xl font-bold">
-                      {displayName.charAt(0).toUpperCase()}
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-cyan-500 text-white text-4xl font-bold">
+                      {getUserInitial({ display_name: displayName, username } as any)}
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                    <Upload size={24} className="text-white" />
+                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    {uploadingAvatar ? (
+                      <Loader2 className="w-8 h-8 text-white animate-spin" />
+                    ) : (
+                      <Upload size={32} className="text-white" />
+                    )}
                   </div>
                 </div>
-                <MediaUploader
-                  bucket="avatars"
-                  path={profile.id}
-                  onUploadComplete={(url) => {
-                    setAvatarUrl(url);
-                    setUploadingAvatar(false);
-                  }}
-                  onError={(error) => {
-                    alert(error);
-                    setUploadingAvatar(false);
-                  }}
-                  enableCrop={true}
-                  cropAspectRatio={1}
-                  compressionOptions={{
-                    maxWidth: 800,
-                    maxHeight: 800,
-                    quality: 0.9,
-                    maxSizeMB: 2,
-                  }}
-                />
+                <div className="flex-1">
+                  {showAvatarUploader ? (
+                    <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                      <MediaUploader
+                        bucket="avatars"
+                        path={profile.id}
+                        onUploadComplete={(url) => {
+                          setAvatarUrl(url);
+                          setUploadingAvatar(false);
+                          setShowAvatarUploader(false);
+                        }}
+                        onError={(error) => {
+                          alert(error);
+                          setUploadingAvatar(false);
+                          setShowAvatarUploader(false);
+                        }}
+                        enableCrop={true}
+                        cropAspectRatio={1}
+                        compressionOptions={{
+                          maxWidth: 800,
+                          maxHeight: 800,
+                          quality: 0.9,
+                          maxSizeMB: 2,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAvatarUploader(false)}
+                        className="mt-2 text-sm text-slate-600 hover:text-slate-800"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAvatarUploader(true);
+                          setUploadingAvatar(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 w-full justify-center"
+                      >
+                        <Camera size={20} />
+                        {avatarUrl ? 'Changer la photo' : 'Ajouter une photo'}
+                      </button>
+                      {avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setAvatarUrl(null)}
+                          className="text-sm text-red-600 hover:text-red-700 w-full text-center"
+                        >
+                          Supprimer la photo
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             <div>
               <label htmlFor="displayName" className="block text-sm font-semibold text-slate-700 mb-2">
-                Display Name
+                Nom d'affichage
               </label>
               <input
                 id="displayName"
                 type="text"
-                value={displayName}
+                value={displayName || ''}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Votre nom"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 required
               />
             </div>
 
             <div>
               <label htmlFor="username" className="block text-sm font-semibold text-slate-700 mb-2">
-                Username
+                Nom d'utilisateur
               </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">@</span>
+                <input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="username"
+                  className="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  required
+                />
+              </div>
             </div>
 
             <div>
@@ -200,15 +274,17 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                 id="bio"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
                 rows={4}
-                placeholder="Tell us about yourself..."
+                placeholder="Parlez-nous de vous, vos tricks préférés, votre histoire..."
+                maxLength={500}
               />
+              <p className="text-xs text-slate-500 mt-1">{bio.length}/500 caractères</p>
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Skill Level
+                Niveau
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {skillLevels.map((level) => (
@@ -251,20 +327,27 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
             </div>
           </div>
 
-          <div className="flex gap-4 mt-6">
+          <div className="flex gap-4 mt-8 pt-6 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
               className="flex-1 px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition-colors"
             >
-              Cancel
+              Annuler
             </button>
             <button
               type="submit"
-              disabled={saving}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={saving || uploadingAvatar || uploadingCover}
+              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : (
+                'Enregistrer les modifications'
+              )}
             </button>
           </div>
         </form>
