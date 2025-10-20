@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Search, Bell, Mail, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getUnreadCount } from '../lib/notifications';
+import NotificationsPanel from './NotificationsPanel';
 import type { Profile } from '../types';
 
 interface HeaderProps {
@@ -7,6 +10,26 @@ interface HeaderProps {
 }
 
 export default function Header({ profile }: HeaderProps) {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (profile) {
+      loadUnreadCount();
+      const interval = setInterval(loadUnreadCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [profile]);
+
+  const loadUnreadCount = async () => {
+    try {
+      const count = await getUnreadCount();
+      setUnreadCount(count);
+    } catch (error) {
+      console.error('Error loading unread count:', error);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.reload();
@@ -34,9 +57,16 @@ export default function Header({ profile }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="relative p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <button
+            onClick={() => setShowNotifications(true)}
+            className="relative p-2 hover:bg-slate-100 rounded-full transition-colors"
+          >
             <Bell size={20} className="text-slate-600" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-semibold px-1">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
           <button className="relative p-2 hover:bg-slate-100 rounded-full transition-colors">
             <Mail size={20} className="text-slate-600" />
@@ -70,6 +100,15 @@ export default function Header({ profile }: HeaderProps) {
           </div>
         </div>
       </div>
+
+      {showNotifications && (
+        <NotificationsPanel
+          onClose={() => {
+            setShowNotifications(false);
+            loadUnreadCount();
+          }}
+        />
+      )}
     </header>
   );
 }

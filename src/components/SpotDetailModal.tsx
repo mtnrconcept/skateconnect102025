@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, MapPin, Star, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, MapPin, Star, Users, ChevronLeft, ChevronRight, Upload, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import MediaUploader from './MediaUploader';
+import CommentSection from './CommentSection';
+import LazyImage from './LazyImage';
 import type { Spot, SpotMedia } from '../types';
 
 interface SpotDetailModalProps {
@@ -12,10 +15,19 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const [media, setMedia] = useState<SpotMedia[]>([]);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showUpload, setShowUpload] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     loadSpotMedia();
+    loadCurrentUser();
   }, [spot.id]);
+
+  const loadCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setCurrentUser(user);
+  };
 
   const loadSpotMedia = async () => {
     try {
@@ -91,11 +103,19 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
             </div>
           ) : media.length > 0 ? (
             <div className="relative h-96 bg-slate-900">
-              <img
-                src={media[currentMediaIndex].media_url}
-                alt={media[currentMediaIndex].caption || spot.name}
-                className="w-full h-full object-cover"
-              />
+              {media[currentMediaIndex].media_type === 'video' ? (
+                <video
+                  src={media[currentMediaIndex].media_url}
+                  controls
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <LazyImage
+                  src={media[currentMediaIndex].media_url}
+                  alt={media[currentMediaIndex].caption || spot.name}
+                  className="w-full h-full object-cover"
+                />
+              )}
 
               {media.length > 1 && (
                 <>
@@ -244,6 +264,70 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex gap-2">
+              <button
+                onClick={() => setShowUpload(!showUpload)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+              >
+                <Upload size={20} />
+                Ajouter une photo/vidéo
+              </button>
+              <button
+                onClick={() => setShowComments(!showComments)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-semibold"
+              >
+                <MessageCircle size={20} />
+                Commentaires
+              </button>
+            </div>
+
+            {showUpload && currentUser && (
+              <div className="mt-4 p-4 bg-slate-50 rounded-lg">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3">
+                  Partager une photo ou vidéo du spot
+                </h3>
+                <MediaUploader
+                  bucket="spots"
+                  acceptVideo={true}
+                  maxFiles={3}
+                  onUploadComplete={async (url) => {
+                    try {
+                      const { error } = await supabase.from('spot_media').insert({
+                        spot_id: spot.id,
+                        user_id: currentUser.id,
+                        media_url: url,
+                        media_type: url.includes('video') ? 'video' : 'photo',
+                      });
+
+                      if (error) throw error;
+                      loadSpotMedia();
+                      setShowUpload(false);
+                    } catch (error) {
+                      console.error('Error adding spot media:', error);
+                      alert('Erreur lors de l\'ajout du média');
+                    }
+                  }}
+                  onError={(error) => alert(error)}
+                  compressionOptions={{
+                    maxWidth: 1920,
+                    maxHeight: 1920,
+                    quality: 0.85,
+                    maxSizeMB: 5,
+                  }}
+                />
+              </div>
+            )}
+
+            {showComments && (
+              <div className="mt-4">
+                <CommentSection
+                  postId={spot.id}
+                  commentCount={0}
+                  onCommentAdded={() => {}}
+                />
               </div>
             )}
           </div>
