@@ -10,6 +10,8 @@ interface MediaUploaderProps {
   path?: string;
   onUploadComplete: (url: string, path: string) => void;
   onError?: (error: string) => void;
+  onUploadStart?: () => void;
+  onUploadEnd?: () => void;
   acceptVideo?: boolean;
   maxFiles?: number;
   enableCrop?: boolean;
@@ -36,6 +38,8 @@ export default function MediaUploader({
   path,
   onUploadComplete,
   onError,
+  onUploadStart,
+  onUploadEnd,
   acceptVideo = false,
   maxFiles = 1,
   enableCrop = false,
@@ -111,6 +115,7 @@ export default function MediaUploader({
 
   const processFile = async (file: File) => {
     setUploading(true);
+    onUploadStart?.();
 
     try {
       const previewUrl = URL.createObjectURL(file);
@@ -136,6 +141,7 @@ export default function MediaUploader({
       console.error('Upload error:', error);
     } finally {
       setUploading(false);
+      onUploadEnd?.();
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -173,6 +179,7 @@ export default function MediaUploader({
     }
 
     setUploading(true);
+    onUploadStart?.();
 
     try {
       const photo = await capturePhoto();
@@ -188,6 +195,7 @@ export default function MediaUploader({
       console.error('Camera error:', error);
     } finally {
       setUploading(false);
+      onUploadEnd?.();
     }
   };
 
@@ -198,6 +206,7 @@ export default function MediaUploader({
     }
 
     setUploading(true);
+    onUploadStart?.();
 
     try {
       const photo = await pickPhoto();
@@ -213,6 +222,7 @@ export default function MediaUploader({
       console.error('Photo picker error:', error);
     } finally {
       setUploading(false);
+      onUploadEnd?.();
     }
   };
 
