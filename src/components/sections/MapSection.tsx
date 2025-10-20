@@ -132,41 +132,65 @@ export default function MapSection() {
         i < spot.difficulty ? '★' : '☆'
       ).join('');
 
-      const recenterMapForPopup = () => {
-        if (!map.current) return;
+      const createPopupWithSmartAnchor = () => {
+        if (!map.current) return null;
 
+        const point = map.current.project([spot.longitude, spot.latitude]);
         const mapContainer = map.current.getContainer();
         const mapRect = mapContainer.getBoundingClientRect();
-        const point = map.current.project([spot.longitude, spot.latitude]);
 
+        const POPUP_WIDTH = 280;
         const POPUP_HEIGHT = 220;
-        const MARGIN_TOP = 100;
-        const targetY = mapRect.height / 2 - POPUP_HEIGHT / 2 - MARGIN_TOP;
+        const POPUP_MARGIN = 20;
+        const MARKER_OFFSET = 40;
 
-        if (point.y < MARGIN_TOP || point.y > mapRect.height - MARGIN_TOP) {
-          const currentCenter = map.current.getCenter();
-          const offsetPixels = point.y - targetY;
-          const offsetLngLat = map.current.unproject({
-            x: point.x,
-            y: point.y - offsetPixels
-          });
+        const distanceFromTop = point.y;
+        const distanceFromBottom = mapRect.height - point.y;
+        const distanceFromLeft = point.x;
+        const distanceFromRight = mapRect.width - point.x;
 
-          map.current.easeTo({
-            center: [spot.longitude, offsetLngLat.lat],
-            duration: 300,
-            easing: (t) => t * (2 - t)
-          });
+        let anchor: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom';
+        let offset = 35;
+
+        const canFitBottom = distanceFromBottom > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
+        const canFitTop = distanceFromTop > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
+        const canFitLeft = distanceFromLeft > (POPUP_WIDTH / 2 + POPUP_MARGIN);
+        const canFitRight = distanceFromRight > (POPUP_WIDTH / 2 + POPUP_MARGIN);
+
+        if (canFitBottom && canFitLeft && canFitRight) {
+          anchor = 'bottom';
+        } else if (canFitTop && canFitLeft && canFitRight) {
+          anchor = 'top';
+        } else if (canFitBottom && !canFitLeft) {
+          anchor = 'bottom-left';
+          offset = 15;
+        } else if (canFitBottom && !canFitRight) {
+          anchor = 'bottom-right';
+          offset = 15;
+        } else if (canFitTop && !canFitLeft) {
+          anchor = 'top-left';
+          offset = 15;
+        } else if (canFitTop && !canFitRight) {
+          anchor = 'top-right';
+          offset = 15;
+        } else if (distanceFromRight > POPUP_WIDTH + POPUP_MARGIN) {
+          anchor = 'left';
+          offset = 15;
+        } else if (distanceFromLeft > POPUP_WIDTH + POPUP_MARGIN) {
+          anchor = 'right';
+          offset = 15;
+        } else {
+          anchor = 'top';
+          offset = 10;
         }
-      };
 
-      const createPopup = () => {
         return new mapboxgl.Popup({
-          offset: 35,
+          offset,
           closeButton: false,
           closeOnClick: false,
           className: 'spot-hover-popup',
           maxWidth: '280px',
-          anchor: 'bottom'
+          anchor
         })
           .setMaxWidth('280px')
           .setHTML(`
@@ -195,56 +219,27 @@ export default function MapSection() {
       };
 
       let popup: mapboxgl.Popup | null = null;
-      let isHovering = false;
 
-      const showPopup = () => {
-        isHovering = true;
-        if (popup) {
-          popup.remove();
+      marker.setPopup(createPopupWithSmartAnchor()!);
+
+      el.addEventListener('mouseenter', () => {
+        popup = createPopupWithSmartAnchor();
+        if (popup && map.current) {
+          popup.setLngLat([spot.longitude, spot.latitude]).addTo(map.current);
         }
+      });
 
-        recenterMapForPopup();
-
+      el.addEventListener('mouseleave', () => {
         setTimeout(() => {
-          if (isHovering && map.current) {
-            popup = createPopup();
-            popup.setLngLat([spot.longitude, spot.latitude]).addTo(map.current);
-
-            const popupElement = popup.getElement();
-            if (popupElement) {
-              popupElement.addEventListener('mouseenter', () => {
-                isHovering = true;
-              });
-              popupElement.addEventListener('mouseleave', () => {
-                isHovering = false;
-                if (popup) {
-                  popup.remove();
-                  popup = null;
-                }
-              });
-            }
+          if (popup) {
+            popup.remove();
           }
         }, 100);
-      };
-
-      const hidePopup = () => {
-        isHovering = false;
-        setTimeout(() => {
-          if (!isHovering && popup) {
-            popup.remove();
-            popup = null;
-          }
-        }, 50);
-      };
-
-      el.addEventListener('mouseenter', showPopup);
-      el.addEventListener('mouseleave', hidePopup);
+      });
 
       el.addEventListener('click', () => {
-        isHovering = false;
         if (popup) {
           popup.remove();
-          popup = null;
         }
         setSelectedSpot(spot);
       });
