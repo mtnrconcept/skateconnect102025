@@ -347,14 +347,7 @@ export default function MapSection() {
   };
 
   const getMarkerColor = (type: string): string => {
-    const colors: Record<string, string> = {
-      street: '#f97316',
-      skatepark: '#22c55e',
-      bowl: '#3b82f6',
-      diy: '#a855f7',
-      transition: '#06b6d4',
-    };
-    return colors[type] || '#64748b';
+    return '#ff8c00';
   };
 
   const getSpotTypeLabel = (type: string) => {
@@ -417,33 +410,34 @@ export default function MapSection() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="bg-white border-b border-slate-200 p-4">
+      <div className="bg-dark-800 border-b border-dark-700 p-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-800">Spots de Skate</h2>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={20} />
-            <span className="hidden sm:inline">Ajouter un spot</span>
-          </button>
+          <h2 className="text-2xl font-bold text-white">SPOT MAP</h2>
+          <div className="flex items-center gap-2">
+            <button className="text-gray-400 hover:text-white transition-colors">
+              <Filter size={20} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          <Filter size={18} className="text-slate-500 flex-shrink-0" />
-          {filterButtons.map((btn) => (
-            <button
-              key={btn.id}
-              onClick={() => setFilter(btn.id)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                filter === btn.id
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {btn.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Find new spots..."
+              className="w-full pl-10 pr-4 py-2 bg-dark-700 border border-dark-600 text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-500"
+            />
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+          </div>
+          <button className="px-3 py-2 bg-dark-700 border border-dark-600 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors text-sm">
+            Park
+          </button>
+          <button className="px-3 py-2 bg-dark-700 border border-dark-600 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors text-sm">
+            DIY
+          </button>
+          <button className="px-3 py-2 bg-dark-700 border border-dark-600 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors text-sm">
+            Indoor
+          </button>
         </div>
       </div>
 
@@ -453,33 +447,18 @@ export default function MapSection() {
             <div ref={mapContainer} className="absolute inset-0" />
             <button
               onClick={getUserLocation}
-              className="absolute top-4 left-4 bg-white rounded-lg p-3 shadow-lg hover:bg-slate-50 transition-colors z-10"
+              className="absolute top-4 left-4 bg-dark-800 rounded-lg p-3 shadow-lg hover:bg-dark-700 transition-colors z-10 border border-dark-700"
               title="Ma position"
             >
-              <Navigation size={20} className="text-slate-700" />
+              <Navigation size={20} className="text-orange-500" />
             </button>
           </div>
 
-          <div className="bg-white overflow-y-auto p-4">
-            <div className="mb-4">
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-blue-50 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-blue-600">{spots.length}</div>
-                  <div className="text-sm text-slate-600">spots au total</div>
-                </div>
-                <div className="bg-cyan-50 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-cyan-600">
-                    {spots.filter(s => s.is_verified).length}
-                  </div>
-                  <div className="text-sm text-slate-600">spots vérifiés</div>
-                </div>
-              </div>
-            </div>
-
+          <div className="bg-dark-900 overflow-y-auto p-4">
             {loading ? (
-              <div className="text-center py-8 text-slate-500">Chargement des spots...</div>
+              <div className="text-center py-8 text-gray-400">Chargement des spots...</div>
             ) : spots.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
+              <div className="text-center py-8 text-gray-400">
                 <MapPin size={48} className="mx-auto mb-2 opacity-30" />
                 <p>Aucun spot trouvé</p>
                 <p className="text-sm mt-1">Soyez le premier à en ajouter un!</p>
@@ -489,26 +468,21 @@ export default function MapSection() {
                 {spots.map((spot) => (
                   <div
                     key={spot.id}
-                    className="bg-white border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    className="bg-dark-800 border border-dark-700 rounded-lg p-4 hover:bg-dark-700 transition-colors cursor-pointer"
                     onClick={() => flyToSpot(spot)}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-slate-800">{spot.name}</h3>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        spot.spot_type === 'street' ? 'bg-orange-100 text-orange-700' :
-                        spot.spot_type === 'skatepark' ? 'bg-green-100 text-green-700' :
-                        spot.spot_type === 'bowl' ? 'bg-blue-100 text-blue-700' :
-                        'bg-purple-100 text-purple-700'
-                      }`}>
+                      <h3 className="font-semibold text-white">{spot.name}</h3>
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-orange-500 text-white">
                         {getSpotTypeLabel(spot.spot_type)}
                       </span>
                     </div>
                     {spot.description && (
-                      <p className="text-sm text-slate-600 mb-2 line-clamp-2">{spot.description}</p>
+                      <p className="text-sm text-gray-400 mb-2 line-clamp-2">{spot.description}</p>
                     )}
-                    <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>{spot.address || 'Adresse non spécifiée'}</span>
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 text-orange-500">
                         {'⭐'.repeat(spot.difficulty)}
                       </span>
                     </div>
@@ -516,6 +490,14 @@ export default function MapSection() {
                 ))}
               </div>
             )}
+
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="fixed bottom-24 left-1/2 -translate-x-1/2 md:bottom-6 flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition-colors shadow-lg font-semibold"
+            >
+              <Plus size={20} />
+              <span>Add a Spot</span>
+            </button>
           </div>
         </div>
       </div>

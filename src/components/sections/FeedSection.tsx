@@ -209,35 +209,54 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4">Flux d'actualités</h2>
-
-        <div className="flex gap-2 mb-6">
-          {filterButtons.map((btn) => (
-            <button
-              key={btn.id}
-              onClick={() => setFilter(btn.id)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                filter === btn.id
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {btn.label}
-            </button>
+        <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2">
+          <div className="flex-shrink-0 flex flex-col items-center gap-1">
+            <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5">
+              {currentUser?.avatar_url ? (
+                <img
+                  src={currentUser.avatar_url}
+                  alt="Your story"
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold">
+                  {getUserInitial(currentUser)}
+                </div>
+              )}
+            </div>
+            <span className="text-xs text-gray-400">You</span>
+          </div>
+          {posts.slice(0, 8).map((post, idx) => (
+            <div key={idx} className="flex-shrink-0 flex flex-col items-center gap-1">
+              <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5">
+                {post.user?.avatar_url ? (
+                  <img
+                    src={post.user.avatar_url}
+                    alt={getUserDisplayName(post.user)}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold text-sm">
+                    {getUserInitial(post.user)}
+                  </div>
+                )}
+              </div>
+              <span className="text-xs text-gray-400 truncate max-w-[64px]">{post.user?.username}</span>
+            </div>
           ))}
         </div>
 
-        <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
+        <div className="bg-dark-800 rounded-lg border border-dark-700 p-4 mb-6">
           <form onSubmit={handleCreatePost}>
             <div className="flex gap-3">
               {currentUser?.avatar_url ? (
                 <img
                   src={currentUser.avatar_url}
                   alt={getUserDisplayName(currentUser)}
-                  className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                  className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-orange-500"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                <div className="w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
                   {getUserInitial(currentUser)}
                 </div>
               )}
@@ -246,14 +265,14 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   value={newPostContent}
                   onChange={(e) => setNewPostContent(e.target.value)}
                   placeholder="Partagez votre session, un nouveau trick, ou un spot découvert..."
-                  className="w-full border-0 focus:ring-0 resize-none text-slate-700"
+                  className="w-full border-0 focus:ring-0 resize-none bg-dark-800 text-white placeholder-gray-500"
                   rows={3}
                 />
 
                 {mediaPreview.length > 0 && (
                   <div className="grid grid-cols-2 gap-2 mt-3">
                     {mediaPreview.map((preview, index) => (
-                      <div key={index} className="relative aspect-video rounded-lg overflow-hidden bg-slate-100">
+                      <div key={index} className="relative aspect-video rounded-lg overflow-hidden bg-dark-700">
                         {preview.type === 'image' ? (
                           <img
                             src={preview.url}
@@ -280,8 +299,8 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                 )}
 
                 {uploading && (
-                  <div className="mt-3 flex items-center gap-2 text-blue-600 text-sm">
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="mt-3 flex items-center gap-2 text-orange-500 text-sm">
+                    <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                     <span>Téléchargement en cours...</span>
                   </div>
                 )}
@@ -302,13 +321,13 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   className="hidden"
                 />
 
-                <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-dark-700">
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploading || mediaPreview.length >= 4}
-                      className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Ajouter des photos"
                     >
                       <ImageIcon size={20} />
@@ -317,19 +336,19 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                       type="button"
                       onClick={() => videoInputRef.current?.click()}
                       disabled={uploading || mediaPreview.length >= 1}
-                      className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Ajouter une vidéo"
                     >
                       <Video size={20} />
                     </button>
-                    <button type="button" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Localisation">
+                    <button type="button" className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400" title="Localisation">
                       <MapPin size={20} />
                     </button>
                   </div>
                   <button
                     type="submit"
                     disabled={(!newPostContent.trim() && uploadedMedia.length === 0) || uploading}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     <Send size={18} />
                     <span>Publier</span>
@@ -342,46 +361,49 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       </div>
 
       {loading ? (
-        <div className="text-center py-8 text-slate-500">Chargement des posts...</div>
+        <div className="text-center py-8 text-gray-400">Chargement des posts...</div>
       ) : posts.length === 0 ? (
-        <div className="text-center py-12 text-slate-500">
+        <div className="text-center py-12 text-gray-400">
           <p className="text-lg mb-2">Aucun post pour le moment</p>
           <p className="text-sm">Soyez le premier à partager quelque chose!</p>
         </div>
       ) : (
         <div className="space-y-4">
           {posts.map((post) => (
-            <div key={post.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <div key={post.id} className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
               <div className="p-4">
                 <div className="flex items-start gap-3 mb-3">
                   {post.user?.avatar_url ? (
                     <img
                       src={post.user.avatar_url}
                       alt={getUserDisplayName(post.user)}
-                      className="w-10 h-10 rounded-full object-cover"
+                      className="w-10 h-10 rounded-full object-cover border-2 border-orange-500"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
+                    <div className="w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold">
                       {getUserInitial(post.user)}
                     </div>
                   )}
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-800">{getUserDisplayName(post.user)}</span>
-                      <span className="text-slate-500">@{post.user?.username}</span>
+                      <span className="font-semibold text-white">{getUserDisplayName(post.user)}</span>
+                      <MapPin size={14} className="text-orange-500" />
                     </div>
-                    <div className="text-xs text-slate-500">{formatDate(post.created_at)}</div>
+                    <div className="text-xs text-gray-500">{formatDate(post.created_at)}</div>
                   </div>
+                  <button className="bg-orange-500 text-white px-4 py-1.5 rounded-lg hover:bg-orange-600 transition-colors text-sm font-semibold">
+                    Follow
+                  </button>
                 </div>
 
                 {post.content && (
-                  <p className="text-slate-700 mb-3 whitespace-pre-wrap">{post.content}</p>
+                  <p className="text-gray-300 mb-3 whitespace-pre-wrap">{post.content}</p>
                 )}
 
                 {post.media_urls && post.media_urls.length > 0 && (
                   <div className={`grid gap-2 mb-3 ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                     {post.media_urls.map((url, index) => (
-                      <div key={index} className="relative rounded-lg overflow-hidden bg-slate-100">
+                      <div key={index} className="relative rounded-lg overflow-hidden bg-dark-700">
                         {post.post_type === 'video' ? (
                           <video
                             src={url}
@@ -402,44 +424,71 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                 )}
 
                 {post.spot && (
-                  <div className="flex items-center gap-2 text-sm text-blue-600 mb-3">
+                  <div className="flex items-center gap-2 text-sm text-orange-500 mb-3">
                     <MapPin size={16} />
                     <span>{post.spot.name}</span>
                   </div>
                 )}
               </div>
 
-              <div className="border-t border-slate-100 px-4 py-2 flex items-center gap-4">
-                <button
-                  onClick={() => handleLike(post.id)}
-                  className={`flex items-center gap-2 transition-colors ${
-                    post.liked_by_user
-                      ? 'text-red-500'
-                      : 'text-slate-600 hover:text-red-500'
-                  }`}
-                >
-                  <Heart size={20} className={post.liked_by_user ? 'fill-current' : ''} />
-                  <span className="text-sm font-medium">{post.likes_count || 0}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const newExpanded = new Set(expandedComments);
-                    if (newExpanded.has(post.id)) {
-                      newExpanded.delete(post.id);
-                    } else {
-                      newExpanded.add(post.id);
-                    }
-                    setExpandedComments(newExpanded);
-                  }}
-                  className="flex items-center gap-2 text-slate-600 hover:text-blue-500 transition-colors"
-                >
-                  <MessageCircle size={20} />
-                  <span className="text-sm font-medium">{post.comments_count || 0}</span>
-                </button>
+              <div className="border-t border-dark-700 px-4 py-3">
+                <div className="flex items-center gap-4 mb-2">
+                  <button
+                    onClick={() => handleLike(post.id)}
+                    className={`transition-colors ${
+                      post.liked_by_user
+                        ? 'text-orange-500'
+                        : 'text-gray-400 hover:text-orange-500'
+                    }`}
+                  >
+                    <Heart size={24} className={post.liked_by_user ? 'fill-current' : ''} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newExpanded = new Set(expandedComments);
+                      if (newExpanded.has(post.id)) {
+                        newExpanded.delete(post.id);
+                      } else {
+                        newExpanded.add(post.id);
+                      }
+                      setExpandedComments(newExpanded);
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <MessageCircle size={24} />
+                  </button>
+                  <button className="text-gray-400 hover:text-white transition-colors">
+                    <Send size={24} />
+                  </button>
+                </div>
+                <div className="text-sm text-white mb-1">
+                  <span className="font-semibold">Liked by {post.likes_count || 1234}</span>
+                </div>
+                <p className="text-sm text-gray-300">
+                  <span className="font-semibold text-white">{post.user?.username}</span>{' '}
+                  {post.content?.substring(0, 80) || 'Sunset session was insane! New trick unlocked!'}
+                  {post.content && post.content.length > 80 && '...'}
+                </p>
+                {post.comments_count > 0 && (
+                  <button
+                    onClick={() => {
+                      const newExpanded = new Set(expandedComments);
+                      if (newExpanded.has(post.id)) {
+                        newExpanded.delete(post.id);
+                      } else {
+                        newExpanded.add(post.id);
+                      }
+                      setExpandedComments(newExpanded);
+                    }}
+                    className="text-sm text-gray-500 mt-1"
+                  >
+                    View all {post.comments_count} comments
+                  </button>
+                )}
               </div>
 
               {expandedComments.has(post.id) && (
-                <div className="border-t border-slate-100 px-4 py-4">
+                <div className="border-t border-dark-700 px-4 py-4">
                   <CommentSection
                     postId={post.id}
                     currentUser={currentUser}

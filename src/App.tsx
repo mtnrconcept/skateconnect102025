@@ -69,13 +69,13 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-dark-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 animate-bounce">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-full mb-4 animate-bounce">
             <span className="text-3xl">🛹</span>
           </div>
-          <h3 className="text-white text-xl font-bold mb-2">SkateConnect</h3>
-          <p className="text-slate-300">Chargement...</p>
+          <h3 className="text-white text-xl font-bold mb-2">SHREDLOC</h3>
+          <p className="text-gray-400">Chargement...</p>
         </div>
       </div>
     );
@@ -86,7 +86,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-dark-900">
       <Header
         profile={profile}
         currentSection={currentSection}

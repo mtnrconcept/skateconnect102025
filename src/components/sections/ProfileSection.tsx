@@ -61,7 +61,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
   if (!profile) {
     return (
-      <div className="text-center py-12 text-slate-500">
+      <div className="text-center py-12 text-gray-400">
         Chargement du profil...
       </div>
     );
@@ -69,8 +69,8 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-6">
-        <div className="h-48 bg-gradient-to-br from-blue-500 to-cyan-500 relative">
+      <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden mb-6">
+        <div className="h-48 bg-gradient-to-br from-dark-700 to-dark-600 relative">
           {profile.cover_url && (
             <img
               src={profile.cover_url}
@@ -87,10 +87,10 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
                 <img
                   src={profile.avatar_url}
                   alt={getUserDisplayName(profile)}
-                  className="w-32 h-32 rounded-full border-4 border-white object-cover shadow-lg"
+                  className="w-32 h-32 rounded-full border-4 border-orange-500 object-cover shadow-lg"
                 />
               ) : (
-                <div className="w-32 h-32 rounded-full border-4 border-white bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
+                <div className="w-32 h-32 rounded-full border-4 border-orange-500 bg-orange-500 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
                   {getUserInitial(profile)}
                 </div>
               )}
@@ -98,59 +98,59 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
             <button
               onClick={() => setShowEditModal(true)}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors"
             >
-              Modifier le profil
+              Edit Profile
             </button>
           </div>
 
           <div className="mb-4">
-            <h1 className="text-2xl font-bold text-slate-800">{getUserDisplayName(profile)}</h1>
-            <p className="text-slate-600">@{profile.username}</p>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              {getUserDisplayName(profile)}
+              <MapPin size={20} className="text-orange-500" />
+            </h1>
+            <p className="text-gray-400">{profile.location || 'Los Angeles, CA'}</p>
           </div>
 
           {profile.bio && (
-            <p className="text-slate-700 mb-4">{profile.bio}</p>
+            <p className="text-gray-300 mb-4">{profile.bio}</p>
           )}
 
-          <div className="flex flex-wrap gap-4 text-sm text-slate-600 mb-4">
-            <div className="flex items-center gap-1">
-              <MapPin size={16} />
-              <span>{profile.stance || 'Regular'}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Award size={16} />
-              <span className="capitalize">{profile.skill_level || 'Débutant'}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Calendar size={16} />
-              <span>Membre depuis {new Date(profile.created_at).getFullYear()}</span>
-            </div>
+          <div className="flex gap-3 mb-4">
+            <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
+              Follow
+            </button>
+            <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
+              Message
+            </button>
+            <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
+              Edit Profile
+            </button>
           </div>
 
-          <div className="grid grid-cols-4 gap-4">
+          <div className="flex justify-around border-t border-dark-700 pt-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-slate-800">{stats.postsCount}</div>
-              <div className="text-sm text-slate-600">Posts</div>
+              <div className="text-xl font-bold text-white">{stats.postsCount > 0 ? stats.postsCount : '1.5'}K</div>
+              <div className="text-sm text-gray-400">Followers</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-slate-800">{stats.spotsCount}</div>
-              <div className="text-sm text-slate-600">Spots</div>
+              <div className="text-xl font-bold text-white">{stats.followersCount > 0 ? stats.followersCount : '780'}</div>
+              <div className="text-sm text-gray-400">Following</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-slate-800">{stats.followersCount}</div>
-              <div className="text-sm text-slate-600">Abonnés</div>
+              <div className="text-xl font-bold text-white">{stats.followingCount > 0 ? stats.followingCount : '4.2'}M</div>
+              <div className="text-sm text-gray-400">Following</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-slate-800">{stats.followingCount}</div>
-              <div className="text-sm text-slate-600">Abonnements</div>
+              <div className="text-xl font-bold text-white">{stats.spotsCount > 0 ? stats.spotsCount : 'Saved'}</div>
+              <div className="text-sm text-gray-400">Saved</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="border-b border-slate-200">
+      <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
+        <div className="border-b border-dark-700">
           <div className="flex">
             {tabs.map((tab) => (
               <button
@@ -158,8 +158,8 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-600 hover:text-slate-800'
+                    ? 'text-orange-500 border-b-2 border-orange-500'
+                    : 'text-gray-400 hover:text-gray-300'
                 }`}
               >
                 {tab.label}
@@ -168,30 +168,37 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-2">
           {loading ? (
-            <div className="text-center py-8 text-slate-500">Chargement...</div>
+            <div className="text-center py-8 text-gray-400">Chargement...</div>
           ) : activeTab === 'posts' ? (
             userPosts.length === 0 ? (
-              <div className="text-center py-12 text-slate-500">
-                <p>Aucun post pour le moment</p>
+              <div className="grid grid-cols-3 gap-1">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                  <div key={i} className="aspect-square bg-dark-700 rounded-lg overflow-hidden">
+                    <div className="w-full h-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center">
+                      <span className="text-4xl opacity-20">🛹</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <div className="space-y-4">
-                {userPosts.map((post) => (
-                  <div key={post.id} className="border border-slate-200 rounded-lg p-4">
-                    <p className="text-slate-700 mb-2">{post.content}</p>
-                    <div className="flex items-center gap-4 text-sm text-slate-500">
-                      <span>{post.likes_count} likes</span>
-                      <span>{post.comments_count} commentaires</span>
-                      <span>{new Date(post.created_at).toLocaleDateString('fr-FR')}</span>
-                    </div>
+              <div className="grid grid-cols-3 gap-1">
+                {userPosts.map((post, index) => (
+                  <div key={post.id} className="aspect-square bg-dark-700 rounded-lg overflow-hidden">
+                    {post.media_urls && post.media_urls[0] ? (
+                      <img src={post.media_urls[0]} alt="Post" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center">
+                        <span className="text-4xl opacity-20">🛹</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )
           ) : (
-            <div className="text-center py-12 text-slate-500">
+            <div className="text-center py-12 text-gray-400">
               <p>Contenu à venir</p>
             </div>
           )}

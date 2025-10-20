@@ -60,15 +60,15 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-dark-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-12 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
+        <div className="bg-dark-800 rounded-2xl shadow-2xl overflow-hidden border border-dark-700">
+          <div className="bg-dark-800 px-8 py-12 text-center border-b border-dark-700">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-full mb-4">
               <span className="text-3xl">🛹</span>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">SkateConnect</h1>
-            <p className="text-blue-100">Le réseau social des skateboarders</p>
+            <h1 className="text-3xl font-bold text-white mb-2">SHREDLOC</h1>
+            <p className="text-gray-400">Le réseau social des skateboarders</p>
           </div>
 
           <div className="p-8">
@@ -78,8 +78,8 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                 onClick={() => setIsLogin(true)}
                 className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${
                   isLogin
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-dark-700 text-gray-400 hover:bg-dark-600'
                 }`}
               >
                 Connexion
@@ -89,8 +89,8 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                 onClick={() => setIsLogin(false)}
                 className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${
                   !isLogin
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-dark-700 text-gray-400 hover:bg-dark-600'
                 }`}
               >
                 Inscription
@@ -99,7 +99,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-400 mb-1.5">
                   Email
                 </label>
                 <input
@@ -108,7 +108,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                  className="w-full px-4 py-2.5 bg-dark-700 border border-dark-600 text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-shadow placeholder-gray-500"
                   placeholder="votre@email.com"
                 />
               </div>
@@ -116,7 +116,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
               {!isLogin && (
                 <>
                   <div>
-                    <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1.5">
+                    <label htmlFor="username" className="block text-sm font-medium text-gray-400 mb-1.5">
                       Nom d'utilisateur
                     </label>
                     <input
@@ -125,13 +125,13 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       required
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                      className="w-full px-4 py-2.5 bg-dark-700 border border-dark-600 text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-shadow placeholder-gray-500"
                       placeholder="skater123"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="displayName" className="block text-sm font-medium text-slate-700 mb-1.5">
+                    <label htmlFor="displayName" className="block text-sm font-medium text-gray-400 mb-1.5">
                       Nom d'affichage
                     </label>
                     <input
@@ -140,7 +140,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       required
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                      className="w-full px-4 py-2.5 bg-dark-700 border border-dark-600 text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-shadow placeholder-gray-500"
                       placeholder="Votre nom"
                     />
                   </div>
@@ -148,7 +148,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
               )}
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-400 mb-1.5">
                   Mot de passe
                 </label>
                 <input
@@ -157,13 +157,13 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                  className="w-full px-4 py-2.5 bg-dark-700 border border-dark-600 text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-shadow placeholder-gray-500"
                   placeholder="••••••••"
                 />
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
@@ -171,7 +171,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-cyan-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-orange-500 text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <span>Chargement...</span>
