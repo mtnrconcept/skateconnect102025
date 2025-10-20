@@ -76,7 +76,7 @@ function App() {
       <div className="min-h-screen bg-dark-900 flex items-center justify-center">
         <div className="text-center">
           <div className="flex justify-center mb-6">
-            <img src="/logo.png" alt="Shredloc" className="h-16 w-auto animate-pulse" />
+            <img src="/logo.png" alt="Shredloc" className="h-150 w-auto animate-pulse" />
           </div>
           <p className="text-gray-400">Chargement...</p>
         </div>
