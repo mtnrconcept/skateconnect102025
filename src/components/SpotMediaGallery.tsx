@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Heart, Eye, Filter, Image as ImageIcon, Video, Clock, TrendingUp } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Heart, Eye, Filter, Image as ImageIcon, Video, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import LazyImage from './LazyImage';
 import type { SpotMedia } from '../types';
@@ -19,12 +19,21 @@ interface MediaWithStats extends SpotMedia {
 }
 
 export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }: SpotMediaGalleryProps) {
-  const [media, setMedia] = useState<MediaWithStats[]>([]);
+  const [allMedia, setAllMedia] = useState<MediaWithStats[]>([]);
   const [filteredMedia, setFilteredMedia] = useState<MediaWithStats[]>([]);
+  const [displayedMedia, setDisplayedMedia] = useState<MediaWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [currentFilter, setCurrentFilter] = useState<FilterType>('recent');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const ITEMS_PER_PAGE = 12;
 
   useEffect(() => {
     loadCurrentUser();
@@ -33,7 +42,20 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
 
   useEffect(() => {
     applyFilter();
-  }, [media, currentFilter]);
+  }, [allMedia, currentFilter]);
+
+  useEffect(() => {
+    loadMoreItems();
+  }, [filteredMedia, page]);
+
+  useEffect(() => {
+    setupInfiniteScroll();
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, loadingMore]);
 
   const loadCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -70,9 +92,9 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
           user_liked: likedIds.has(m.id),
         }));
 
-        setMedia(mediaWithLikes as MediaWithStats[]);
+        setAllMedia(mediaWithLikes as MediaWithStats[]);
       } else {
-        setMedia((mediaData || []) as MediaWithStats[]);
+        setAllMedia((mediaData || []) as MediaWithStats[]);
       }
     } catch (error) {
       console.error('Error loading media:', error);
@@ -82,7 +104,7 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
   };
 
   const applyFilter = () => {
-    let filtered = [...media];
+    let filtered = [...allMedia];
 
     switch (currentFilter) {
       case 'recent':
@@ -105,7 +127,56 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
         break;
     }
 
-    setFilteredMedia(filtered.slice(0, 12));
+    setFilteredMedia(filtered);
+    setPage(1);
+    setDisplayedMedia([]);
+    setHasMore(filtered.length > 0);
+  };
+
+  const loadMoreItems = () => {
+    if (filteredMedia.length === 0) {
+      setDisplayedMedia([]);
+      setHasMore(false);
+      return;
+    }
+
+    const startIndex = (page - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const newItems = filteredMedia.slice(startIndex, endIndex);
+
+    if (page === 1) {
+      setDisplayedMedia(newItems);
+    } else {
+      setDisplayedMedia(prev => [...prev, ...newItems]);
+    }
+
+    setHasMore(endIndex < filteredMedia.length);
+    setLoadingMore(false);
+  };
+
+  const setupInfiniteScroll = () => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && hasMore && !loadingMore) {
+          setLoadingMore(true);
+          setPage(prev => prev + 1);
+        }
+      },
+      {
+        root: null,
+        rootMargin: '100px',
+        threshold: 0.1,
+      }
+    );
+
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current);
+    }
   };
 
   const handleLike = async (mediaId: string, e: React.MouseEvent) => {
@@ -116,7 +187,7 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
       return;
     }
 
-    const mediaItem = media.find(m => m.id === mediaId);
+    const mediaItem = allMedia.find(m => m.id === mediaId);
     if (!mediaItem) return;
 
     try {
@@ -127,7 +198,7 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
           .eq('media_id', mediaId)
           .eq('user_id', currentUser.id);
 
-        setMedia(prev => prev.map(m =>
+        setAllMedia(prev => prev.map(m =>
           m.id === mediaId
             ? { ...m, user_liked: false, likes_count: Math.max(0, (m.likes_count || 0) - 1) }
             : m
@@ -137,7 +208,7 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
           .from('spot_media_likes')
           .insert({ media_id: mediaId, user_id: currentUser.id });
 
-        setMedia(prev => prev.map(m =>
+        setAllMedia(prev => prev.map(m =>
           m.id === mediaId
             ? { ...m, user_liked: true, likes_count: (m.likes_count || 0) + 1 }
             : m
@@ -176,7 +247,7 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800">
-          Galerie <span className="text-slate-500">({media.length})</span>
+          Galerie <span className="text-slate-500">({filteredMedia.length})</span>
         </h3>
 
         <div className="relative">
@@ -219,7 +290,7 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
             <div key={i} className="aspect-square bg-slate-200 rounded-lg animate-pulse" />
           ))}
         </div>
-      ) : filteredMedia.length === 0 ? (
+      ) : displayedMedia.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-lg">
           <ImageIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
           <p className="text-slate-500 mb-4">
@@ -233,74 +304,85 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
-          {filteredMedia.map((item, index) => (
-            <div
-              key={item.id}
-              onClick={() => {
-                trackView(item.id);
-                onMediaClick(item, index);
-              }}
-              className="relative aspect-square bg-slate-900 rounded-lg overflow-hidden cursor-pointer group"
-            >
-              {item.media_type === 'video' ? (
-                <div className="relative w-full h-full">
-                  <video
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            {displayedMedia.map((item, index) => (
+              <div
+                key={item.id}
+                onClick={() => {
+                  trackView(item.id);
+                  onMediaClick(item, index);
+                }}
+                className="relative aspect-square bg-slate-900 rounded-lg overflow-hidden cursor-pointer group"
+              >
+                {item.media_type === 'video' ? (
+                  <div className="relative w-full h-full">
+                    <video
+                      src={item.media_url}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40">
+                      <Video className="w-8 h-8 text-white" />
+                    </div>
+                  </div>
+                ) : (
+                  <LazyImage
                     src={item.media_url}
+                    alt={item.caption || 'Spot media'}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40">
-                    <Video className="w-8 h-8 text-white" />
+                )}
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                <div className="absolute bottom-0 left-0 right-0 p-2 text-white text-xs flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Eye size={12} />
+                      <span>{item.views_count || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Heart size={12} className={item.user_liked ? 'fill-red-500 text-red-500' : ''} />
+                      <span>{item.likes_count || 0}</span>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <LazyImage
-                  src={item.media_url}
-                  alt={item.caption || 'Spot media'}
-                  className="w-full h-full object-cover"
-                />
-              )}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <button
+                  onClick={(e) => handleLike(item.id, e)}
+                  className="absolute top-2 right-2 p-1.5 bg-white bg-opacity-90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-opacity-100"
+                >
+                  <Heart
+                    size={16}
+                    className={item.user_liked ? 'fill-red-500 text-red-500' : 'text-slate-600'}
+                  />
+                </button>
 
-              <div className="absolute bottom-0 left-0 right-0 p-2 text-white text-xs flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <Eye size={12} />
-                    <span>{item.views_count || 0}</span>
+                {item.media_type === 'video' && (
+                  <div className="absolute top-2 left-2 px-2 py-1 bg-black bg-opacity-75 rounded text-white text-xs">
+                    <Video size={12} className="inline mr-1" />
+                    Vidéo
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Heart size={12} className={item.user_liked ? 'fill-red-500 text-red-500' : ''} />
-                    <span>{item.likes_count || 0}</span>
-                  </div>
-                </div>
+                )}
               </div>
+            ))}
+          </div>
 
-              <button
-                onClick={(e) => handleLike(item.id, e)}
-                className="absolute top-2 right-2 p-1.5 bg-white bg-opacity-90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-opacity-100"
-              >
-                <Heart
-                  size={16}
-                  className={item.user_liked ? 'fill-red-500 text-red-500' : 'text-slate-600'}
-                />
-              </button>
-
-              {item.media_type === 'video' && (
-                <div className="absolute top-2 left-2 px-2 py-1 bg-black bg-opacity-75 rounded text-white text-xs">
-                  <Video size={12} className="inline mr-1" />
-                  Vidéo
+          {hasMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-4">
+              {loadingMore && (
+                <div className="flex items-center gap-2 text-slate-500">
+                  <div className="animate-spin w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full"></div>
+                  <span className="text-sm">Chargement...</span>
                 </div>
               )}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {filteredMedia.length > 0 && filteredMedia.length < media.length && (
-        <p className="text-center text-sm text-slate-500">
-          Affichage de {filteredMedia.length} sur {media.length} médias
-        </p>
+          <p className="text-center text-sm text-slate-500">
+            {displayedMedia.length} sur {filteredMedia.length} médias
+          </p>
+        </>
       )}
     </div>
   );
