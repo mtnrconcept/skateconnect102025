@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, MapPin, Navigation } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import MediaUploader from './MediaUploader';
 
 interface AddSpotModalProps {
   onClose: () => void;
@@ -16,6 +17,7 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
 
   const [selectedSurfaces, setSelectedSurfaces] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
@@ -94,7 +96,7 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
         return;
       }
 
-      const { error } = await supabase.from('spots').insert({
+      const { data: newSpot, error: spotError } = await supabase.from('spots').insert({
         created_by: user.id,
         name,
         description,
@@ -105,9 +107,26 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
         difficulty,
         surfaces: selectedSurfaces,
         modules: selectedModules,
-      });
+      }).select().single();
 
-      if (error) throw error;
+      if (spotError) throw spotError;
+
+      if (mediaUrls.length > 0 && newSpot) {
+        const mediaInserts = mediaUrls.map(url => ({
+          spot_id: newSpot.id,
+          media_url: url,
+          media_type: url.includes('video') ? 'video' : 'image',
+          uploaded_by: user.id,
+        }));
+
+        const { error: mediaError } = await supabase
+          .from('spot_media')
+          .insert(mediaInserts);
+
+        if (mediaError) {
+          console.error('Error adding spot media:', mediaError);
+        }
+      }
 
       alert('Spot ajouté avec succès!');
       onSpotAdded();
@@ -166,6 +185,34 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
                 placeholder="Décrivez le spot, ses caractéristiques, l'ambiance..."
                 rows={3}
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Photos et Vidéos
+              </label>
+              <MediaUploader
+                bucket="spots"
+                acceptVideo={true}
+                maxFiles={5}
+                onUploadComplete={(url) => {
+                  setMediaUrls(prev => [...prev, url]);
+                }}
+                onError={(error) => {
+                  alert(error);
+                }}
+                compressionOptions={{
+                  maxWidth: 1920,
+                  maxHeight: 1920,
+                  quality: 0.85,
+                  maxSizeMB: 5,
+                }}
+              />
+              {mediaUrls.length > 0 && (
+                <p className="mt-2 text-sm text-green-600">
+                  {mediaUrls.length} fichier(s) téléchargé(s)
+                </p>
+              )}
             </div>
 
             <div>

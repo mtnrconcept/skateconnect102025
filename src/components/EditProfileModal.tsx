@@ -110,6 +110,14 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                       alert(error);
                       setUploadingCover(false);
                     }}
+                    enableCrop={true}
+                    cropAspectRatio={3}
+                    compressionOptions={{
+                      maxWidth: 1920,
+                      maxHeight: 640,
+                      quality: 0.9,
+                      maxSizeMB: 5,
+                    }}
                     className="w-full"
                   />
                 </div>
@@ -143,6 +151,14 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                   onError={(error) => {
                     alert(error);
                     setUploadingAvatar(false);
+                  }}
+                  enableCrop={true}
+                  cropAspectRatio={1}
+                  compressionOptions={{
+                    maxWidth: 800,
+                    maxHeight: 800,
+                    quality: 0.9,
+                    maxSizeMB: 2,
                   }}
                 />
               </div>
