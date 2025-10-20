@@ -1,7 +1,8 @@
 import { MapPin, Camera, Calendar } from 'lucide-react';
+import type { Section } from '../../types';
 
 interface AddSectionProps {
-  onNavigate: (section: 'map' | 'feed') => void;
+  onNavigate: (section: Section) => void;
 }
 
 export default function AddSection({ onNavigate }: AddSectionProps) {

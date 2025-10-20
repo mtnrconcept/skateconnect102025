@@ -266,4 +266,17 @@ export interface LeaderboardEntry {
   profile?: Profile;
 }
 
-export type Section = 'map' | 'feed' | 'add' | 'challenges' | 'profile' | 'messages' | 'notifications' | 'rewards' | 'leaderboard' | 'badges';
+export type Section =
+  | 'map'
+  | 'feed'
+  | 'add'
+  | 'challenges'
+  | 'profile'
+  | 'messages'
+  | 'notifications'
+  | 'rewards'
+  | 'leaderboard'
+  | 'badges'
+  | 'settings'
+  | 'privacy'
+  | 'terms';

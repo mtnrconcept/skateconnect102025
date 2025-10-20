@@ -1,5 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mail, LogOut, Map, Home, Plus, Trophy, User, Award, Gift, TrendingUp } from 'lucide-react';
+import {
+  Search,
+  Bell,
+  Mail,
+  LogOut,
+  Map,
+  Home,
+  Plus,
+  Trophy,
+  User,
+  Award,
+  Gift,
+  TrendingUp,
+  Settings,
+  ShieldCheck,
+  FileText,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
@@ -142,6 +158,39 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
               <Award size={20} />
               <span>Badges</span>
             </button>
+            <button
+              onClick={() => onSectionChange('settings')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'settings'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-gray-400 hover:bg-dark-700'
+              }`}
+            >
+              <Settings size={20} />
+              <span>Paramètres</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('privacy')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'privacy'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-gray-400 hover:bg-dark-700'
+              }`}
+            >
+              <ShieldCheck size={20} />
+              <span>Confidentialité</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('terms')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'terms'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-gray-400 hover:bg-dark-700'
+              }`}
+            >
+              <FileText size={20} />
+              <span>Conditions</span>
+            </button>
           </nav>
         )}
 
@@ -157,6 +206,13 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => onSectionChange?.('settings')}
+            className="relative p-2 hover:bg-dark-700 rounded-full transition-colors"
+            title="Paramètres"
+          >
+            <Settings size={20} className="text-gray-400" />
+          </button>
           <button
             onClick={() => setShowNotifications(true)}
             className="relative p-2 hover:bg-dark-700 rounded-full transition-colors"
