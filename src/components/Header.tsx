@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Mail, LogOut, Map, Home, Plus, Trophy, User, Camera } from 'lucide-react';
+import { Search, Bell, Mail, LogOut, Map, Home, Plus, Trophy, User, Camera, Award, Gift, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
@@ -104,6 +104,39 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
             >
               <User size={20} />
               <span>Profil</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('leaderboard')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'leaderboard'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-gray-400 hover:bg-dark-700'
+              }`}
+            >
+              <TrendingUp size={20} />
+              <span>Classement</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('rewards')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'rewards'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-gray-400 hover:bg-dark-700'
+              }`}
+            >
+              <Gift size={20} />
+              <span>Store</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('badges')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'badges'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-gray-400 hover:bg-dark-700'
+              }`}
+            >
+              <Award size={20} />
+              <span>Badges</span>
             </button>
           </nav>
         )}

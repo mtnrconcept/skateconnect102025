@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { MapPin, Calendar, Award, Users } from 'lucide-react';
+import { MapPin, Calendar, Award, Users, TrendingUp, Gift } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import EditProfileModal from '../EditProfileModal';
-import type { Profile, Post } from '../../types';
+import XPProgressBar from '../XPProgressBar';
+import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
   profile: Profile | null;
@@ -18,6 +19,8 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
     followersCount: 0,
     followingCount: 0,
   });
+  const [userXP, setUserXP] = useState<UserXP | null>(null);
+  const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -31,11 +34,13 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
     if (!profile) return;
 
     try {
-      const [postsResult, spotsResult, followersResult, followingResult] = await Promise.all([
+      const [postsResult, spotsResult, followersResult, followingResult, xpResult, badgesResult] = await Promise.all([
         supabase.from('posts').select('*', { count: 'exact' }).eq('user_id', profile.id),
         supabase.from('spots').select('*', { count: 'exact' }).eq('created_by', profile.id),
         supabase.from('follows').select('*', { count: 'exact' }).eq('following_id', profile.id),
         supabase.from('follows').select('*', { count: 'exact' }).eq('follower_id', profile.id),
+        supabase.from('user_xp').select('*').eq('user_id', profile.id).maybeSingle(),
+        supabase.from('user_badges').select('*, badge:badges(*)').eq('user_id', profile.id).eq('is_displayed', true).limit(5),
       ]);
 
       setUserPosts(postsResult.data || []);
@@ -45,6 +50,8 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
         followersCount: followersResult.count || 0,
         followingCount: followingResult.count || 0,
       });
+      setUserXP(xpResult.data);
+      setUserBadges(badgesResult.data || []);
     } catch (error) {
       console.error('Error loading profile data:', error);
     } finally {
@@ -114,6 +121,26 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
           {profile.bio && (
             <p className="text-gray-300 mb-4">{profile.bio}</p>
+          )}
+
+          {userXP && (
+            <div className="mb-4">
+              <XPProgressBar userXP={userXP} compact />
+            </div>
+          )}
+
+          {userBadges.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2">
+              {userBadges.map((userBadge) => (
+                <div
+                  key={userBadge.id}
+                  className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-2xl border-2 border-orange-500"
+                  title={userBadge.badge?.name}
+                >
+                  {userBadge.badge?.icon}
+                </div>
+              ))}
+            </div>
           )}
 
           <div className="flex gap-3 mb-4">

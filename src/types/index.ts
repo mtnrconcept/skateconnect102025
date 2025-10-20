@@ -196,4 +196,74 @@ export interface SpotMediaComment {
   user?: Profile;
 }
 
-export type Section = 'map' | 'feed' | 'add' | 'challenges' | 'profile' | 'messages' | 'notifications';
+export interface UserXP {
+  user_id: string;
+  total_xp: number;
+  current_level: number;
+  xp_to_next_level: number;
+  level_title: string;
+  updated_at: string;
+}
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  requirement: Record<string, any>;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  created_at: string;
+}
+
+export interface UserBadge {
+  id: string;
+  user_id: string;
+  badge_id: string;
+  earned_at: string;
+  is_displayed: boolean;
+  badge?: Badge;
+}
+
+export interface XPTransaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  action_type: string;
+  reference_id: string | null;
+  created_at: string;
+}
+
+export interface Reward {
+  id: string;
+  name: string;
+  description: string;
+  image_url: string | null;
+  type: 'physical' | 'digital' | 'discount';
+  cost_xp: number;
+  stock: number;
+  partner: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UserReward {
+  id: string;
+  user_id: string;
+  reward_id: string;
+  claimed_at: string;
+  status: 'pending' | 'shipped' | 'delivered';
+  redemption_code: string | null;
+  reward?: Reward;
+}
+
+export interface LeaderboardEntry {
+  user_id: string;
+  total_xp: number;
+  current_level: number;
+  level_title: string;
+  rank: number;
+  profile?: Profile;
+}
+
+export type Section = 'map' | 'feed' | 'add' | 'challenges' | 'profile' | 'messages' | 'notifications' | 'rewards' | 'leaderboard' | 'badges';

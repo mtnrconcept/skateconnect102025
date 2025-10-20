@@ -8,6 +8,9 @@ import FeedSection from './components/sections/FeedSection';
 import AddSection from './components/sections/AddSection';
 import ChallengesSection from './components/sections/ChallengesSection';
 import ProfileSection from './components/sections/ProfileSection';
+import BadgesSection from './components/sections/BadgesSection';
+import RewardsSection from './components/sections/RewardsSection';
+import LeaderboardSection from './components/sections/LeaderboardSection';
 import type { Profile, Section } from './types';
 
 function App() {
@@ -99,6 +102,9 @@ function App() {
         {currentSection === 'add' && <AddSection onNavigate={setCurrentSection} />}
         {currentSection === 'challenges' && <ChallengesSection />}
         {currentSection === 'profile' && <ProfileSection profile={profile} />}
+        {currentSection === 'badges' && <BadgesSection profile={profile} />}
+        {currentSection === 'rewards' && <RewardsSection profile={profile} />}
+        {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
       </main>
 
       <Navigation currentSection={currentSection} onSectionChange={setCurrentSection} />
