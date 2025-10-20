@@ -49,7 +49,7 @@ export default function MapSection() {
   useEffect(() => {
     if (!map.current || loading) return;
     updateMarkers();
-  }, [spots, loading]);
+  }, [spots, loading, spotCoverPhotos]);
 
   const loadSpots = async () => {
     try {
@@ -139,24 +139,49 @@ export default function MapSection() {
         const mapContainer = map.current.getContainer();
         const mapRect = mapContainer.getBoundingClientRect();
 
+        const POPUP_WIDTH = 280;
+        const POPUP_HEIGHT = 220;
+        const POPUP_MARGIN = 20;
+        const MARKER_OFFSET = 40;
+
         const distanceFromTop = point.y;
         const distanceFromBottom = mapRect.height - point.y;
         const distanceFromLeft = point.x;
         const distanceFromRight = mapRect.width - point.x;
 
-        let anchor: 'top' | 'bottom' | 'left' | 'right' = 'bottom';
+        let anchor: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom';
         let offset = 35;
 
-        if (distanceFromTop < 250) {
-          anchor = 'top';
-        } else if (distanceFromBottom < 250) {
+        const canFitBottom = distanceFromBottom > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
+        const canFitTop = distanceFromTop > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
+        const canFitLeft = distanceFromLeft > (POPUP_WIDTH / 2 + POPUP_MARGIN);
+        const canFitRight = distanceFromRight > (POPUP_WIDTH / 2 + POPUP_MARGIN);
+
+        if (canFitBottom && canFitLeft && canFitRight) {
           anchor = 'bottom';
-        } else if (distanceFromLeft < 150) {
+        } else if (canFitTop && canFitLeft && canFitRight) {
+          anchor = 'top';
+        } else if (canFitBottom && !canFitLeft) {
+          anchor = 'bottom-left';
+          offset = 15;
+        } else if (canFitBottom && !canFitRight) {
+          anchor = 'bottom-right';
+          offset = 15;
+        } else if (canFitTop && !canFitLeft) {
+          anchor = 'top-left';
+          offset = 15;
+        } else if (canFitTop && !canFitRight) {
+          anchor = 'top-right';
+          offset = 15;
+        } else if (distanceFromRight > POPUP_WIDTH + POPUP_MARGIN) {
           anchor = 'left';
           offset = 15;
-        } else if (distanceFromRight < 150) {
+        } else if (distanceFromLeft > POPUP_WIDTH + POPUP_MARGIN) {
           anchor = 'right';
           offset = 15;
+        } else {
+          anchor = 'top';
+          offset = 10;
         }
 
         return new mapboxgl.Popup({
@@ -172,7 +197,7 @@ export default function MapSection() {
           <div class="spot-hover-card">
             ${coverPhotoUrl ? `
               <div class="spot-hover-image">
-                <img src="${coverPhotoUrl}" alt="${spot.name}" />
+                <img src="${coverPhotoUrl}" alt="${spot.name}" onerror="this.parentElement.innerHTML='<div class=\\'spot-hover-no-image\\'><svg width=\\'32\\' height=\\'32\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><path d=\\'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z\\'></path><circle cx=\\'12\\' cy=\\'10\\' r=\\'3\\'></circle></svg></div>';" />
               </div>
             ` : `
               <div class="spot-hover-image spot-hover-no-image">

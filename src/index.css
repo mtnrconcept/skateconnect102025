@@ -14,11 +14,13 @@
 
 .mapboxgl-popup {
   z-index: 1000 !important;
+  will-change: transform !important;
 }
 
 .spot-hover-popup {
   z-index: 9999 !important;
   position: relative !important;
+  max-width: 280px !important;
 }
 
 .spot-hover-popup .mapboxgl-popup-content {
@@ -27,10 +29,15 @@
   overflow: hidden;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
   pointer-events: auto !important;
+  max-width: 280px !important;
+  width: 280px !important;
 }
 
 .spot-hover-popup .mapboxgl-popup-tip {
   border-top-color: white !important;
+  border-bottom-color: white !important;
+  border-left-color: white !important;
+  border-right-color: white !important;
   z-index: 9998 !important;
 }
 
@@ -53,6 +60,7 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .spot-hover-no-image {
