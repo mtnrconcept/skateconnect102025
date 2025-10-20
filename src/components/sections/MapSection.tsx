@@ -141,7 +141,8 @@ export default function MapSection() {
 
         const POPUP_WIDTH = 280;
         const POPUP_HEIGHT = 220;
-        const POPUP_MARGIN = 20;
+        const EDGE_PADDING = 16;
+        const MARKER_HEIGHT = 32;
         const MARKER_OFFSET = 40;
 
         const centerX = mapRect.width / 2;
@@ -152,51 +153,66 @@ export default function MapSection() {
         const isLeftOfCenter = point.x < centerX;
         const isRightOfCenter = point.x > centerX;
 
-        const distanceFromTop = point.y;
-        const distanceFromBottom = mapRect.height - point.y;
-        const distanceFromLeft = point.x;
-        const distanceFromRight = mapRect.width - point.x;
+        const distanceFromTop = point.y - EDGE_PADDING;
+        const distanceFromBottom = mapRect.height - point.y - EDGE_PADDING;
+        const distanceFromLeft = point.x - EDGE_PADDING;
+        const distanceFromRight = mapRect.width - point.x - EDGE_PADDING;
 
         let anchor: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom';
         let offset = 35;
 
-        const canFitBelow = distanceFromBottom > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
-        const canFitAbove = distanceFromTop > (POPUP_HEIGHT + MARKER_OFFSET + POPUP_MARGIN);
-        const canFitRight = distanceFromRight > (POPUP_WIDTH + POPUP_MARGIN);
-        const canFitLeft = distanceFromLeft > (POPUP_WIDTH + POPUP_MARGIN);
+        const canFitBelow = distanceFromBottom > (POPUP_HEIGHT + MARKER_OFFSET);
+        const canFitAbove = distanceFromTop > (POPUP_HEIGHT + MARKER_OFFSET);
+        const canFitRight = distanceFromRight > (POPUP_WIDTH + MARKER_HEIGHT);
+        const canFitLeft = distanceFromLeft > (POPUP_WIDTH + MARKER_HEIGHT);
+        const hasHorizontalSpace = (distanceFromLeft > POPUP_WIDTH / 2) && (distanceFromRight > POPUP_WIDTH / 2);
 
-        if (isAboveCenter && canFitBelow) {
+        if (isAboveCenter && canFitBelow && hasHorizontalSpace) {
           anchor = 'top';
           offset = 35;
-          if (isLeftOfCenter && distanceFromLeft < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
-            anchor = 'top-left';
-            offset = 15;
-          } else if (isRightOfCenter && distanceFromRight < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
-            anchor = 'top-right';
-            offset = 15;
-          }
-        } else if (isBelowCenter && canFitAbove) {
+        } else if (isBelowCenter && canFitAbove && hasHorizontalSpace) {
           anchor = 'bottom';
           offset = 35;
-          if (isLeftOfCenter && distanceFromLeft < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
-            anchor = 'bottom-left';
-            offset = 15;
-          } else if (isRightOfCenter && distanceFromRight < (POPUP_WIDTH / 2 + POPUP_MARGIN)) {
-            anchor = 'bottom-right';
-            offset = 15;
-          }
         } else if (isLeftOfCenter && canFitRight) {
           anchor = 'left';
-          offset = 15;
+          offset = 20;
         } else if (isRightOfCenter && canFitLeft) {
           anchor = 'right';
-          offset = 15;
+          offset = 20;
+        } else if (isAboveCenter && canFitBelow) {
+          if (distanceFromLeft < POPUP_WIDTH / 2) {
+            anchor = 'top-left';
+            offset = 15;
+          } else if (distanceFromRight < POPUP_WIDTH / 2) {
+            anchor = 'top-right';
+            offset = 15;
+          } else {
+            anchor = 'top';
+            offset = 35;
+          }
+        } else if (isBelowCenter && canFitAbove) {
+          if (distanceFromLeft < POPUP_WIDTH / 2) {
+            anchor = 'bottom-left';
+            offset = 15;
+          } else if (distanceFromRight < POPUP_WIDTH / 2) {
+            anchor = 'bottom-right';
+            offset = 15;
+          } else {
+            anchor = 'bottom';
+            offset = 35;
+          }
         } else if (canFitBelow) {
           anchor = 'top';
           offset = 35;
         } else if (canFitAbove) {
           anchor = 'bottom';
           offset = 35;
+        } else if (canFitRight) {
+          anchor = 'left';
+          offset = 20;
+        } else if (canFitLeft) {
+          anchor = 'right';
+          offset = 20;
         } else {
           anchor = 'top';
           offset = 10;
