@@ -139,11 +139,12 @@ export default function MapSection() {
         const mapContainer = map.current.getContainer();
         const mapRect = mapContainer.getBoundingClientRect();
 
-        const POPUP_WIDTH = 280;
-        const POPUP_HEIGHT = 220;
-        const EDGE_PADDING = 16;
+        const isMobile = mapRect.width < 768;
+        const POPUP_WIDTH = isMobile ? Math.min(260, mapRect.width - 32) : 280;
+        const POPUP_HEIGHT = isMobile ? 200 : 220;
+        const EDGE_PADDING = isMobile ? 12 : 16;
         const MARKER_HEIGHT = 32;
-        const MARKER_OFFSET = 40;
+        const MARKER_OFFSET = isMobile ? 35 : 40;
 
         const centerX = mapRect.width / 2;
         const centerY = mapRect.height / 2;
@@ -159,7 +160,7 @@ export default function MapSection() {
         const distanceFromRight = mapRect.width - point.x - EDGE_PADDING;
 
         let anchor: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' = 'bottom';
-        let offset = 35;
+        let offset = isMobile ? 30 : 35;
 
         const canFitBelow = distanceFromBottom > (POPUP_HEIGHT + MARKER_OFFSET);
         const canFitAbove = distanceFromTop > (POPUP_HEIGHT + MARKER_OFFSET);
@@ -167,55 +168,96 @@ export default function MapSection() {
         const canFitLeft = distanceFromLeft > (POPUP_WIDTH + MARKER_HEIGHT);
         const hasHorizontalSpace = (distanceFromLeft > POPUP_WIDTH / 2) && (distanceFromRight > POPUP_WIDTH / 2);
 
-        if (isAboveCenter && canFitBelow && hasHorizontalSpace) {
-          anchor = 'top';
-          offset = 35;
-        } else if (isBelowCenter && canFitAbove && hasHorizontalSpace) {
-          anchor = 'bottom';
-          offset = 35;
-        } else if (isLeftOfCenter && canFitRight) {
-          anchor = 'left';
-          offset = 20;
-        } else if (isRightOfCenter && canFitLeft) {
-          anchor = 'right';
-          offset = 20;
-        } else if (isAboveCenter && canFitBelow) {
-          if (distanceFromLeft < POPUP_WIDTH / 2) {
-            anchor = 'top-left';
-            offset = 15;
-          } else if (distanceFromRight < POPUP_WIDTH / 2) {
-            anchor = 'top-right';
-            offset = 15;
+        if (isMobile) {
+          if (isAboveCenter && canFitBelow) {
+            if (hasHorizontalSpace) {
+              anchor = 'top';
+              offset = 30;
+            } else if (distanceFromLeft < POPUP_WIDTH / 2) {
+              anchor = 'top-left';
+              offset = 12;
+            } else if (distanceFromRight < POPUP_WIDTH / 2) {
+              anchor = 'top-right';
+              offset = 12;
+            } else {
+              anchor = 'top';
+              offset = 30;
+            }
+          } else if (isBelowCenter && canFitAbove) {
+            if (hasHorizontalSpace) {
+              anchor = 'bottom';
+              offset = 30;
+            } else if (distanceFromLeft < POPUP_WIDTH / 2) {
+              anchor = 'bottom-left';
+              offset = 12;
+            } else if (distanceFromRight < POPUP_WIDTH / 2) {
+              anchor = 'bottom-right';
+              offset = 12;
+            } else {
+              anchor = 'bottom';
+              offset = 30;
+            }
+          } else if (canFitBelow) {
+            anchor = 'top';
+            offset = 30;
+          } else if (canFitAbove) {
+            anchor = 'bottom';
+            offset = 30;
           } else {
             anchor = 'top';
-            offset = 35;
+            offset = 10;
           }
-        } else if (isBelowCenter && canFitAbove) {
-          if (distanceFromLeft < POPUP_WIDTH / 2) {
-            anchor = 'bottom-left';
-            offset = 15;
-          } else if (distanceFromRight < POPUP_WIDTH / 2) {
-            anchor = 'bottom-right';
-            offset = 15;
-          } else {
+        } else {
+          if (isAboveCenter && canFitBelow && hasHorizontalSpace) {
+            anchor = 'top';
+            offset = 35;
+          } else if (isBelowCenter && canFitAbove && hasHorizontalSpace) {
             anchor = 'bottom';
             offset = 35;
+          } else if (isLeftOfCenter && canFitRight) {
+            anchor = 'left';
+            offset = 20;
+          } else if (isRightOfCenter && canFitLeft) {
+            anchor = 'right';
+            offset = 20;
+          } else if (isAboveCenter && canFitBelow) {
+            if (distanceFromLeft < POPUP_WIDTH / 2) {
+              anchor = 'top-left';
+              offset = 15;
+            } else if (distanceFromRight < POPUP_WIDTH / 2) {
+              anchor = 'top-right';
+              offset = 15;
+            } else {
+              anchor = 'top';
+              offset = 35;
+            }
+          } else if (isBelowCenter && canFitAbove) {
+            if (distanceFromLeft < POPUP_WIDTH / 2) {
+              anchor = 'bottom-left';
+              offset = 15;
+            } else if (distanceFromRight < POPUP_WIDTH / 2) {
+              anchor = 'bottom-right';
+              offset = 15;
+            } else {
+              anchor = 'bottom';
+              offset = 35;
+            }
+          } else if (canFitBelow) {
+            anchor = 'top';
+            offset = 35;
+          } else if (canFitAbove) {
+            anchor = 'bottom';
+            offset = 35;
+          } else if (canFitRight) {
+            anchor = 'left';
+            offset = 20;
+          } else if (canFitLeft) {
+            anchor = 'right';
+            offset = 20;
+          } else {
+            anchor = 'top';
+            offset = 10;
           }
-        } else if (canFitBelow) {
-          anchor = 'top';
-          offset = 35;
-        } else if (canFitAbove) {
-          anchor = 'bottom';
-          offset = 35;
-        } else if (canFitRight) {
-          anchor = 'left';
-          offset = 20;
-        } else if (canFitLeft) {
-          anchor = 'right';
-          offset = 20;
-        } else {
-          anchor = 'top';
-          offset = 10;
         }
 
         return new mapboxgl.Popup({
@@ -223,10 +265,10 @@ export default function MapSection() {
           closeButton: false,
           closeOnClick: false,
           className: 'spot-hover-popup',
-          maxWidth: '280px',
+          maxWidth: `${POPUP_WIDTH}px`,
           anchor
         })
-          .setMaxWidth('280px')
+          .setMaxWidth(`${POPUP_WIDTH}px`)
           .setHTML(`
           <div class="spot-hover-card">
             ${coverPhotoUrl ? `
