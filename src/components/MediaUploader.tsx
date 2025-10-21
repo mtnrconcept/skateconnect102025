@@ -52,6 +52,7 @@ export default function MediaUploader({
   const [showCropModal, setShowCropModal] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [cropOutputFormat, setCropOutputFormat] = useState<'image/jpeg' | 'image/png' | 'image/webp'>('image/jpeg');
 
   const getCropOutputFormat = (file: File): 'image/jpeg' | 'image/png' | 'image/webp' => {
     switch (file.type) {
@@ -97,6 +98,7 @@ export default function MediaUploader({
         maxHeight: compressionOptions.maxHeight || 1920,
         quality: compressionOptions.quality || 0.85,
         maxSizeMB: compressionOptions.maxSizeMB || 5,
+        outputFormat: getCropOutputFormat(file),
       });
       fileToUpload = compressed.file;
       compressedSize = compressed.compressedSize;
@@ -120,6 +122,7 @@ export default function MediaUploader({
     const file = files[0];
 
     if (enableCrop && file.type.startsWith('image/')) {
+      setCropOutputFormat(getCropOutputFormat(file));
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -176,7 +179,8 @@ export default function MediaUploader({
 
     if (!pendingFile) return;
 
-    const blobType = croppedBlob.type || pendingFile.type || 'image/jpeg';
+    const preferredMime = croppedBlob.type || pendingFile?.type || cropOutputFormat || 'image/jpeg';
+    const blobType = preferredMime;
     const extension = getFileExtensionFromMime(blobType);
     const baseName = pendingFile.name.replace(/\.[^/.]+$/, '');
     const fileName = `${baseName}.${extension}`;
@@ -359,7 +363,7 @@ export default function MediaUploader({
           aspectRatio={cropAspectRatio}
           onCrop={handleCropComplete}
           onCancel={handleCropCancel}
-          outputFormat={pendingFile ? getCropOutputFormat(pendingFile) : undefined}
+          outputFormat={cropOutputFormat}
         />
       )}
     </>
