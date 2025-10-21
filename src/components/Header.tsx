@@ -113,21 +113,21 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 bg-dark-800 border-b border-dark-700 z-40">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+    <header className="fixed top-0 left-0 right-0 bg-dark-800/95 border-b border-dark-700/80 backdrop-blur z-40">
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-4 flex items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 rounded-2xl bg-dark-900/60 px-3 py-1.5 border border-dark-700/80">
             <img
               src="/logo.png"
               alt="Shredloc"
-              className="h-12 w-auto object-contain m-[3px]"
+              className="h-14 w-auto object-contain"
             />
             <span className="sr-only">Shredloc</span>
           </div>
         </div>
 
         {onSectionChange && (
-          <nav className="hidden md:flex items-center gap-2 mx-6 flex-wrap">
+          <nav className="hidden md:flex flex-1 items-center justify-center lg:justify-start gap-x-3 gap-y-2 mx-4 flex-wrap">
             {navStructure.map((item) => {
               if (item.type === 'direct') {
                 const Icon = item.icon;
@@ -136,10 +136,10 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
                   <button
                     key={item.id}
                     onClick={() => onSectionChange(item.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors font-medium border ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm whitespace-nowrap ${
                       isActive
-                        ? 'bg-orange-500 text-white border-orange-400'
-                        : 'text-gray-400 border-transparent hover:border-dark-600 hover:text-white'
+                        ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
+                        : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
                     }`}
                   >
                     <Icon size={20} />
@@ -155,17 +155,17 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
                 <div key={item.label} className="relative group">
                   <button
                     type="button"
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors font-medium border ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm whitespace-nowrap ${
                       hasActiveChild
-                        ? 'bg-orange-500 text-white border-orange-400'
-                        : 'text-gray-400 border-transparent hover:border-dark-600 hover:text-white'
+                        ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
+                        : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
                     }`}
                   >
                     <Icon size={20} />
                     <span>{item.label}</span>
                     <ChevronDown size={16} className="mt-[1px]" />
                   </button>
-                  <div className="absolute top-full left-0 mt-2 hidden w-56 rounded-2xl border border-dark-700 bg-dark-900/95 p-2 shadow-xl group-hover:flex group-focus-within:flex flex-col">
+                  <div className="absolute top-full left-0 mt-3 hidden min-w-[15rem] rounded-2xl border border-dark-700/80 bg-dark-900/95 p-2 shadow-xl group-hover:flex group-focus-within:flex flex-col">
                     {item.items.map((child) => {
                       const ChildIcon = child.icon;
                       const isChildActive = currentSection === child.id;
@@ -191,7 +191,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
           </nav>
         )}
 
-        <div className="flex-1 max-w-xl mx-4 hidden lg:block">
+        <div className="flex-1 max-w-xl hidden lg:block">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
             <input
