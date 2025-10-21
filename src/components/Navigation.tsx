@@ -1,4 +1,4 @@
-import { Map, Home, CalendarDays, Trophy, User, Settings } from 'lucide-react';
+import { Map, Home, CalendarDays, Trophy, User, Settings, Mail } from 'lucide-react';
 import type { Section } from '../types';
 
 interface NavigationProps {
@@ -12,6 +12,7 @@ export default function Navigation({ currentSection, onSectionChange }: Navigati
     { id: 'feed' as Section, icon: Home, label: 'Feed' },
     { id: 'events' as Section, icon: CalendarDays, label: 'Événements' },
     { id: 'challenges' as Section, icon: Trophy, label: 'Défis' },
+    { id: 'messages' as Section, icon: Mail, label: 'Messages' },
     { id: 'profile' as Section, icon: User, label: 'Profil' },
     { id: 'settings' as Section, icon: Settings, label: 'Paramètres' },
   ];

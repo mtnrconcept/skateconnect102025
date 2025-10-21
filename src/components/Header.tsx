@@ -200,9 +200,17 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
               </span>
             )}
           </button>
-          <button className="relative p-2 hover:bg-dark-700 rounded-full transition-colors">
-            <Mail size={20} className="text-gray-400" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
+          <button
+            onClick={() => onSectionChange?.('messages')}
+            className={`relative p-2 rounded-full transition-colors ${
+              currentSection === 'messages' ? 'bg-orange-500/20 text-orange-400' : 'hover:bg-dark-700'
+            }`}
+            title="Messagerie"
+          >
+            <Mail size={20} className={currentSection === 'messages' ? 'text-orange-400' : 'text-gray-400'} />
+            {currentSection !== 'messages' && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
+            )}
           </button>
           <div className="h-6 w-px bg-dark-700 mx-2"></div>
           <div className="flex items-center gap-2">
