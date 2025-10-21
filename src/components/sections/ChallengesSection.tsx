@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Trophy, Calendar, Users, Star, Target } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Trophy, Calendar, Users, Star, Target, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import DailyChallenges from '../DailyChallenges';
+import {
+  getStoredChallengeRegistrations,
+  registerForChallenge,
+} from '../../lib/engagement';
 import type { Challenge, Profile } from '../../types';
 
 interface ChallengesSectionProps {
@@ -13,10 +17,17 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
   const [filter, setFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<'daily' | 'community'>('daily');
   const [loading, setLoading] = useState(true);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, { message: string; tone: 'success' | 'info' }>>({});
+  const [joinedIds, setJoinedIds] = useState<string[]>([]);
 
   useEffect(() => {
     loadChallenges();
   }, [filter]);
+
+  useEffect(() => {
+    setJoinedIds(Array.from(getStoredChallengeRegistrations()));
+  }, []);
 
   const getFallbackChallenges = () => {
     const now = new Date();
@@ -124,6 +135,62 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
     }
   };
 
+  const joinedChallengeSet = useMemo(() => new Set(joinedIds), [joinedIds]);
+
+  const handleJoinChallenge = async (challenge: Challenge) => {
+    if (!profile?.id) {
+      setFeedback((prev) => ({
+        ...prev,
+        [challenge.id]: {
+          message: 'Connecte-toi pour rejoindre un challenge.',
+          tone: 'info',
+        },
+      }));
+      return;
+    }
+
+    if (joinedChallengeSet.has(challenge.id)) {
+      setFeedback((prev) => ({
+        ...prev,
+        [challenge.id]: {
+          message: 'Tu participes déjà à ce challenge.',
+          tone: 'info',
+        },
+      }));
+      return;
+    }
+
+    setJoiningId(challenge.id);
+    const result = await registerForChallenge(profile.id, challenge.id);
+    setJoiningId(null);
+
+    if (result.success) {
+      setJoinedIds((prev) => [...prev, challenge.id]);
+      setChallenges((prev) =>
+        prev.map((item) =>
+          item.id === challenge.id
+            ? { ...item, participants_count: item.participants_count + 1 }
+            : item,
+        ),
+      );
+      setFeedback((prev) => ({
+        ...prev,
+        [challenge.id]: {
+          message: result.message,
+          tone: 'success',
+        },
+      }));
+    } else {
+      setFeedback((prev) => ({
+        ...prev,
+        [challenge.id]: {
+          message: result.message,
+          tone: 'info',
+        },
+      }));
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('fr-FR', {
       day: 'numeric',
@@ -206,7 +273,7 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
       ) : (
         <div>
           <div className="mb-6 bg-dark-800 rounded-xl border border-dark-700 p-4">
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex flex-wrap gap-2 overflow-x-auto pb-2">
               {filterButtons.map((btn) => (
                 <button
                   key={btn.id}
@@ -236,6 +303,9 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
               {challenges.map((challenge) => {
                 const daysRemaining = getDaysRemaining(challenge.end_date);
                 const isExpiringSoon = daysRemaining <= 2;
+                const hasJoined = joinedChallengeSet.has(challenge.id);
+                const canJoin = challenge.challenge_type === 'community';
+                const currentFeedback = feedback[challenge.id];
 
                 return (
                   <div
@@ -289,10 +359,43 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
                         ) : (
                           <span className="text-sm font-medium text-red-500">Expiré</span>
                         )}
-                        <button className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors">
-                          Participer
+                        <button
+                          onClick={() => canJoin && handleJoinChallenge(challenge)}
+                          disabled={!canJoin || hasJoined || joiningId === challenge.id || daysRemaining <= 0}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 ${
+                            !canJoin
+                              ? 'bg-dark-700 text-gray-500 cursor-not-allowed'
+                              : hasJoined
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                : 'bg-orange-500 text-white hover:bg-orange-600'
+                          }`}
+                        >
+                          {hasJoined ? (
+                            <>
+                              <CheckCircle2 size={16} />
+                              <span>Inscrit</span>
+                            </>
+                          ) : joiningId === challenge.id ? (
+                            <span>En cours...</span>
+                          ) : (
+                            <span>Participer</span>
+                          )}
                         </button>
                       </div>
+                      {currentFeedback && (
+                        <div
+                          className={`mt-3 flex items-center gap-2 text-sm ${
+                            currentFeedback.tone === 'success' ? 'text-emerald-400' : 'text-gray-400'
+                          }`}
+                        >
+                          {currentFeedback.tone === 'success' ? (
+                            <CheckCircle2 size={16} />
+                          ) : (
+                            <AlertCircle size={16} />
+                          )}
+                          <span>{currentFeedback.message}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

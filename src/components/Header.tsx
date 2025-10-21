@@ -13,6 +13,7 @@ import {
   Gift,
   TrendingUp,
   Settings,
+  Handshake,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
@@ -67,7 +68,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
         </div>
 
         {onSectionChange && (
-          <nav className="hidden md:flex items-center gap-1 mx-6">
+          <nav className="hidden md:flex items-center gap-1 mx-6 overflow-x-auto max-w-3xl xl:max-w-4xl">
             <button
               onClick={() => onSectionChange('map')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
@@ -111,6 +112,17 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
             >
               <Trophy size={20} />
               <span>Défis</span>
+            </button>
+            <button
+              onClick={() => onSectionChange('sponsors')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                currentSection === 'sponsors'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-gray-400 hover:bg-dark-700'
+              }`}
+            >
+              <Handshake size={20} />
+              <span>Sponsors</span>
             </button>
             <button
               onClick={() => onSectionChange('profile')}

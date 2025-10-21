@@ -1,71 +1,79 @@
-import { Calendar, MapPin, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar, MapPin, Users, CheckCircle2, AlertCircle, Share2 } from 'lucide-react';
+import { getStoredEventRegistrations, registerForEvent } from '../../lib/engagement';
+import type { CommunityEvent, Profile } from '../../types';
+import { eventsCatalog } from '../../data/eventsCatalog';
 
-interface EventItem {
-  id: string;
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  location: string;
-  type: 'Compétition' | 'Contest' | 'Rencontre' | 'Avant-première';
-  attendees: number;
+interface EventsSectionProps {
+  profile?: Profile | null;
 }
-
-const events: EventItem[] = [
-  {
-    id: 'battle-lyon',
-    title: 'Battle of Lyon',
-    description:
-      'Session street géante avec modules DIY, best trick et jam par équipes toute la journée.',
-    date: 'Samedi 16 mars 2025',
-    time: '10h00 - 20h00',
-    location: 'Place des Terreaux, Lyon',
-    type: 'Compétition',
-    attendees: 128,
-  },
-  {
-    id: 'dawn-patrol',
-    title: 'Dawn Patrol - Sunrise Session',
-    description:
-      "Rencontre matinale pour profiter du bowl avant l'affluence, café offert par la crew locale.",
-    date: 'Dimanche 23 mars 2025',
-    time: '07h00 - 09h30',
-    location: 'Skatepark de la Friche, Marseille',
-    type: 'Rencontre',
-    attendees: 42,
-  },
-  {
-    id: 'hype-video-premiere',
-    title: 'Avant-première "Concrete Dreams"',
-    description:
-      'Projection exclusive du nouveau film de la team Shredloc avec session signature et Q&A.',
-    date: 'Vendredi 4 avril 2025',
-    time: '21h00 - 23h00',
-    location: 'Cinéma Le Brady, Paris',
-    type: 'Avant-première',
-    attendees: 95,
-  },
-  {
-    id: 'spring-jam',
-    title: 'Spring Bowl Jam',
-    description:
-      'Contest bowl avec formats juniors, open et masters, cash for tricks et DJ set sunset.',
-    date: 'Samedi 12 avril 2025',
-    time: '12h00 - 22h00',
-    location: 'Hangar Darwin, Bordeaux',
-    type: 'Contest',
-    attendees: 210,
-  },
-];
-
-const typeColors: Record<EventItem['type'], string> = {
+const typeColors: Record<CommunityEvent['type'], string> = {
   Compétition: 'bg-red-500/10 text-red-300 border-red-500/40',
   Contest: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/40',
   Rencontre: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/40',
   'Avant-première': 'bg-amber-500/10 text-amber-300 border-amber-500/40',
+  'Appel à projet': 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/40',
+  'Appel à sponsor': 'bg-cyan-500/10 text-cyan-300 border-cyan-500/40',
 };
 
-export default function EventsSection() {
+export default function EventsSection({ profile }: EventsSectionProps) {
+  const [registered, setRegistered] = useState<string[]>([]);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, { message: string; tone: 'success' | 'info' }>>({});
+
+  useEffect(() => {
+    setRegistered(Array.from(getStoredEventRegistrations()));
+  }, []);
+
+  const registeredSet = useMemo(() => new Set(registered), [registered]);
+
+  const handleRegister = async (event: CommunityEvent) => {
+    if (!profile?.id) {
+      setFeedback((prev) => ({
+        ...prev,
+        [event.id]: {
+          message: 'Connecte-toi pour confirmer ta participation.',
+          tone: 'info',
+        },
+      }));
+      return;
+    }
+
+    if (registeredSet.has(event.id)) {
+      setFeedback((prev) => ({
+        ...prev,
+        [event.id]: {
+          message: 'Tu es déjà inscrit.',
+          tone: 'info',
+        },
+      }));
+      return;
+    }
+
+    setJoiningId(event.id);
+    const result = await registerForEvent(profile.id, event.id);
+    setJoiningId(null);
+
+    if (result.success) {
+      setRegistered((prev) => [...prev, event.id]);
+      setFeedback((prev) => ({
+        ...prev,
+        [event.id]: {
+          message: result.message,
+          tone: 'success',
+        },
+      }));
+    } else {
+      setFeedback((prev) => ({
+        ...prev,
+        [event.id]: {
+          message: result.message,
+          tone: 'info',
+        },
+      }));
+    }
+  };
+
   return (
     <section className="max-w-5xl mx-auto px-4">
       <header className="py-10 flex flex-col gap-3">
@@ -77,67 +85,109 @@ export default function EventsSection() {
         </p>
       </header>
 
-      <div className="space-y-6 pb-16">
-        {events.map((event) => (
-          <article
-            key={event.id}
-            className="bg-dark-800 border border-dark-700 rounded-2xl overflow-hidden shadow-lg shadow-black/20"
-          >
-            <div className="flex flex-col md:flex-row">
-              <div className="md:w-48 bg-gradient-to-b from-orange-500/20 to-orange-500/10 p-6 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-orange-300 font-semibold">
-                  <Calendar size={20} />
-                  <span>{event.date}</span>
-                </div>
-                <div className="text-gray-300 text-sm">{event.time}</div>
-                <span
-                  className={`inline-flex items-center justify-center px-3 py-1 mt-auto text-xs font-semibold uppercase tracking-wide rounded-full border ${
-                    typeColors[event.type]
-                  }`}
-                >
-                  {event.type}
-                </span>
-              </div>
+      <div className="space-y-6 pb-20">
+        {eventsCatalog.map((event) => {
+          const isRegistered = registeredSet.has(event.id);
+          const eventFeedback = feedback[event.id];
 
-              <div className="flex-1 p-6 md:p-8 flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">{event.title}</h2>
-                    <p className="text-gray-300 mt-2 leading-relaxed">{event.description}</p>
+          return (
+            <article
+              key={event.id}
+              className="bg-dark-800 border border-dark-700 rounded-2xl overflow-hidden shadow-lg shadow-black/20"
+            >
+              <div className="flex flex-col md:flex-row">
+                <div className="md:w-56 bg-gradient-to-b from-orange-500/20 to-orange-500/10 p-6 flex flex-col gap-3">
+                  <div className="flex items-center gap-2 text-orange-300 font-semibold">
+                    <Calendar size={20} />
+                    <span className="leading-tight">{event.date}</span>
                   </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4 text-sm text-gray-300">
-                  <div className="flex items-center gap-2">
-                    <MapPin size={18} className="text-orange-400" />
-                    <span>{event.location}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users size={18} className="text-orange-400" />
-                    <span>
-                      {event.attendees} inscrit{event.attendees > 1 ? 's' : ''}
+                  <div className="text-gray-300 text-sm">{event.time}</div>
+                  {event.is_sponsor_event && event.sponsor_name && (
+                    <span className="text-xs uppercase tracking-wide text-orange-200 bg-orange-500/20 border border-orange-500/40 rounded-full px-3 py-1">
+                      Sponsor: {event.sponsor_name}
                     </span>
-                  </div>
+                  )}
+                  <span
+                    className={`inline-flex items-center justify-center px-3 py-1 mt-auto text-xs font-semibold uppercase tracking-wide rounded-full border ${
+                      typeColors[event.type]
+                    }`}
+                  >
+                    {event.type}
+                  </span>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-orange-500 text-white font-semibold hover:bg-orange-400 transition-colors"
-                  >
-                    Je participe
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-dark-600 text-gray-300 hover:border-orange-400 hover:text-white transition-colors"
-                  >
-                    Ajouter à mon agenda
-                  </button>
+                <div className="flex-1 p-6 md:p-8 flex flex-col gap-4">
+                  <div className="flex flex-col gap-3">
+                    <h2 className="text-2xl font-bold text-white leading-snug">{event.title}</h2>
+                    <p className="text-gray-300 leading-relaxed text-sm sm:text-base">{event.description}</p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4 text-sm text-gray-300">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={18} className="text-orange-400 shrink-0" />
+                      <span>{event.location}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Users size={18} className="text-orange-400 shrink-0" />
+                      <span>
+                        {event.attendees + (isRegistered ? 1 : 0)} inscrit
+                        {event.attendees + (isRegistered ? 1 : 0) > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRegister(event)}
+                      disabled={isRegistered || joiningId === event.id}
+                      className={`inline-flex items-center justify-center px-4 py-2 rounded-full font-semibold transition-colors gap-2 ${
+                        isRegistered
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                          : 'bg-orange-500 text-white hover:bg-orange-400'
+                      }`}
+                    >
+                      {isRegistered ? (
+                        <>
+                          <CheckCircle2 size={18} />
+                          <span>Inscrit</span>
+                        </>
+                      ) : joiningId === event.id ? (
+                        <span>Inscription...</span>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={18} />
+                          <span>Je participe</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-dark-600 text-gray-300 hover:border-orange-400 hover:text-white transition-colors gap-2"
+                    >
+                      <Share2 size={18} />
+                      <span>Ajouter à mon agenda</span>
+                    </button>
+                  </div>
+                  {eventFeedback && (
+                    <div
+                      className={`flex items-center gap-2 text-sm ${
+                        eventFeedback.tone === 'success' ? 'text-emerald-400' : 'text-gray-400'
+                      }`}
+                    >
+                      {eventFeedback.tone === 'success' ? (
+                        <CheckCircle2 size={16} />
+                      ) : (
+                        <AlertCircle size={16} />
+                      )}
+                      <span>{eventFeedback.message}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </section>
   );

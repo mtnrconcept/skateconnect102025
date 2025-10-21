@@ -64,6 +64,19 @@ export interface Challenge {
   creator?: Profile;
 }
 
+export interface CommunityEvent {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  type: 'Compétition' | 'Contest' | 'Rencontre' | 'Avant-première' | 'Appel à projet' | 'Appel à sponsor';
+  attendees: number;
+  is_sponsor_event?: boolean;
+  sponsor_name?: string;
+}
+
 export interface Comment {
   id: string;
   user_id: string;
@@ -271,6 +284,7 @@ export type Section =
   | 'feed'
   | 'events'
   | 'challenges'
+  | 'sponsors'
   | 'profile'
   | 'messages'
   | 'notifications'
