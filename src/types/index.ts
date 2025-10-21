@@ -269,7 +269,7 @@ export interface LeaderboardEntry {
 export type Section =
   | 'map'
   | 'feed'
-  | 'add'
+  | 'events'
   | 'challenges'
   | 'profile'
   | 'messages'

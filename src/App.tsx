@@ -6,7 +6,7 @@ import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import MapSection from './components/sections/MapSection';
 import FeedSection from './components/sections/FeedSection';
-import AddSection from './components/sections/AddSection';
+import EventsSection from './components/sections/EventsSection';
 import ChallengesSection from './components/sections/ChallengesSection';
 import ProfileSection from './components/sections/ProfileSection';
 import BadgesSection from './components/sections/BadgesSection';
@@ -103,7 +103,7 @@ function App() {
       <main className="pt-16 pb-20 md:pb-6">
         {currentSection === 'map' && <MapSection />}
         {currentSection === 'feed' && <FeedSection currentUser={profile} />}
-        {currentSection === 'add' && <AddSection onNavigate={setCurrentSection} />}
+        {currentSection === 'events' && <EventsSection />}
         {currentSection === 'challenges' && <ChallengesSection profile={profile} />}
         {currentSection === 'profile' && <ProfileSection profile={profile} />}
         {currentSection === 'badges' && <BadgesSection profile={profile} />}
