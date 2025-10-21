@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Phone,
@@ -225,13 +225,6 @@ const initialConversations: ConversationPreview[] = [
   },
 ];
 
-const quickReplies = [
-  'Je suis en route 🚲',
-  'On se retrouve au spot habituel ?',
-  "Let's go filmer !",
-  'Je t’envoie ça ce soir.',
-];
-
 export default function MessagesSection({ profile }: MessagesSectionProps) {
   const [conversations, setConversations] = useState(initialConversations);
   const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? '');
@@ -239,6 +232,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
   const [messageDraft, setMessageDraft] = useState('');
   const [isMobileView, setIsMobileView] = useState(false);
   const [isMobileConversationOpen, setMobileConversationOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -277,6 +271,12 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
     () => conversations.find((conversation) => conversation.id === selectedId),
     [conversations, selectedId],
   );
+  const messagesLength = selectedConversation?.messages.length ?? 0;
+
+  useEffect(() => {
+    if (!messagesEndRef.current) return;
+    messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messagesLength, selectedConversation?.id]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedId(conversationId);
@@ -481,7 +481,9 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                     </div>
                   </header>
 
-                  <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
+                  <div
+                    className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6"
+                  >
                     <div className="text-center text-xs text-gray-500 uppercase tracking-wide">
                       Conversation depuis 3 jours
                     </div>
@@ -513,27 +515,32 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                         </div>
                       );
                     })}
+                    <div ref={messagesEndRef} />
                   </div>
 
                   <footer className="border-t border-dark-700 p-4 sm:p-6 bg-dark-900/80">
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {quickReplies.map((reply) => (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1">
+                          <textarea
+                            value={messageDraft}
+                            onChange={(event) => setMessageDraft(event.target.value)}
+                            placeholder="Écrire un message..."
+                            rows={1}
+                            className="w-full bg-dark-700/60 border border-dark-600 text-white text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/70 resize-none"
+                          />
+                        </div>
                         <button
-                          key={reply}
-                          onClick={() => setMessageDraft(reply)}
-                          className="px-3 py-1.5 text-xs rounded-full bg-dark-700/70 text-gray-200 border border-dark-600 hover:border-orange-400/60 hover:text-orange-200 transition-colors"
+                          onClick={handleSendMessage}
+                          className="h-12 w-12 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30 hover:bg-orange-400 transition-colors"
+                          aria-label="Envoyer le message"
                         >
-                          {reply}
+                          <Send size={18} />
                         </button>
-                      ))}
-                    </div>
-                    <div className="flex items-end gap-3">
+                      </div>
                       <div className="flex items-center gap-2">
                         <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
                           <Smile size={18} />
-                        </button>
-                        <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
-                          <Paperclip size={18} />
                         </button>
                         <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
                           <Image size={18} />
@@ -541,23 +548,10 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                         <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
                           <Mic size={18} />
                         </button>
+                        <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                          <Paperclip size={18} />
+                        </button>
                       </div>
-                      <div className="flex-1">
-                        <textarea
-                          value={messageDraft}
-                          onChange={(event) => setMessageDraft(event.target.value)}
-                          placeholder="Écrire un message..."
-                          rows={1}
-                          className="w-full bg-dark-700/60 border border-dark-600 text-white text-sm rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/70 resize-none"
-                        />
-                      </div>
-                      <button
-                        onClick={handleSendMessage}
-                        className="h-12 w-12 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30 hover:bg-orange-400 transition-colors"
-                        aria-label="Envoyer le message"
-                      >
-                        <Send size={18} />
-                      </button>
                     </div>
                   </footer>
                 </>
