@@ -20,7 +20,7 @@ export default function Navigation({ currentSection, onSectionChange }: Navigati
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-dark-800 border-t border-dark-700 z-50 md:hidden">
-      <div className="flex items-center h-16 overflow-x-auto px-2 gap-2">
+      <div className="grid grid-cols-4 gap-2 px-3 py-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentSection === item.id;
@@ -29,7 +29,7 @@ export default function Navigation({ currentSection, onSectionChange }: Navigati
             <button
               key={item.id}
               onClick={() => onSectionChange(item.id)}
-              className={`flex flex-col items-center justify-center min-w-[72px] flex-1 h-full rounded-2xl transition-colors border ${
+              className={`flex flex-col items-center justify-center rounded-2xl transition-colors border py-2 text-center ${
                 isActive
                   ? 'bg-dark-700 text-orange-400 border-orange-500/40'
                   : 'bg-transparent text-gray-400 border-transparent hover:text-gray-200 hover:bg-dark-700/60'

@@ -14,6 +14,11 @@ import {
   TrendingUp,
   Settings,
   Handshake,
+  ChevronDown,
+  Users,
+  BookOpen,
+  Shield,
+  FileText,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
@@ -53,6 +58,60 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     window.location.reload();
   };
 
+  const navStructure = [
+    {
+      type: 'direct' as const,
+      id: 'feed' as Section,
+      label: "Fil d'actu",
+      icon: Home,
+    },
+    {
+      type: 'direct' as const,
+      id: 'sponsors' as Section,
+      label: 'Sponsors',
+      icon: Handshake,
+    },
+    {
+      type: 'dropdown' as const,
+      label: 'Explorer',
+      icon: Map,
+      items: [
+        { id: 'map' as Section, label: 'Carte', icon: Map },
+        { id: 'events' as Section, label: 'Événements', icon: CalendarDays },
+        { id: 'challenges' as Section, label: 'Défis', icon: Trophy },
+      ],
+    },
+    {
+      type: 'dropdown' as const,
+      label: 'Communauté',
+      icon: Users,
+      items: [
+        { id: 'messages' as Section, label: 'Messages', icon: Mail },
+        { id: 'leaderboard' as Section, label: 'Classement', icon: TrendingUp },
+        { id: 'rewards' as Section, label: 'Store', icon: Gift },
+      ],
+    },
+    {
+      type: 'dropdown' as const,
+      label: 'Profil',
+      icon: User,
+      items: [
+        { id: 'profile' as Section, label: 'Mon profil', icon: User },
+        { id: 'badges' as Section, label: 'Badges', icon: Award },
+        { id: 'settings' as Section, label: 'Paramètres', icon: Settings },
+      ],
+    },
+    {
+      type: 'dropdown' as const,
+      label: 'Infos',
+      icon: BookOpen,
+      items: [
+        { id: 'privacy' as Section, label: 'Confidentialité', icon: Shield },
+        { id: 'terms' as Section, label: 'Conditions', icon: FileText },
+      ],
+    },
+  ];
+
   return (
     <header className="fixed top-0 left-0 right-0 bg-dark-800 border-b border-dark-700 z-40">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -68,117 +127,67 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
         </div>
 
         {onSectionChange && (
-          <nav className="hidden md:flex items-center gap-1 mx-6 overflow-x-auto max-w-3xl xl:max-w-4xl">
-            <button
-              onClick={() => onSectionChange('map')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'map'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <Map size={20} />
-              <span>Carte</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('feed')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'feed'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <Home size={20} />
-              <span>Feed</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('events')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'events'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <CalendarDays size={20} />
-              <span>Événements</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('challenges')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'challenges'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <Trophy size={20} />
-              <span>Défis</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('sponsors')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'sponsors'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <Handshake size={20} />
-              <span>Sponsors</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('profile')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'profile'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <User size={20} />
-              <span>Profil</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('leaderboard')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'leaderboard'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <TrendingUp size={20} />
-              <span>Classement</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('rewards')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'rewards'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <Gift size={20} />
-              <span>Store</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('badges')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'badges'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <Award size={20} />
-              <span>Badges</span>
-            </button>
-            <button
-              onClick={() => onSectionChange('settings')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'settings'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-gray-400 hover:bg-dark-700'
-              }`}
-            >
-              <Settings size={20} />
-              <span>Paramètres</span>
-            </button>
+          <nav className="hidden md:flex items-center gap-2 mx-6 flex-wrap">
+            {navStructure.map((item) => {
+              if (item.type === 'direct') {
+                const Icon = item.icon;
+                const isActive = currentSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onSectionChange(item.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors font-medium border ${
+                      isActive
+                        ? 'bg-orange-500 text-white border-orange-400'
+                        : 'text-gray-400 border-transparent hover:border-dark-600 hover:text-white'
+                    }`}
+                  >
+                    <Icon size={20} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              }
+
+              const Icon = item.icon;
+              const hasActiveChild = item.items.some((child) => child.id === currentSection);
+
+              return (
+                <div key={item.label} className="relative group">
+                  <button
+                    type="button"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors font-medium border ${
+                      hasActiveChild
+                        ? 'bg-orange-500 text-white border-orange-400'
+                        : 'text-gray-400 border-transparent hover:border-dark-600 hover:text-white'
+                    }`}
+                  >
+                    <Icon size={20} />
+                    <span>{item.label}</span>
+                    <ChevronDown size={16} className="mt-[1px]" />
+                  </button>
+                  <div className="absolute top-full left-0 mt-2 hidden w-56 rounded-2xl border border-dark-700 bg-dark-900/95 p-2 shadow-xl group-hover:flex group-focus-within:flex flex-col">
+                    {item.items.map((child) => {
+                      const ChildIcon = child.icon;
+                      const isChildActive = currentSection === child.id;
+                      return (
+                        <button
+                          key={child.id}
+                          onClick={() => onSectionChange(child.id)}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
+                            isChildActive
+                              ? 'bg-orange-500/20 text-white'
+                              : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                          }`}
+                        >
+                          <ChildIcon size={18} />
+                          <span>{child.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </nav>
         )}
 
