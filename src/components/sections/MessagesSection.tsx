@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Search,
   Phone,
@@ -12,6 +12,7 @@ import {
   Mic,
   ChevronDown,
   Sparkles,
+  ArrowLeft,
 } from 'lucide-react';
 import type { Profile } from '../../types';
 
@@ -236,6 +237,29 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
   const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? '');
   const [searchTerm, setSearchTerm] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [isMobileConversationOpen, setMobileConversationOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setIsMobileView(window.innerWidth < 1024);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileView) {
+      setMobileConversationOpen(false);
+    }
+  }, [isMobileView]);
 
   const filteredConversations = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -263,6 +287,10 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
           : conversation,
       ),
     );
+
+    if (isMobileView) {
+      setMobileConversationOpen(true);
+    }
   };
 
   const handleSendMessage = () => {
@@ -302,7 +330,11 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
       <div className="max-w-7xl mx-auto">
         <div className="bg-dark-800/80 border border-dark-700 rounded-3xl shadow-xl overflow-hidden backdrop-blur">
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] xl:grid-cols-[320px_1fr_280px] h-[calc(100vh-180px)] min-h-[620px]">
-            <aside className="border-b border-dark-700 lg:border-b-0 lg:border-r bg-dark-900/60 flex flex-col">
+            <aside
+              className={`${
+                isMobileView && isMobileConversationOpen ? 'hidden' : 'flex'
+              } border-b border-dark-700 lg:border-b-0 lg:border-r bg-dark-900/60 flex-col lg:flex`}
+            >
               <div className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -393,11 +425,24 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
               </div>
             </aside>
 
-            <div className="flex flex-col bg-dark-900/60 border-t border-dark-700 lg:border-t-0">
+            <div
+              className={`${
+                isMobileView && !isMobileConversationOpen ? 'hidden' : 'flex'
+              } flex-col bg-dark-900/60 border-t border-dark-700 lg:border-t-0 lg:flex`}
+            >
               {selectedConversation ? (
                 <>
-                  <header className="px-6 py-4 border-b border-dark-700 flex items-center justify-between bg-dark-900/80">
+                  <header className="px-4 sm:px-6 py-4 border-b border-dark-700 flex items-center justify-between gap-3 bg-dark-900/80">
                     <div className="flex items-center gap-3 min-w-0">
+                      {isMobileView && (
+                        <button
+                          onClick={() => setMobileConversationOpen(false)}
+                          className="lg:hidden shrink-0 p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors"
+                          aria-label="Revenir à la liste des conversations"
+                        >
+                          <ArrowLeft size={18} />
+                        </button>
+                      )}
                       <div className="relative">
                         <img
                           src={selectedConversation.participant.avatar}
