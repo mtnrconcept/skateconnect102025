@@ -16,6 +16,7 @@ import SettingsSection from './components/sections/SettingsSection';
 import MessagesSection from './components/sections/MessagesSection';
 import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
 import TermsSection from './components/sections/TermsSection';
+import SponsorsSection from './components/sections/SponsorsSection';
 import AchievementNotification from './components/AchievementNotification';
 import type { Profile, Section } from './types';
 
@@ -101,11 +102,12 @@ function App() {
         onSectionChange={setCurrentSection}
       />
 
-      <main className="pt-16 pb-20 md:pb-6">
+      <main className="pt-16 pb-28 md:pb-10 lg:pb-8">
         {currentSection === 'map' && <MapSection />}
         {currentSection === 'feed' && <FeedSection currentUser={profile} />}
-        {currentSection === 'events' && <EventsSection />}
+        {currentSection === 'events' && <EventsSection profile={profile} />}
         {currentSection === 'challenges' && <ChallengesSection profile={profile} />}
+        {currentSection === 'sponsors' && <SponsorsSection profile={profile} />}
         {currentSection === 'profile' && (
           <ProfileSection profile={profile} onProfileUpdate={setProfile} />
         )}
