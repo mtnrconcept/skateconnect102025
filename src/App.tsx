@@ -106,7 +106,9 @@ function App() {
         {currentSection === 'feed' && <FeedSection currentUser={profile} />}
         {currentSection === 'events' && <EventsSection />}
         {currentSection === 'challenges' && <ChallengesSection profile={profile} />}
-        {currentSection === 'profile' && <ProfileSection profile={profile} />}
+        {currentSection === 'profile' && (
+          <ProfileSection profile={profile} onProfileUpdate={setProfile} />
+        )}
         {currentSection === 'badges' && <BadgesSection profile={profile} />}
         {currentSection === 'rewards' && <RewardsSection profile={profile} />}
         {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}

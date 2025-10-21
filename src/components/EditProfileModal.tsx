@@ -8,10 +8,18 @@ import type { Profile } from '../types';
 interface EditProfileModalProps {
   profile: Profile;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => Promise<void> | void;
+  onAvatarChange?: (url: string | null) => void;
+  onCoverChange?: (url: string | null) => void;
 }
 
-export default function EditProfileModal({ profile, onClose, onSaved }: EditProfileModalProps) {
+export default function EditProfileModal({
+  profile,
+  onClose,
+  onSaved,
+  onAvatarChange,
+  onCoverChange,
+}: EditProfileModalProps) {
   const [displayName, setDisplayName] = useState(profile.display_name);
   const [username, setUsername] = useState(profile.username);
   const [bio, setBio] = useState(profile.bio || '');
@@ -58,8 +66,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
 
       if (error) throw error;
 
-      onSaved();
-      onClose();
+      await onSaved();
     } catch (error) {
       console.error('Error updating profile:', error);
       alert('Failed to update profile');
@@ -108,7 +115,10 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCoverUrl(null)}
+                        onClick={() => {
+                          setCoverUrl(null);
+                          onCoverChange?.(null);
+                        }}
                         className="bg-white/70 backdrop-blur-sm text-red-600 px-3 py-1.5 text-sm rounded-md font-medium hover:bg-white"
                       >
                         Supprimer
@@ -145,6 +155,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                             path={profile.id}
                             onUploadComplete={(url) => {
                               setCoverUrl(url);
+                              onCoverChange?.(url);
                               setShowCoverUploader(false);
                             }}
                             onError={(error) => {
@@ -213,6 +224,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                         path={profile.id}
                         onUploadComplete={(url) => {
                           setAvatarUrl(url);
+                          onAvatarChange?.(url);
                           setShowAvatarUploader(false);
                         }}
                         onError={(error) => {
@@ -253,7 +265,10 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
                       {avatarUrl && (
                         <button
                           type="button"
-                          onClick={() => setAvatarUrl(null)}
+                          onClick={() => {
+                            setAvatarUrl(null);
+                            onAvatarChange?.(null);
+                          }}
                           className="text-sm text-red-600 hover:text-red-700 w-full text-center"
                         >
                           Supprimer la photo

@@ -13,9 +13,10 @@ import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
   profile: Profile | null;
+  onProfileUpdate?: (profile: Profile) => void;
 }
 
-export default function ProfileSection({ profile }: ProfileSectionProps) {
+export default function ProfileSection({ profile, onProfileUpdate }: ProfileSectionProps) {
   const [profileData, setProfileData] = useState<Profile | null>(profile);
   const [activeTab, setActiveTab] = useState('posts');
   const [userPosts, setUserPosts] = useState<Post[]>([]);
@@ -31,6 +32,32 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showGalleryViewer, setShowGalleryViewer] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
+  const [profileSnapshot, setProfileSnapshot] = useState<Profile | null>(null);
+
+  const handleAvatarPreview = useCallback((url: string | null) => {
+    setProfileData((prev) => (prev ? { ...prev, avatar_url: url } : prev));
+  }, []);
+
+  const handleCoverPreview = useCallback((url: string | null) => {
+    setProfileData((prev) => (prev ? { ...prev, cover_url: url } : prev));
+  }, []);
+
+  const handleModalClose = useCallback(() => {
+    setShowEditModal(false);
+    if (profileSnapshot) {
+      setProfileData({ ...profileSnapshot });
+    }
+    setProfileSnapshot(null);
+  }, [profileSnapshot]);
+
+  const openEditModal = useCallback(() => {
+    if (profileData) {
+      setProfileSnapshot({ ...profileData });
+    } else {
+      setProfileSnapshot(null);
+    }
+    setShowEditModal(true);
+  }, [profileData]);
 
   useEffect(() => {
     setProfileData(profile);
@@ -116,6 +143,9 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
         if (error) throw error;
         setProfileData(data);
+        if (data) {
+          onProfileUpdate?.(data);
+        }
         return data;
       } catch (error) {
         console.error('Error refreshing profile:', error);
@@ -123,7 +153,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
 
       return null;
     },
-    [],
+    [onProfileUpdate],
   );
 
   const tabs = [
@@ -233,7 +263,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
             </div>
 
             <button
-              onClick={() => setShowEditModal(true)}
+              onClick={openEditModal}
               className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors"
             >
               Edit Profile
@@ -279,7 +309,10 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
             <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
               Message
             </button>
-            <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
+            <button
+              onClick={openEditModal}
+              className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+            >
               Edit Profile
             </button>
           </div>
@@ -429,17 +462,20 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
     {showEditModal && profileData && (
       <EditProfileModal
         profile={profileData}
-          onClose={() => setShowEditModal(false)}
-          onSaved={async () => {
+        onClose={handleModalClose}
+        onSaved={async () => {
+          const updatedProfile = await refreshProfile(profileData.id);
+          if (updatedProfile) {
+            setProfileSnapshot(null);
             setShowEditModal(false);
-            const updatedProfile = await refreshProfile(profileData.id);
-            if (updatedProfile) {
-              setLoading(true);
-              await loadProfileData(updatedProfile.id);
-            }
-          }}
-        />
-      )}
+            setLoading(true);
+            await loadProfileData(updatedProfile.id);
+          }
+        }}
+        onAvatarChange={handleAvatarPreview}
+        onCoverChange={handleCoverPreview}
+      />
+    )}
     </div>
   );
 }
