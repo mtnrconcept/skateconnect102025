@@ -18,8 +18,87 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
     loadChallenges();
   }, [filter]);
 
+  const getFallbackChallenges = () => {
+    const now = new Date();
+    const addDays = (days: number) => {
+      const date = new Date(now);
+      date.setDate(date.getDate() + days);
+      return date.toISOString();
+    };
+
+    const fallbackChallenges: Challenge[] = [
+      {
+        id: 'community-fallback-1',
+        created_by: null,
+        title: 'Session DIY à rénover',
+        description:
+          'Rassemble ta crew pour retaper un spot DIY et partage le résultat final avec la communauté.',
+        challenge_type: 'community',
+        difficulty: 3,
+        prize: 'Pack stickers Shredloc + mise en avant sur la page d’accueil',
+        start_date: now.toISOString(),
+        end_date: addDays(10),
+        participants_count: 128,
+        is_active: true,
+        created_at: now.toISOString(),
+      },
+      {
+        id: 'weekly-fallback-1',
+        created_by: null,
+        title: 'Combo créatif filmé',
+        description:
+          'Filme un combo original de trois tricks minimum et publie-le sur le feed communautaire.',
+        challenge_type: 'weekly',
+        difficulty: 4,
+        prize: 'Carte cadeau de 25€ chez notre shop partenaire',
+        start_date: now.toISOString(),
+        end_date: addDays(7),
+        participants_count: 94,
+        is_active: true,
+        created_at: now.toISOString(),
+      },
+      {
+        id: 'brand-fallback-1',
+        created_by: null,
+        title: 'Best trick brandé',
+        description:
+          'Porte une pièce de ta marque préférée et filme ton meilleur trick sur un curb ou une box.',
+        challenge_type: 'brand',
+        difficulty: 2,
+        prize: 'Goodies exclusifs + repost sur le compte de la marque',
+        start_date: now.toISOString(),
+        end_date: addDays(5),
+        participants_count: 57,
+        is_active: true,
+        created_at: now.toISOString(),
+      },
+      {
+        id: 'daily-fallback-1',
+        created_by: null,
+        title: 'Bon plan spot partagé',
+        description:
+          'Ajoute un nouveau spot ou mets à jour un spot existant avec une photo récente.',
+        challenge_type: 'daily',
+        difficulty: 1,
+        prize: '50 XP instantanés',
+        start_date: now.toISOString(),
+        end_date: addDays(1),
+        participants_count: 36,
+        is_active: true,
+        created_at: now.toISOString(),
+      },
+    ];
+
+    if (filter === 'all') {
+      return fallbackChallenges;
+    }
+
+    return fallbackChallenges.filter((challenge) => challenge.challenge_type === filter);
+  };
+
   const loadChallenges = async () => {
     try {
+      setLoading(true);
       let query = supabase
         .from('challenges')
         .select('*, creator:profiles(*)')
@@ -32,9 +111,14 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
-      setChallenges(data || []);
+      if (!data || data.length === 0) {
+        setChallenges(getFallbackChallenges());
+      } else {
+        setChallenges(data);
+      }
     } catch (error) {
       console.error('Error loading challenges:', error);
+      setChallenges(getFallbackChallenges());
     } finally {
       setLoading(false);
     }
