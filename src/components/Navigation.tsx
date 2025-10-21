@@ -1,4 +1,4 @@
-import { Map, Home, Plus, Trophy, User, Settings } from 'lucide-react';
+import { Map, Home, CalendarDays, Trophy, User, Settings } from 'lucide-react';
 import type { Section } from '../types';
 
 interface NavigationProps {
@@ -10,7 +10,7 @@ export default function Navigation({ currentSection, onSectionChange }: Navigati
   const navItems = [
     { id: 'map' as Section, icon: Map, label: 'Carte' },
     { id: 'feed' as Section, icon: Home, label: 'Feed' },
-    { id: 'add' as Section, icon: Plus, label: 'Ajouter' },
+    { id: 'events' as Section, icon: CalendarDays, label: 'Événements' },
     { id: 'challenges' as Section, icon: Trophy, label: 'Défis' },
     { id: 'profile' as Section, icon: User, label: 'Profil' },
     { id: 'settings' as Section, icon: Settings, label: 'Paramètres' },

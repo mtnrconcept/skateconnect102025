@@ -6,7 +6,7 @@ import {
   LogOut,
   Map,
   Home,
-  Plus,
+  CalendarDays,
   Trophy,
   User,
   Award,
@@ -91,15 +91,15 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
               <span>Feed</span>
             </button>
             <button
-              onClick={() => onSectionChange('add')}
+              onClick={() => onSectionChange('events')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-                currentSection === 'add'
+                currentSection === 'events'
                   ? 'bg-orange-500 text-white'
                   : 'text-gray-400 hover:bg-dark-700'
               }`}
             >
-              <Plus size={20} />
-              <span>Ajouter</span>
+              <CalendarDays size={20} />
+              <span>Événements</span>
             </button>
             <button
               onClick={() => onSectionChange('challenges')}
