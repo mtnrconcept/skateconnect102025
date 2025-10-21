@@ -57,8 +57,61 @@ export default function DailyChallenges({ profile }: DailyChallengesProps) {
     };
   }, [profile.id]);
 
+  const getFallbackDailyChallenges = () => {
+    const now = new Date();
+    const addDays = (days: number) => {
+      const date = new Date(now);
+      date.setDate(date.getDate() + days);
+      return date.toISOString();
+    };
+
+    return [
+      {
+        id: 'daily-fallback-community-session',
+        title: 'Session matinale au park',
+        description: 'Pose trois manuals consécutifs avant 10h et partage ta meilleure tentative.',
+        challenge_type: 'daily',
+        target_count: 3,
+        xp_reward: 75,
+        start_date: now.toISOString(),
+        end_date: addDays(1),
+      },
+      {
+        id: 'daily-fallback-new-spot',
+        title: 'Nouveau spot référencé',
+        description: 'Ajoute un spot street ou mets à jour les infos d’un spot existant.',
+        challenge_type: 'daily',
+        target_count: 1,
+        xp_reward: 60,
+        start_date: now.toISOString(),
+        end_date: addDays(1),
+      },
+      {
+        id: 'weekly-fallback-tour',
+        title: 'Tour des quartiers',
+        description: 'Valide cinq spots différents dans la semaine et laisse un avis sur chacun.',
+        challenge_type: 'weekly',
+        target_count: 5,
+        xp_reward: 200,
+        start_date: now.toISOString(),
+        end_date: addDays(7),
+      },
+      {
+        id: 'weekly-fallback-clip',
+        title: 'Clip collectif',
+        description: 'Publie une vidéo de groupe avec au moins trois riders différents.',
+        challenge_type: 'weekly',
+        target_count: 1,
+        xp_reward: 250,
+        start_date: now.toISOString(),
+        end_date: addDays(7),
+      },
+    ];
+  };
+
   const loadChallenges = async () => {
     try {
+      setLoading(true);
       const { data: challengesData, error: challengesError } = await supabase
         .from('daily_challenges')
         .select('*')
@@ -84,9 +137,14 @@ export default function DailyChallenges({ profile }: DailyChallengesProps) {
         progress: progressMap.get(challenge.id),
       })) || [];
 
-      setChallenges(challengesWithProgress);
+      if (challengesWithProgress.length === 0) {
+        setChallenges(getFallbackDailyChallenges());
+      } else {
+        setChallenges(challengesWithProgress);
+      }
     } catch (error) {
       console.error('Error loading challenges:', error);
+      setChallenges(getFallbackDailyChallenges());
     } finally {
       setLoading(false);
     }

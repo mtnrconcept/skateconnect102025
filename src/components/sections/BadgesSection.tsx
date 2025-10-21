@@ -110,6 +110,16 @@ export default function BadgesSection({ profile }: BadgesSectionProps) {
         <h1 className="text-3xl font-bold text-white mb-2">Badges et Achievements</h1>
         <p className="text-gray-400 mb-6">Collectionnez des badges en accomplissant des exploits</p>
 
+        <div className="bg-dark-900 border border-dark-700 rounded-lg p-4 mb-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Ce que les badges peuvent débloquer</h2>
+          <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
+            <li>Bonus d’XP permanents pour accélérer ta progression sur le leaderboard.</li>
+            <li>Réductions exclusives sur la boutique partenaire et accès anticipé aux drops.</li>
+            <li>Slots supplémentaires pour mettre en avant tes spots, clips et événements.</li>
+            <li>Accès à des challenges secrets réservés aux riders les plus assidus.</li>
+          </ul>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-dark-900 rounded-lg p-4 border border-dark-700">
             <div className="flex items-center gap-3">
