@@ -333,7 +333,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
             <aside
               className={`${
                 isMobileView && isMobileConversationOpen ? 'hidden' : 'flex'
-              } border-b border-dark-700 lg:border-b-0 lg:border-r bg-dark-900/60 flex-col lg:flex`}
+              } border-b border-dark-700 lg:border-b-0 lg:border-r bg-dark-900/60 flex-col lg:flex min-h-0`}
             >
               <div className="p-5">
                 <div className="flex items-center justify-between">
@@ -370,7 +370,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-h-0">
                 {filteredConversations.length === 0 ? (
                   <div className="p-6 text-center text-gray-500 text-sm">Aucun résultat pour « {searchTerm} »</div>
                 ) : (
@@ -428,7 +428,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
             <div
               className={`${
                 isMobileView && !isMobileConversationOpen ? 'hidden' : 'flex'
-              } flex-col bg-dark-900/60 border-t border-dark-700 lg:border-t-0 lg:flex`}
+              } flex-col bg-dark-900/60 border-t border-dark-700 lg:border-t-0 lg:flex min-h-0`}
             >
               {selectedConversation ? (
                 <>
