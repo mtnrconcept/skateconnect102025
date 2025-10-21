@@ -127,67 +127,71 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
         </div>
 
         {onSectionChange && (
-          <nav className="hidden md:flex flex-1 items-center justify-center lg:justify-start gap-x-3 gap-y-2 mx-4 flex-wrap">
-            {navStructure.map((item) => {
-              if (item.type === 'direct') {
+          <nav className="hidden md:flex flex-1 items-center justify-center lg:justify-start mx-4">
+            <div className="flex flex-1 items-center justify-center lg:justify-start gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar">
+              {navStructure.map((item) => {
+                if (item.type === 'direct') {
+                  const Icon = item.icon;
+                  const isActive = currentSection === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onSectionChange(item.id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
+                        isActive
+                          ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
+                          : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
+                      }`}
+                    >
+                      <Icon size={20} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                }
+
                 const Icon = item.icon;
-                const isActive = currentSection === item.id;
+                const hasActiveChild = item.items.some((child) => child.id === currentSection);
+
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => onSectionChange(item.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm whitespace-nowrap ${
-                      isActive
-                        ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
-                        : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
-                    }`}
-                  >
-                    <Icon size={20} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              }
+                  <div key={item.label} className="relative group">
+                    <button
+                      type="button"
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
+                        hasActiveChild
+                          ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
+                          : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
+                      }`}
+                    >
+                      <Icon size={20} />
+                      <span>{item.label}</span>
+                      <ChevronDown size={16} className="mt-[1px]" />
+                    </button>
+                    <div className="absolute top-full left-0 mt-3 hidden min-w-[15rem] rounded-2xl border border-dark-700/80 bg-dark-900/95 p-2 shadow-xl group-hover:flex group-focus-within:flex flex-col">
+                      {item.items.map((child) => {
+                        const ChildIcon = child.icon;
+                        const isChildActive = currentSection === child.id;
 
-              const Icon = item.icon;
-              const hasActiveChild = item.items.some((child) => child.id === currentSection);
-
-              return (
-                <div key={item.label} className="relative group">
-                  <button
-                    type="button"
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm whitespace-nowrap ${
-                      hasActiveChild
-                        ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
-                        : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
-                    }`}
-                  >
-                    <Icon size={20} />
-                    <span>{item.label}</span>
-                    <ChevronDown size={16} className="mt-[1px]" />
-                  </button>
-                  <div className="absolute top-full left-0 mt-3 hidden min-w-[15rem] rounded-2xl border border-dark-700/80 bg-dark-900/95 p-2 shadow-xl group-hover:flex group-focus-within:flex flex-col">
-                    {item.items.map((child) => {
-                      const ChildIcon = child.icon;
-                      const isChildActive = currentSection === child.id;
-                      return (
-                        <button
-                          key={child.id}
-                          onClick={() => onSectionChange(child.id)}
-                          className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
-                            isChildActive
-                              ? 'bg-orange-500/20 text-white'
-                              : 'text-gray-300 hover:bg-dark-700 hover:text-white'
-                          }`}
-                        >
-                          <ChildIcon size={18} />
-                          <span>{child.label}</span>
-                        </button>
-                      );
-                    })}
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => onSectionChange(child.id)}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
+                              isChildActive
+                                ? 'bg-orange-500/20 text-white'
+                                : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                            }`}
+                          >
+                            <ChildIcon size={18} />
+                            <span>{child.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </nav>
         )}
 

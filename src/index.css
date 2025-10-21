@@ -23,6 +23,15 @@
   will-change: transform !important;
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 .spot-hover-popup {
   z-index: 9999 !important;
   position: relative !important;
