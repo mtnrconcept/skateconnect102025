@@ -29,20 +29,40 @@ export default function MapSection() {
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    map.current = new mapboxgl.Map({
+    const mapInstance = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
       center: [2.3522, 48.8566],
       zoom: 12,
     });
 
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.current = mapInstance;
+
+    mapInstance.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    const handleResize = () => {
+      mapInstance.resize();
+    };
+
+    if (!mapInstance.loaded()) {
+      mapInstance.once('load', handleResize);
+    } else {
+      handleResize();
+    }
+
+    window.addEventListener('resize', handleResize);
+
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+
+    resizeObserver.observe(mapContainer.current);
 
     return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
+      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
+      mapInstance.remove();
+      map.current = null;
     };
   }, []);
 
