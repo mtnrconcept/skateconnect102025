@@ -13,6 +13,7 @@ import BadgesSection from './components/sections/BadgesSection';
 import RewardsSection from './components/sections/RewardsSection';
 import LeaderboardSection from './components/sections/LeaderboardSection';
 import SettingsSection from './components/sections/SettingsSection';
+import MessagesSection from './components/sections/MessagesSection';
 import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
 import TermsSection from './components/sections/TermsSection';
 import AchievementNotification from './components/AchievementNotification';
@@ -109,6 +110,7 @@ function App() {
         {currentSection === 'badges' && <BadgesSection profile={profile} />}
         {currentSection === 'rewards' && <RewardsSection profile={profile} />}
         {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
+        {currentSection === 'messages' && <MessagesSection profile={profile} />}
         {currentSection === 'settings' && (
           <SettingsSection profile={profile} onNavigate={setCurrentSection} />
         )}
