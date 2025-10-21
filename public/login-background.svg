@@ -1,0 +1,69 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="960" y1="0" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1E23"/>
+      <stop offset="0.4" stop-color="#141419"/>
+      <stop offset="1" stop-color="#050507"/>
+    </linearGradient>
+    <linearGradient id="street" x1="960" y1="740" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17171B"/>
+      <stop offset="1" stop-color="#050506"/>
+    </linearGradient>
+    <linearGradient id="letters" x1="960" y1="870" x2="960" y2="1020" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9A3C"/>
+      <stop offset="1" stop-color="#F25C05"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="960" y1="720" x2="960" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E43D30"/>
+      <stop offset="1" stop-color="#A31C1C"/>
+    </linearGradient>
+    <linearGradient id="pinHighlight" x1="960" y1="770" x2="960" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F06543"/>
+      <stop offset="1" stop-color="#B6231D"/>
+    </linearGradient>
+    <linearGradient id="skater" x1="960" y1="380" x2="960" y2="540" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#DBDBE2"/>
+      <stop offset="1" stop-color="#6F6F7A"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <g opacity="0.5">
+    <rect x="160" y="260" width="180" height="420" fill="#1B1B22"/>
+    <rect x="380" y="210" width="200" height="520" fill="#1A1A20"/>
+    <rect x="620" y="300" width="160" height="430" fill="#18181E"/>
+    <rect x="800" y="240" width="210" height="540" fill="#1D1D23"/>
+    <rect x="1040" y="280" width="170" height="480" fill="#181820"/>
+    <rect x="1230" y="260" width="220" height="520" fill="#1C1C24"/>
+    <rect x="1490" y="310" width="170" height="430" fill="#191920"/>
+    <rect x="1670" y="280" width="150" height="470" fill="#17171E"/>
+  </g>
+  <g opacity="0.25">
+    <rect x="120" y="360" width="140" height="320" fill="#2A2A34"/>
+    <rect x="310" y="340" width="120" height="310" fill="#24242D"/>
+    <rect x="520" y="380" width="120" height="320" fill="#262630"/>
+    <rect x="700" y="360" width="140" height="330" fill="#22222A"/>
+    <rect x="900" y="370" width="140" height="320" fill="#23232B"/>
+    <rect x="1110" y="340" width="140" height="330" fill="#25252D"/>
+    <rect x="1320" y="370" width="130" height="330" fill="#22222A"/>
+    <rect x="1510" y="350" width="120" height="310" fill="#1E1E26"/>
+    <rect x="1700" y="360" width="120" height="320" fill="#1B1B22"/>
+  </g>
+  <circle cx="1410" cy="170" r="120" fill="#EAEAF0"/>
+  <circle cx="1410" cy="170" r="100" fill="#F7F7FB"/>
+  <path d="M1120 420C1170 400 1240 410 1280 440C1295 450 1310 470 1315 490C1318 500 1316 510 1308 516C1290 530 1258 540 1210 540C1160 540 1115 532 1088 520C1070 511 1070 488 1086 474C1100 462 1110 450 1120 420Z" fill="url(#skater)"/>
+  <path d="M1135 430C1155 420 1185 420 1200 430C1220 445 1245 470 1265 500C1285 530 1295 555 1275 566C1252 578 1215 578 1170 565C1125 552 1100 528 1098 508C1096 488 1113 442 1135 430Z" fill="#1F1F27" opacity="0.6"/>
+  <path d="M1110 568C1115 556 1130 550 1144 553L1236 574C1242 575 1248 582 1248 589V592C1248 600 1243 607 1235 608L1148 620C1132 622 1112 619 1104 611C1096 602 1102 585 1110 568Z" fill="#0F0F15"/>
+  <path d="M960 760C1020 664 1050 600 1104 564C1146 536 1198 532 1242 548C1292 566 1332 612 1346 672C1356 716 1352 766 1320 812C1284 862 1224 900 1140 930L1088 948C1060 958 1030 966 1004 962C968 956 944 932 934 900C924 868 932 828 960 760Z" fill="url(#pin)"/>
+  <path d="M960 760C912 864 902 934 928 974C944 998 974 1010 1014 1006C1044 1004 1086 988 1140 962C1230 920 1286 868 1308 812C1330 756 1318 700 1278 660C1244 626 1196 608 1150 610C1098 612 1058 642 1024 690C998 726 980 760 960 804C950 782 950 750 960 760Z" fill="url(#pinHighlight)"/>
+  <path d="M960 814C980 792 1004 778 1034 774C1082 766 1124 786 1158 812C1182 830 1192 858 1180 886C1170 908 1144 926 1104 938C1062 952 1022 954 992 944C960 932 942 904 944 874C946 852 952 832 960 814Z" fill="#0F0F15" opacity="0.45"/>
+  <rect y="720" width="1920" height="360" fill="url(#street)"/>
+  <g opacity="0.3">
+    <rect x="0" y="720" width="1920" height="6" fill="#2D2D33"/>
+    <rect x="0" y="870" width="1920" height="4" fill="#1C1C22"/>
+    <rect x="0" y="1010" width="1920" height="3" fill="#131318"/>
+  </g>
+  <text x="960" y="940" text-anchor="middle" font-family="'Arial Black', 'Arial', sans-serif" font-size="150" fill="url(#letters)" letter-spacing="8">SHREDLOC</text>
+  <g opacity="0.4">
+    <ellipse cx="960" cy="980" rx="420" ry="60" fill="#050506"/>
+  </g>
+</svg>

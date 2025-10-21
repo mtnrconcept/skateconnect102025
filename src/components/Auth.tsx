@@ -60,9 +60,20 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen bg-dark-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="bg-dark-800 rounded-2xl shadow-2xl overflow-hidden border border-dark-700">
+    <div className="relative min-h-screen bg-dark-900 flex items-center justify-center p-4 overflow-hidden">
+      <div className="pointer-events-none absolute inset-0">
+        <div
+          className="absolute inset-0 bg-cover bg-top opacity-80"
+          style={{
+            backgroundImage: "url('/logo copie.jpg')",
+            WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0))',
+            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0))',
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-dark-900/30 via-dark-900/70 to-dark-900" />
+      </div>
+      <div className="relative z-10 max-w-md w-full">
+        <div className="bg-dark-800/90 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-dark-700/80">
           <div className="bg-dark-800 px-8 py-12 text-center border-b border-dark-700">
             <div className="flex justify-center mb-4">
               <img src="/logo.png" alt="Shredloc" className="h-150 w-auto" />
