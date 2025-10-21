@@ -62,8 +62,15 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   return (
     <div className="relative min-h-screen bg-dark-900 flex items-center justify-center p-4 overflow-hidden">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[url('/login-background.svg')] bg-cover bg-center opacity-70" />
-        <div className="absolute inset-0 bg-gradient-to-b from-dark-900/40 via-dark-900/70 to-dark-900" />
+        <div
+          className="absolute inset-0 bg-cover bg-top opacity-80"
+          style={{
+            backgroundImage: "url('/logo copie.jpg')",
+            WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0))',
+            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0))',
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-dark-900/30 via-dark-900/70 to-dark-900" />
       </div>
       <div className="relative z-10 max-w-md w-full">
         <div className="bg-dark-800/90 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-dark-700/80">
