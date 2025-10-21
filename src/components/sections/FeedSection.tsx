@@ -6,6 +6,7 @@ import { uploadFile } from '../../lib/storage';
 import { filterOutProfileMediaPosts } from '../../lib/postUtils';
 import { compressImage, validateMediaFile } from '../../lib/imageCompression';
 import CommentSection from '../CommentSection';
+import PostMediaViewer from '../PostMediaViewer';
 import type { Post, Profile } from '../../types';
 
 interface FeedSectionProps {
@@ -23,6 +24,9 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const [showStoryViewer, setShowStoryViewer] = useState(false);
+  const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const [activeStoryMediaIndex, setActiveStoryMediaIndex] = useState(0);
 
   useEffect(() => {
     loadPosts();
@@ -164,9 +168,9 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           .eq('post_id', postId)
           .eq('user_id', currentUser.id);
 
-        setPosts(posts.map(p =>
+        setPosts(prev => prev.map(p =>
           p.id === postId
-            ? { ...p, liked_by_user: false, likes_count: Math.max(0, p.likes_count - 1) }
+            ? { ...p, liked_by_user: false, likes_count: Math.max(0, (p.likes_count || 0) - 1) }
             : p
         ));
       } else {
@@ -177,9 +181,9 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
             post_id: postId,
           });
 
-        setPosts(posts.map(p =>
+        setPosts(prev => prev.map(p =>
           p.id === postId
-            ? { ...p, liked_by_user: true, likes_count: p.likes_count + 1 }
+            ? { ...p, liked_by_user: true, likes_count: (p.likes_count || 0) + 1 }
             : p
         ));
       }
@@ -201,6 +205,25 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     if (diffHours < 24) return `Il y a ${diffHours}h`;
     if (diffDays < 7) return `Il y a ${diffDays}j`;
     return date.toLocaleDateString('fr-FR');
+  };
+
+  const handleCommentCountChange = (postId: string, count: number) => {
+    setPosts(prev => prev.map(p =>
+      p.id === postId
+        ? { ...p, comments_count: count }
+        : p
+    ));
+  };
+
+  const storyPosts = posts.filter((post) => post.media_urls && post.media_urls.length > 0);
+
+  const isVideoUrl = (url: string) => {
+    try {
+      const cleanUrl = new URL(url, 'http://localhost').pathname || url;
+      return /(\.mp4$|\.mov$|\.webm$|\.ogg$)/i.test(cleanUrl);
+    } catch {
+      return /(\.mp4$|\.mov$|\.webm$|\.ogg$)/i.test(url);
+    }
   };
 
   const filterButtons = [
@@ -229,10 +252,34 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
             </div>
             <span className="text-xs text-gray-400">You</span>
           </div>
-          {posts.slice(0, 8).map((post, idx) => (
-            <div key={idx} className="flex-shrink-0 flex flex-col items-center gap-1">
-              <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5">
-                {post.user?.avatar_url ? (
+          {storyPosts.slice(0, 10).map((post, idx) => (
+            <button
+              key={post.id}
+              className="flex-shrink-0 flex flex-col items-center gap-1 focus:outline-none"
+              onClick={() => {
+                setActiveStoryIndex(idx);
+                setActiveStoryMediaIndex(0);
+                setShowStoryViewer(true);
+              }}
+            >
+              <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5 overflow-hidden">
+                {post.media_urls?.[0] ? (
+                  isVideoUrl(post.media_urls[0]) ? (
+                    <video
+                      src={post.media_urls[0]}
+                      className="w-full h-full object-cover rounded-full"
+                      muted
+                      playsInline
+                      loop
+                    />
+                  ) : (
+                    <img
+                      src={post.media_urls[0]}
+                      alt={getUserDisplayName(post.user)}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  )
+                ) : post.user?.avatar_url ? (
                   <img
                     src={post.user.avatar_url}
                     alt={getUserDisplayName(post.user)}
@@ -244,8 +291,8 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   </div>
                 )}
               </div>
-              <span className="text-xs text-gray-400 truncate max-w-[64px]">{post.user?.username}</span>
-            </div>
+              <span className="text-xs text-gray-400 truncate max-w-[64px]">{post.user?.username || 'Story'}</span>
+            </button>
           ))}
         </div>
 
@@ -495,17 +542,24 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   <CommentSection
                     postId={post.id}
                     currentUser={currentUser}
-                    onCommentCountChange={(count) => {
-                      setPosts(posts.map(p =>
-                        p.id === post.id ? { ...p, comments_count: count } : p
-                      ));
-                    }}
+                    onCommentCountChange={(count) => handleCommentCountChange(post.id, count)}
                   />
                 </div>
               )}
             </div>
           ))}
         </div>
+      )}
+      {showStoryViewer && storyPosts.length > 0 && (
+        <PostMediaViewer
+          posts={storyPosts}
+          initialPostIndex={activeStoryIndex}
+          initialMediaIndex={activeStoryMediaIndex}
+          onClose={() => setShowStoryViewer(false)}
+          onLike={handleLike}
+          currentUser={currentUser}
+          onCommentCountChange={handleCommentCountChange}
+        />
       )}
     </div>
   );

@@ -8,6 +8,7 @@ import XPProgressBar from '../XPProgressBar';
 import StatsDisplay from '../StatsDisplay';
 import XPHistory from '../XPHistory';
 import GamificationTester from '../GamificationTester';
+import PostMediaViewer from '../PostMediaViewer';
 import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
@@ -28,6 +29,8 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
   const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showGalleryViewer, setShowGalleryViewer] = useState(false);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
 
   useEffect(() => {
     setProfileData(profile);
@@ -44,7 +47,10 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
           xpResult,
           badgesResult,
         ] = await Promise.all([
-          supabase.from('posts').select('*', { count: 'exact' }).eq('user_id', profileId),
+          supabase
+            .from('posts')
+            .select('*, user:profiles(*)', { count: 'exact' })
+            .eq('user_id', profileId),
           supabase.from('spots').select('*', { count: 'exact' }).eq('created_by', profileId),
           supabase.from('follows').select('*', { count: 'exact' }).eq('following_id', profileId),
           supabase.from('follows').select('*', { count: 'exact' }).eq('follower_id', profileId),
@@ -58,7 +64,23 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
         ]);
 
         const filteredPosts = filterOutProfileMediaPosts(postsResult.data || []);
-        setUserPosts(filteredPosts);
+
+        if (profile?.id && filteredPosts.length > 0) {
+          const postIds = filteredPosts.map((post) => post.id);
+          const { data: likesData } = await supabase
+            .from('likes')
+            .select('post_id')
+            .eq('user_id', profile.id)
+            .in('post_id', postIds);
+          const likedIds = new Set(likesData?.map((like) => like.post_id) || []);
+          setUserPosts(filteredPosts.map((post) => ({
+            ...post,
+            liked_by_user: likedIds.has(post.id),
+          })));
+        } else {
+          setUserPosts(filteredPosts);
+        }
+
         setStats({
           postsCount: filteredPosts.length,
           spotsCount: spotsResult.count || 0,
@@ -73,7 +95,7 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
         setLoading(false);
       }
     },
-    [],
+    [profile?.id],
   );
 
   useEffect(() => {
@@ -111,6 +133,63 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
     { id: 'badges', label: 'Badges' },
     { id: 'test', label: 'Test Gamification' },
   ];
+
+  const mediaPosts = userPosts.filter((post) => post.media_urls && post.media_urls.length > 0);
+
+  const isVideoUrl = (url: string) => {
+    try {
+      const cleanUrl = new URL(url, 'http://localhost').pathname || url;
+      return /(\.mp4$|\.mov$|\.webm$|\.ogg$)/i.test(cleanUrl);
+    } catch {
+      return /(\.mp4$|\.mov$|\.webm$|\.ogg$)/i.test(url);
+    }
+  };
+
+  const handlePostLike = async (postId: string) => {
+    if (!profileData) return;
+
+    const post = userPosts.find((p) => p.id === postId);
+    if (!post) return;
+
+    try {
+      if (post.liked_by_user) {
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', profileData.id);
+
+        setUserPosts((prev) => prev.map((p) =>
+          p.id === postId
+            ? { ...p, liked_by_user: false, likes_count: Math.max(0, (p.likes_count || 0) - 1) }
+            : p
+        ));
+      } else {
+        await supabase
+          .from('likes')
+          .insert({
+            user_id: profileData.id,
+            post_id: postId,
+          });
+
+        setUserPosts((prev) => prev.map((p) =>
+          p.id === postId
+            ? { ...p, liked_by_user: true, likes_count: (p.likes_count || 0) + 1 }
+            : p
+        ));
+      }
+    } catch (error) {
+      console.error('Error liking post:', error);
+    }
+  };
+
+  const handleGalleryCommentCountChange = (postId: string, count: number) => {
+    setUserPosts((prev) => prev.map((p) =>
+      p.id === postId
+        ? { ...p, comments_count: count }
+        : p
+    ));
+  };
 
   if (!profileData) {
     return (
@@ -277,29 +356,53 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
               <GamificationTester profile={profileData} />
             </div>
           ) : activeTab === 'posts' ? (
-            userPosts.length === 0 ? (
-              <div className="grid grid-cols-3 gap-1">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-                  <div key={i} className="aspect-square bg-dark-700 rounded-lg overflow-hidden">
-                    <div className="w-full h-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center">
-                      <span className="text-4xl opacity-20">🛹</span>
-                    </div>
-                  </div>
-                ))}
+            mediaPosts.length === 0 ? (
+              <div className="py-12 text-center text-gray-400">
+                <p className="text-sm">Aucun média partagé pour le moment.</p>
+                <p className="text-xs text-gray-500 mt-1">Ajoutez une photo ou une vidéo pour alimenter votre galerie.</p>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-1">
-                {userPosts.map((post, index) => (
-                  <div key={post.id} className="aspect-square bg-dark-700 rounded-lg overflow-hidden">
-                    {post.media_urls && post.media_urls[0] ? (
-                      <img src={post.media_urls[0]} alt="Post" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center">
-                        <span className="text-4xl opacity-20">🛹</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {mediaPosts.map((post, index) => {
+                  const firstMedia = post.media_urls?.[0];
+                  const isVideo = firstMedia ? isVideoUrl(firstMedia) : post.post_type === 'video';
+
+                  return (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveGalleryIndex(index);
+                        setShowGalleryViewer(true);
+                      }}
+                      className="relative aspect-square bg-dark-700 rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      aria-label="Voir le média du post"
+                    >
+                      {firstMedia ? (
+                        isVideo ? (
+                          <video
+                            src={firstMedia}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                            loop
+                          />
+                        ) : (
+                          <img src={firstMedia} alt="Post" className="w-full h-full object-cover" />
+                        )
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center">
+                          <span className="text-4xl opacity-20">🛹</span>
+                        </div>
+                      )}
+                      {isVideo && (
+                        <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full">
+                          Vidéo
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )
           ) : (
@@ -307,12 +410,25 @@ export default function ProfileSection({ profile }: ProfileSectionProps) {
               <p>Contenu à venir</p>
             </div>
           )}
-        </div>
       </div>
+    </div>
 
-      {showEditModal && profileData && (
-        <EditProfileModal
-          profile={profileData}
+    {showGalleryViewer && mediaPosts.length > 0 && profileData && (
+      <PostMediaViewer
+        posts={mediaPosts}
+        initialPostIndex={activeGalleryIndex}
+        initialMediaIndex={0}
+        onClose={() => setShowGalleryViewer(false)}
+        onLike={handlePostLike}
+        currentUser={profileData}
+        onCommentCountChange={handleGalleryCommentCountChange}
+        fallbackUser={profileData}
+      />
+    )}
+
+    {showEditModal && profileData && (
+      <EditProfileModal
+        profile={profileData}
           onClose={() => setShowEditModal(false)}
           onSaved={async () => {
             setShowEditModal(false);
