@@ -1,0 +1,237 @@
+import { useEffect, useMemo, useState } from 'react';
+import { X, ChevronLeft, ChevronRight, Heart, MessageCircle } from 'lucide-react';
+import CommentSection from './CommentSection';
+import { getUserDisplayName, getUserInitial } from '../lib/userUtils';
+import type { Post, Profile } from '../types';
+
+interface PostMediaViewerProps {
+  posts: Post[];
+  initialPostIndex: number;
+  initialMediaIndex?: number;
+  onClose: () => void;
+  onLike: (postId: string) => void;
+  currentUser: Profile | null;
+  onCommentCountChange: (postId: string, count: number) => void;
+  fallbackUser?: Profile | null;
+}
+
+const isVideoUrl = (url: string) => {
+  try {
+    const cleanUrl = new URL(url, 'http://localhost').pathname || url;
+    return /(\.mp4$|\.mov$|\.webm$|\.ogg$)/i.test(cleanUrl);
+  } catch {
+    return /(\.mp4$|\.mov$|\.webm$|\.ogg$)/i.test(url);
+  }
+};
+
+export default function PostMediaViewer({
+  posts,
+  initialPostIndex,
+  initialMediaIndex = 0,
+  onClose,
+  onLike,
+  currentUser,
+  onCommentCountChange,
+  fallbackUser = null,
+}: PostMediaViewerProps) {
+  const [currentPostIndex, setCurrentPostIndex] = useState(initialPostIndex);
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(initialMediaIndex);
+  const [showComments, setShowComments] = useState(true);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  useEffect(() => {
+    setCurrentPostIndex(initialPostIndex);
+    setCurrentMediaIndex(initialMediaIndex);
+  }, [initialPostIndex, initialMediaIndex]);
+
+  useEffect(() => {
+    if (currentPostIndex >= posts.length) {
+      setCurrentPostIndex(posts.length - 1);
+      setCurrentMediaIndex(0);
+    }
+  }, [posts.length, currentPostIndex]);
+
+  const currentPost = useMemo(() => posts[currentPostIndex], [posts, currentPostIndex]);
+  const currentMediaUrl = currentPost?.media_urls?.[currentMediaIndex] || '';
+  const currentMediaIsVideo = currentMediaUrl ? isVideoUrl(currentMediaUrl) : currentPost?.post_type === 'video';
+  const postAuthor = currentPost?.user || fallbackUser;
+
+  const handleNext = () => {
+    if (!currentPost) return;
+
+    const totalMedia = currentPost.media_urls?.length || 0;
+    if (currentMediaIndex < totalMedia - 1) {
+      setCurrentMediaIndex((prev) => prev + 1);
+      return;
+    }
+
+    if (currentPostIndex < posts.length - 1) {
+      setCurrentPostIndex((prev) => prev + 1);
+      setCurrentMediaIndex(0);
+    }
+  };
+
+  const handlePrev = () => {
+    if (!currentPost) return;
+
+    if (currentMediaIndex > 0) {
+      setCurrentMediaIndex((prev) => prev - 1);
+      return;
+    }
+
+    if (currentPostIndex > 0) {
+      const prevIndex = currentPostIndex - 1;
+      const prevPost = posts[prevIndex];
+      const prevMediaLength = prevPost.media_urls?.length || 1;
+      setCurrentPostIndex(prevIndex);
+      setCurrentMediaIndex(prevMediaLength - 1);
+    }
+  };
+
+  if (!currentPost) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center px-4 md:px-12" onClick={onClose}>
+      <div
+        className="relative max-w-6xl w-full h-full max-h-[90vh] bg-dark-900 rounded-2xl overflow-hidden flex flex-col md:flex-row border border-dark-700"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-20 bg-dark-800 text-white p-2 rounded-full hover:bg-dark-700 transition-colors"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="relative flex-1 bg-black flex items-center justify-center">
+          {currentMediaUrl ? (
+            currentMediaIsVideo ? (
+              <video
+                key={currentMediaUrl}
+                src={currentMediaUrl}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <img
+                src={currentMediaUrl}
+                alt={currentPost.content || 'Story media'}
+                className="max-h-full max-w-full object-contain"
+              />
+            )
+          ) : (
+            <div className="text-gray-400">Aucun média disponible</div>
+          )}
+
+          {(posts.length > 1 || (currentPost.media_urls?.length || 0) > 1) && (
+            <div className="absolute inset-x-0 top-4 flex justify-center gap-2">
+              {currentPost.media_urls?.map((_, index) => (
+                <span
+                  key={`media-${index}`}
+                  className={`h-1 rounded-full transition-all duration-200 ${
+                    index === currentMediaIndex ? 'bg-white w-12' : 'bg-white/40 w-6'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+
+          {currentPostIndex > 0 || currentMediaIndex > 0 ? (
+            <button
+              onClick={handlePrev}
+              className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 bg-dark-800/70 text-white p-3 rounded-full hover:bg-dark-700 transition-colors"
+            >
+              <ChevronLeft size={24} />
+            </button>
+          ) : null}
+
+          {(currentPost.media_urls?.length || 0) - 1 > currentMediaIndex || currentPostIndex < posts.length - 1 ? (
+            <button
+              onClick={handleNext}
+              className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 bg-dark-800/70 text-white p-3 rounded-full hover:bg-dark-700 transition-colors"
+            >
+              <ChevronRight size={24} />
+            </button>
+          ) : null}
+        </div>
+
+        <div className="w-full md:w-96 bg-dark-800 flex flex-col border-l border-dark-700">
+          <div className="p-4 border-b border-dark-700">
+            <div className="flex items-center gap-3 mb-3">
+              {postAuthor?.avatar_url ? (
+                <img
+                  src={postAuthor.avatar_url}
+                  alt={getUserDisplayName(postAuthor)}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-orange-500"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-orange-500 text-white flex items-center justify-center text-lg font-semibold">
+                  {getUserInitial(postAuthor)}
+                </div>
+              )}
+              <div className="flex-1">
+                <p className="text-white font-semibold leading-tight">
+                  {getUserDisplayName(postAuthor)}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {new Date(currentPost.created_at).toLocaleString('fr-FR')}
+                </p>
+              </div>
+            </div>
+
+            {currentPost.content && (
+              <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                {currentPost.content}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-4 px-4 py-3 border-b border-dark-700">
+            <button
+              onClick={() => onLike(currentPost.id)}
+              className={`flex items-center gap-2 text-sm transition-colors ${
+                currentPost.liked_by_user ? 'text-orange-500' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              <Heart size={20} className={currentPost.liked_by_user ? 'fill-current' : ''} />
+              <span>{currentPost.likes_count || 0}</span>
+            </button>
+            <button
+              onClick={() => setShowComments((prev) => !prev)}
+              className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
+            >
+              <MessageCircle size={20} />
+              <span>{currentPost.comments_count || 0}</span>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4">
+            {showComments ? (
+              <CommentSection
+                postId={currentPost.id}
+                currentUser={currentUser}
+                showAll
+                onCommentCountChange={(count) => onCommentCountChange(currentPost.id, count)}
+              />
+            ) : (
+              <div className="text-center text-gray-500 text-sm">
+                <MessageCircle className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p>Ouvrez les commentaires pour participer à la discussion</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
