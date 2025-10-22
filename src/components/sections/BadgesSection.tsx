@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Award, Lock, Eye, EyeOff } from 'lucide-react';
+import { Award, Lock, Eye, EyeOff, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import BadgeIcon from '../BadgeIcon';
 import type { Badge, UserBadge, Profile } from '../../types';
 
 interface BadgesSectionProps {
@@ -13,6 +12,7 @@ export default function BadgesSection({ profile }: BadgesSectionProps) {
   const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -91,6 +91,14 @@ export default function BadgesSection({ profile }: BadgesSectionProps) {
   const filteredBadges = filter === 'all'
     ? allBadges
     : allBadges.filter(b => b.category === filter);
+
+  const handleLockedBadgeClick = (badge: Badge) => {
+    setSelectedBadge(badge);
+  };
+
+  const closeModal = () => {
+    setSelectedBadge(null);
+  };
 
   const earnedCount = userBadges.length;
   const totalCount = allBadges.length;
@@ -209,9 +217,14 @@ export default function BadgesSection({ profile }: BadgesSectionProps) {
                     }`}
                   >
                     {!earned && (
-                      <div className="absolute inset-0 bg-dark-900/80 rounded-lg flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleLockedBadgeClick(badge)}
+                        className="absolute inset-0 bg-dark-900/80 rounded-lg flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        aria-label={`Comment débloquer le badge ${badge.name}`}
+                      >
                         <Lock className="text-gray-600" size={32} />
-                      </div>
+                      </button>
                     )}
 
                     <div className="flex flex-col items-center text-center">
@@ -267,6 +280,46 @@ export default function BadgesSection({ profile }: BadgesSectionProps) {
           <p>Fonctionnalité à venir</p>
         </div>
       </div>
+
+      {selectedBadge && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={closeModal}
+        >
+          <div
+            className="bg-dark-800 border border-dark-600 rounded-xl max-w-md w-full p-6 relative"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closeModal}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-full"
+              aria-label="Fermer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center justify-center mb-4">
+              <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${getRarityColor(selectedBadge.rarity)} flex items-center justify-center text-3xl`}>
+                {selectedBadge.icon}
+              </div>
+            </div>
+
+            <h3 className="text-xl font-bold text-white text-center mb-2">{selectedBadge.name}</h3>
+            <p className="text-gray-300 text-sm text-center">
+              Pour déverrouiller ce badge : {selectedBadge.description}
+            </p>
+
+            <button
+              type="button"
+              onClick={closeModal}
+              className="mt-6 w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              J'ai compris
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
