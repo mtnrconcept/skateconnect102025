@@ -17,7 +17,7 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [mediaUploads, setMediaUploads] = useState<{ url: string; type: 'photo' | 'video' }[]>([]);
 
   const [selectedSurfaces, setSelectedSurfaces] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
@@ -111,12 +111,12 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
 
       if (spotError) throw spotError;
 
-      if (mediaUrls.length > 0 && newSpot) {
-        const mediaInserts = mediaUrls.map(url => ({
+      if (mediaUploads.length > 0 && newSpot) {
+        const mediaInserts = mediaUploads.map((media) => ({
           spot_id: newSpot.id,
-          media_url: url,
-          media_type: url.includes('video') ? 'video' : 'image',
-          uploaded_by: user.id,
+          media_url: media.url,
+          media_type: media.type,
+          user_id: user.id,
         }));
 
         const { error: mediaError } = await supabase
@@ -129,6 +129,7 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
       }
 
       alert('Spot ajouté avec succès!');
+      setMediaUploads([]);
       onSpotAdded();
       onClose();
     } catch (error) {
@@ -207,8 +208,9 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
                 bucket="spots"
                 acceptVideo={true}
                 maxFiles={5}
-                onUploadComplete={(url) => {
-                  setMediaUrls(prev => [...prev, url]);
+                onUploadComplete={(url, _path, type) => {
+                  const normalizedType: 'photo' | 'video' = type === 'video' ? 'video' : 'photo';
+                  setMediaUploads((prev) => [...prev, { url, type: normalizedType }]);
                 }}
                 onError={(error) => {
                   alert(error);
@@ -220,9 +222,9 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
                   maxSizeMB: 5,
                 }}
               />
-              {mediaUrls.length > 0 && (
+              {mediaUploads.length > 0 && (
                 <p className="mt-2 text-sm text-green-600">
-                  {mediaUrls.length} fichier(s) téléchargé(s)
+                  {mediaUploads.length} fichier(s) téléchargé(s)
                 </p>
               )}
             </div>

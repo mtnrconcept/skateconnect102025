@@ -8,7 +8,7 @@ import ImageCropModal from './ImageCropModal';
 interface MediaUploaderProps {
   bucket: StorageBucket;
   path?: string;
-  onUploadComplete: (url: string, path: string) => void;
+  onUploadComplete: (url: string, path: string, type?: 'image' | 'video') => void;
   onError?: (error: string) => void;
   onUploadStart?: () => void;
   onUploadEnd?: () => void;
@@ -151,7 +151,7 @@ export default function MediaUploader({
         { url: previewUrl, type: mediaType, file, originalSize: file.size },
       ]);
 
-      const { result, originalSize, compressedSize } = await uploadMedia(file);
+      const { result, compressedSize } = await uploadMedia(file);
 
       setPreviews((prev) =>
         prev.map((p) =>
@@ -159,7 +159,7 @@ export default function MediaUploader({
         )
       );
 
-      onUploadComplete(result.url, result.path);
+      onUploadComplete(result.url, result.path, mediaType);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to upload file';
       onError?.(errorMessage);
@@ -221,7 +221,7 @@ export default function MediaUploader({
       setPreviews((prev) => [...prev, { url: previewUrl, type: 'image' }]);
 
       const result = await uploadBase64(bucket, photo.base64!, photo.format, path);
-      onUploadComplete(result.url, result.path);
+      onUploadComplete(result.url, result.path, 'image');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to capture photo';
       onError?.(errorMessage);
@@ -248,7 +248,7 @@ export default function MediaUploader({
       setPreviews((prev) => [...prev, { url: previewUrl, type: 'image' }]);
 
       const result = await uploadBase64(bucket, photo.base64!, photo.format, path);
-      onUploadComplete(result.url, result.path);
+      onUploadComplete(result.url, result.path, 'image');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to pick photo';
       onError?.(errorMessage);
