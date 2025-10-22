@@ -377,7 +377,7 @@ export default function Header({
         </div>
 
         {onSectionChange && (
-          <nav className="hidden md:flex flex-1 min-w-[320px] items-center justify-center lg:justify-start">
+          <nav className="hidden md:flex flex-1 min-w-[80px] items-center justify-center lg:justify-start">
             <div className="flex flex-1 items-center justify-center lg:justify-start gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar">
               {primaryNavigationItems.map((item) => {
                 const Icon = item.icon;
@@ -404,12 +404,12 @@ export default function Header({
         )}
 
         <div
-          className={`hidden lg:flex items-center flex-1 min-w-[80px] max-w-xl xl:max-w-lg 2xl:max-w-lg transition-all duration-300 ease-out ${
+          className={`hidden lg:flex items-center flex-1 min-w-[0px] max-w-xl xl:max-w-lg 2xl:max-w-lg transition-all duration-300 ease-out ${
             isSearchActive ? 'scale-[1.02] drop-shadow-xl' : ''
           }`}
           ref={searchContainerRef}
         >
-          <form onSubmit={handleSearchSubmit} className="relative w-full">
+          <form onSubmit={handleSearchSubmit} className="relative">
             <Search
               className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
                 isSearchActive ? 'text-orange-400' : 'text-gray-500'
