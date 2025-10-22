@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search,
   Bell,
@@ -546,14 +547,16 @@ export default function Header({
         </div>
       </div>
 
-      {showNotifications && (
-        <NotificationsPanel
-          onClose={() => {
-            setShowNotifications(false);
-            loadUnreadCount();
-          }}
-        />
-      )}
+      {showNotifications &&
+        createPortal(
+          <NotificationsPanel
+            onClose={() => {
+              setShowNotifications(false);
+              loadUnreadCount();
+            }}
+          />,
+          document.body,
+        )}
     </header>
   );
 }
