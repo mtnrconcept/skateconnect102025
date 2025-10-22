@@ -404,7 +404,7 @@ export default function Header({
         )}
 
         <div
-          className={`hidden lg:flex items-center flex-1 min-w-[800px] max-w-xl xl:max-w-2xl 2xl:max-w-3xl transition-all duration-300 ease-out ${
+          className={`hidden lg:flex items-center flex-1 min-w-[80px] max-w-xl xl:max-w-2xl 2xl:max-w-3xl transition-all duration-300 ease-out ${
             isSearchActive ? 'scale-[1.02] drop-shadow-xl' : ''
           }`}
           ref={searchContainerRef}
