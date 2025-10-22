@@ -1,28 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  Search,
-  Bell,
-  Mail,
-  LogOut,
-  Map,
-  Home,
-  CalendarDays,
-  Trophy,
-  User,
-  Award,
-  Gift,
-  TrendingUp,
-  Settings,
-  Handshake,
-  Shield,
-  FileText,
-  Menu,
-  X,
-} from 'lucide-react';
+import { Search, Bell, Mail, LogOut, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import NotificationsPanel from './NotificationsPanel';
+import { navigationGroups, primaryNavigationItems, searchableNavigationItems } from '../data/navigation';
 import type { Profile, Section } from '../types';
 
 interface HeaderProps {
@@ -36,24 +18,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') {
-      return undefined;
-    }
-
-    const originalOverflow = document.body.style.overflow;
-
-    if (isMobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [isMobileMenuOpen]);
 
   useEffect(() => {
     if (profile) {
@@ -77,61 +42,14 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     window.location.reload();
   };
 
-  const navigationGroups = useMemo(
-    () => [
-      {
-        title: 'Navigation principale',
-        items: [
-          { id: 'feed' as Section, label: "Fil d'actu", icon: Home },
-          { id: 'map' as Section, label: 'Carte', icon: Map },
-          { id: 'events' as Section, label: 'Événements', icon: CalendarDays },
-          { id: 'challenges' as Section, label: 'Défis', icon: Trophy },
-          { id: 'leaderboard' as Section, label: 'Classement', icon: TrendingUp },
-          { id: 'sponsors' as Section, label: 'Sponsor', icon: Handshake },
-          { id: 'rewards' as Section, label: 'Store', icon: Gift },
-        ],
-      },
-      {
-        title: 'Espace membre',
-        items: [
-          { id: 'messages' as Section, label: 'Messages', icon: Mail },
-          { id: 'profile' as Section, label: 'Profil', icon: User },
-          { id: 'badges' as Section, label: 'Badges', icon: Award },
-          { id: 'settings' as Section, label: 'Paramètres', icon: Settings },
-        ],
-      },
-      {
-        title: 'Informations',
-        items: [
-          { id: 'privacy' as Section, label: 'Confidentialité', icon: Shield },
-          { id: 'terms' as Section, label: 'Conditions', icon: FileText },
-        ],
-      },
-    ],
-    [],
-  );
-
-  const primaryNavItems = navigationGroups[0]?.items ?? [];
-
-  const searchableNavItems = useMemo(
-    () =>
-      navigationGroups.flatMap((group) =>
-        group.items.map((item) => ({
-          ...item,
-          category: group.title,
-        })),
-      ),
-    [navigationGroups],
-  );
-
   const filteredSearchItems = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return searchableNavItems;
+    if (!term) return searchableNavigationItems;
 
-    return searchableNavItems.filter((item) =>
+    return searchableNavigationItems.filter((item) =>
       `${item.label} ${item.category}`.toLowerCase().includes(term),
     );
-  }, [searchTerm, searchableNavItems]);
+  }, [searchTerm]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -147,7 +65,6 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
   const handleNavigation = (section: Section) => {
     onSectionChange?.(section);
     setShowSearchResults(false);
-    setIsMobileMenuOpen(false);
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -162,15 +79,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
   return (
     <header className="fixed top-0 left-0 right-0 bg-dark-800/95 border-b border-dark-700/80 backdrop-blur z-40">
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-4 flex items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen((previous) => !previous)}
-            className="md:hidden p-2 rounded-full border border-dark-700/60 bg-dark-900/60 text-gray-300 hover:text-white hover:border-orange-500/40 transition-colors"
-            aria-label="Ouvrir le menu"
-          >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-3 rounded-2xl bg-dark-900/60 px-3 py-1.5 border border-dark-700/80">
             <img
               src="/logo.png"
@@ -184,7 +93,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
         {onSectionChange && (
           <nav className="hidden md:flex flex-1 items-center justify-center lg:justify-start mx-4">
             <div className="flex flex-1 items-center justify-center lg:justify-start gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar">
-              {primaryNavItems.map((item) => {
+              {primaryNavigationItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentSection === item.id;
 
@@ -330,66 +239,6 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
           }}
         />
       )}
-
-      <div
-        className={`fixed inset-0 z-[0] transition-opacity duration-300 md:hidden ${
-          isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-        aria-hidden={!isMobileMenuOpen}
-      >
-        <div
-          className="absolute inset-0 bg-black/70"
-          onClick={() => setIsMobileMenuOpen(false)}
-        ></div>
-        <div
-          className={`absolute inset-y-0 right-0 h-full w-72 max-w-[90%] bg-dark-800 border-l border-dark-700/80 shadow-2xl flex flex-col overflow-y-auto transition-transform duration-300 ease-out ${
-            isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-dark-700/60">
-            <span className="text-sm font-semibold text-white uppercase tracking-wide">Menu</span>
-            <button
-              type="button"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-dark-700 transition-colors"
-              aria-label="Fermer le menu"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="flex-1 divide-y divide-dark-700/60">
-            {navigationGroups.map((group) => (
-              <div key={group.title} className="py-4">
-                <p className="px-5 text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
-                  {group.title}
-                </p>
-                <div className="flex flex-col gap-1 px-3">
-                  {group.items.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = currentSection === item.id;
-
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleNavigation(item.id)}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-orange-500 text-white'
-                            : 'text-gray-300 hover:bg-dark-700 hover:text-white'
-                        }`}
-                      >
-                        <Icon size={18} />
-                        <span>{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </header>
   );
 }
