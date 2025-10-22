@@ -9,13 +9,12 @@ import {
   Trophy,
   MapPin,
   User as UserIcon,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import NotificationsPanel from './NotificationsPanel';
-import { navigationGroups, primaryNavigationItems, searchableNavigationItems } from '../data/navigation';
+import { primaryNavigationItems, searchableNavigationItems } from '../data/navigation';
 import { eventsCatalog } from '../data/eventsCatalog';
 import { createFallbackChallenges, createFallbackDailyChallenges } from '../data/challengesCatalog';
 import { settingsCategories, quickSettingsLinks } from '../data/settingsCatalog';
@@ -365,20 +364,20 @@ export default function Header({
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-dark-800/95 border-b border-dark-700/80 backdrop-blur z-40">
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-4 flex items-center justify-between gap-6">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 rounded-2xl bg-dark-900/60 px-3 py-1.5 border border-dark-700/80">
+      <div className="w-full px-4 lg:px-8 py-4 flex items-center gap-4 xl:gap-6">
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 rounded-2xl bg-dark-900/60 px-4 py-2 border border-dark-700/80">
             <img
               src="/logo.png"
               alt="Shredloc"
-              className="h-12 w-auto object-contain"
+              className="h-14 w-auto object-contain"
             />
             <span className="sr-only">Shredloc</span>
           </div>
         </div>
 
         {onSectionChange && (
-          <nav className="hidden md:flex flex-1 items-center justify-center lg:justify-start mx-4">
+          <nav className="hidden md:flex flex-1 min-w-[320px] items-center justify-center lg:justify-start">
             <div className="flex flex-1 items-center justify-center lg:justify-start gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar">
               {primaryNavigationItems.map((item) => {
                 const Icon = item.icon;
@@ -405,8 +404,8 @@ export default function Header({
         )}
 
         <div
-          className={`hidden lg:block flex-1 transition-all duration-300 ease-out ${
-            isSearchActive ? 'max-w-3xl scale-[1.02] drop-shadow-xl' : 'max-w-xl'
+          className={`hidden lg:block flex-[1.2] min-w-[280px] transition-all duration-300 ease-out ${
+            isSearchActive ? 'scale-[1.02] drop-shadow-xl' : ''
           }`}
           ref={searchContainerRef}
         >
@@ -475,7 +474,7 @@ export default function Header({
           </form>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto shrink-0">
           <button
             onClick={() => onSectionChange?.('settings')}
             className="relative p-2 hover:bg-dark-700 rounded-full transition-colors"
@@ -520,10 +519,10 @@ export default function Header({
                     <img
                       src={profile.avatar_url}
                       alt={getUserDisplayName(profile)}
-                      className="w-9 h-9 rounded-full object-cover border-2 border-transparent hover:border-orange-500 transition-colors"
+                      className="w-10 h-10 rounded-full object-cover border-2 border-transparent hover:border-orange-500 transition-colors"
                     />
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold border-2 border-orange-500">
+                    <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold border-2 border-orange-500">
                       {getUserInitial(profile)}
                     </div>
                   )}
