@@ -40,6 +40,22 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isMobileMenuOpen]);
+
+  useEffect(() => {
     if (profile) {
       loadUnreadCount();
       const interval = setInterval(loadUnreadCount, 30000);
@@ -316,17 +332,17 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
       )}
 
       <div
-        className={`fixed inset-0 z-50 transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 z-[70] transition-opacity duration-300 md:hidden ${
           isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden={!isMobileMenuOpen}
       >
         <div
-          className="absolute inset-0 bg-black/60"
+          className="absolute inset-0 bg-black/70"
           onClick={() => setIsMobileMenuOpen(false)}
         ></div>
         <div
-          className={`absolute inset-y-0 right-0 w-72 max-w-[90%] bg-dark-800 border-l border-dark-700/80 shadow-2xl flex flex-col overflow-y-auto transition-transform duration-300 ease-out ${
+          className={`absolute inset-y-0 right-0 h-full w-72 max-w-[90%] bg-dark-800 border-l border-dark-700/80 shadow-2xl flex flex-col overflow-y-auto transition-transform duration-300 ease-out ${
             isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
