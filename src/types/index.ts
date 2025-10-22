@@ -199,6 +199,12 @@ export interface SpotComment {
   user?: Profile;
 }
 
+export interface ContentNavigationOptions {
+  scrollToId?: string;
+  challengeTab?: 'community' | 'daily';
+  spotId?: string;
+}
+
 export interface SpotMediaComment {
   id: string;
   media_id: string;

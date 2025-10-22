@@ -1,24 +1,74 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Bell, Mail, LogOut, Settings } from 'lucide-react';
+import {
+  Search,
+  Bell,
+  Mail,
+  LogOut,
+  Settings,
+  CalendarDays,
+  Trophy,
+  MapPin,
+  User as UserIcon,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import NotificationsPanel from './NotificationsPanel';
 import { navigationGroups, primaryNavigationItems, searchableNavigationItems } from '../data/navigation';
-import type { Profile, Section } from '../types';
+import { eventsCatalog } from '../data/eventsCatalog';
+import { createFallbackChallenges, createFallbackDailyChallenges } from '../data/challengesCatalog';
+import { settingsCategories, quickSettingsLinks } from '../data/settingsCatalog';
+import type { Profile, Section, ContentNavigationOptions } from '../types';
+import type { LucideIcon } from 'lucide-react';
 
 interface HeaderProps {
   profile: Profile | null;
   currentSection?: Section;
   onSectionChange?: (section: Section) => void;
+  onNavigateToContent?: (section: Section, options?: ContentNavigationOptions) => void;
+  onSearchFocusChange?: (isActive: boolean) => void;
 }
 
-export default function Header({ profile, currentSection, onSectionChange }: HeaderProps) {
+interface SearchResult {
+  key: string;
+  label: string;
+  category: string;
+  description?: string;
+  section?: Section;
+  icon?: LucideIcon;
+  options?: ContentNavigationOptions;
+  onSelect?: () => void;
+}
+
+export default function Header({
+  profile,
+  currentSection,
+  onSectionChange,
+  onNavigateToContent,
+  onSearchFocusChange,
+}: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchIndex, setSearchIndex] = useState<SearchResult[]>([]);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const isSearchActive = isInputFocused || showSearchResults;
+
+  const sortResults = (results: SearchResult[]) =>
+    [...results].sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+
+  const mergeResults = (existing: SearchResult[], additions: SearchResult[]) => {
+    const existingKeys = new Set(existing.map((item) => item.key));
+    const uniqueAdditions = additions.filter((item) => !existingKeys.has(item.key));
+    return sortResults([...existing, ...uniqueAdditions]);
+  };
+
+  useEffect(() => {
+    onSearchFocusChange?.(isSearchActive);
+  }, [isSearchActive, onSearchFocusChange]);
 
   useEffect(() => {
     if (profile) {
@@ -42,19 +92,234 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     window.location.reload();
   };
 
-  const filteredSearchItems = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return searchableNavigationItems;
+  const getSpotTypeLabel = (type?: string | null) => {
+    switch (type) {
+      case 'street':
+        return 'Spot street';
+      case 'skatepark':
+        return 'Skatepark';
+      case 'bowl':
+        return 'Bowl';
+      case 'diy':
+        return 'Spot DIY';
+      case 'transition':
+        return 'Spot transition';
+      default:
+        return 'Spot';
+    }
+  };
 
-    return searchableNavigationItems.filter((item) =>
-      `${item.label} ${item.category}`.toLowerCase().includes(term),
+  useEffect(() => {
+    const navigationResults: SearchResult[] = searchableNavigationItems.map((item) => ({
+      key: `nav-${item.id}`,
+      label: item.label,
+      category: item.category,
+      description: `Aller à ${item.label}`,
+      section: item.id,
+      icon: item.icon,
+    }));
+
+    const eventResults: SearchResult[] = eventsCatalog.map((event) => ({
+      key: `event-${event.id}`,
+      label: event.title,
+      category: 'Événements',
+      description: event.location,
+      section: 'events',
+      icon: CalendarDays,
+      options: { scrollToId: `event-${event.id}` },
+    }));
+
+    const fallbackChallengeResults: SearchResult[] = createFallbackChallenges().map((challenge) => ({
+      key: `fallback-challenge-${challenge.id}`,
+      label: challenge.title,
+      category: 'Défis',
+      description: challenge.description,
+      section: 'challenges',
+      icon: Trophy,
+      options: {
+        scrollToId: `challenge-${challenge.id}`,
+        challengeTab: 'community',
+      },
+    }));
+
+    const fallbackDailyResults: SearchResult[] = createFallbackDailyChallenges().map((challenge) => ({
+      key: `fallback-daily-${challenge.id}`,
+      label: challenge.title,
+      category: 'Défis quotidiens',
+      description: challenge.description,
+      section: 'challenges',
+      icon: Trophy,
+      options: {
+        scrollToId: `daily-challenge-${challenge.id}`,
+        challengeTab: 'daily',
+      },
+    }));
+
+    const settingsResults: SearchResult[] = settingsCategories.flatMap((category) =>
+      category.items.map((item) => ({
+        key: `setting-${item.id}`,
+        label: item.title,
+        category: `Paramètres · ${category.title}`,
+        description: item.description,
+        section: 'settings',
+        icon: item.icon as LucideIcon,
+        options: { scrollToId: `setting-${item.id}` },
+      })),
     );
-  }, [searchTerm]);
+
+    const quickLinkResults: SearchResult[] = quickSettingsLinks.map((link) => ({
+      key: `quick-${link.id}`,
+      label: link.title,
+      category: 'Documentation',
+      description: link.description,
+      section: link.id === 'privacy' ? 'privacy' : 'terms',
+      icon: link.icon as LucideIcon,
+    }));
+
+    const initialResults = sortResults([
+      ...navigationResults,
+      ...eventResults,
+      ...fallbackChallengeResults,
+      ...fallbackDailyResults,
+      ...settingsResults,
+      ...quickLinkResults,
+    ]);
+
+    setSearchIndex(initialResults);
+
+    const loadDynamicResults = async () => {
+      const dynamicResults: SearchResult[] = [];
+
+      try {
+        const { data: spots } = await supabase
+          .from('spots')
+          .select('id, name, address, spot_type')
+          .limit(50);
+
+        if (spots) {
+          dynamicResults.push(
+            ...spots
+              .filter((spot) => Boolean(spot.id) && Boolean(spot.name))
+              .map((spot) => ({
+                key: `spot-${spot.id}`,
+                label: spot.name!,
+                category: 'Spots',
+                description: spot.address || getSpotTypeLabel(spot.spot_type),
+                section: 'map',
+                icon: MapPin,
+                options: { spotId: spot.id },
+              })),
+          );
+        }
+      } catch (error) {
+        console.error('Error loading spots for search:', error);
+      }
+
+      try {
+        const { data: challengesData } = await supabase
+          .from('challenges')
+          .select('id, title, description, challenge_type')
+          .limit(50);
+
+        if (challengesData) {
+          dynamicResults.push(
+            ...challengesData
+              .filter((challenge) => Boolean(challenge.id) && Boolean(challenge.title))
+              .map((challenge) => ({
+                key: `challenge-${challenge.id}`,
+                label: challenge.title!,
+                category: 'Défis',
+                description: challenge.description ?? undefined,
+                section: 'challenges',
+                icon: Trophy,
+                options: {
+                  scrollToId: `challenge-${challenge.id}`,
+                  challengeTab: 'community',
+                },
+              })),
+          );
+        }
+      } catch (error) {
+        console.error('Error loading challenges for search:', error);
+      }
+
+      try {
+        const { data: dailyData } = await supabase
+          .from('daily_challenges')
+          .select('id, title, description, challenge_type')
+          .limit(50);
+
+        if (dailyData) {
+          dynamicResults.push(
+            ...dailyData
+              .filter((challenge) => Boolean(challenge.id) && Boolean(challenge.title))
+              .map((challenge) => ({
+                key: `daily-${challenge.id}`,
+                label: challenge.title!,
+                category: 'Défis quotidiens',
+                description: challenge.description ?? undefined,
+                section: 'challenges',
+                icon: Trophy,
+                options: {
+                  scrollToId: `daily-challenge-${challenge.id}`,
+                  challengeTab: 'daily',
+                },
+              })),
+          );
+        }
+      } catch (error) {
+        console.error('Error loading daily challenges for search:', error);
+      }
+
+      try {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, username, display_name')
+          .limit(50);
+
+        if (profilesData) {
+          dynamicResults.push(
+            ...profilesData
+              .filter((person) => Boolean(person.id))
+              .map((person) => ({
+                key: `profile-${person.id}`,
+                label: person.display_name || person.username || 'Rider',
+                category: 'Riders',
+                description: person.username ?? undefined,
+                section: 'leaderboard',
+                icon: UserIcon,
+              })),
+          );
+        }
+      } catch (error) {
+        console.error('Error loading riders for search:', error);
+      }
+
+      setSearchIndex((previous) => mergeResults(previous, dynamicResults));
+    };
+
+    loadDynamicResults();
+  }, []);
+
+  const filteredResults = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) {
+      return searchIndex.slice(0, 20);
+    }
+
+    return searchIndex
+      .filter((item) => {
+        const haystack = `${item.label} ${item.description ?? ''} ${item.category}`.toLowerCase();
+        return haystack.includes(term);
+      })
+      .slice(0, 20);
+  }, [searchIndex, searchTerm]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setShowSearchResults(false);
+        setIsInputFocused(false);
       }
     };
 
@@ -62,17 +327,39 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleNavigation = (section: Section) => {
-    onSectionChange?.(section);
+  const closeSearch = () => {
     setShowSearchResults(false);
+    setIsInputFocused(false);
+  };
+
+  const navigateToSection = (section: Section, options?: ContentNavigationOptions) => {
+    if (onNavigateToContent) {
+      onNavigateToContent(section, options);
+    } else {
+      onSectionChange?.(section);
+    }
+    setSearchTerm('');
+    closeSearch();
+  };
+
+  const handleResultSelect = (result: SearchResult) => {
+    if (result.onSelect) {
+      result.onSelect();
+      setSearchTerm('');
+      closeSearch();
+      return;
+    }
+
+    if (result.section) {
+      navigateToSection(result.section, result.options);
+    }
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const firstResult = filteredSearchItems[0];
+    const firstResult = filteredResults[0];
     if (firstResult) {
-      handleNavigation(firstResult.id);
-      setSearchTerm('');
+      handleResultSelect(firstResult);
     }
   };
 
@@ -101,7 +388,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => handleNavigation(item.id)}
+                    onClick={() => navigateToSection(item.id)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
                       isActive
                         ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
@@ -117,9 +404,19 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
           </nav>
         )}
 
-        <div className="flex-1 max-w-xl hidden lg:block" ref={searchContainerRef}>
+        <div
+          className={`hidden lg:block flex-1 transition-all duration-300 ease-out ${
+            isSearchActive ? 'max-w-3xl scale-[1.02] drop-shadow-xl' : 'max-w-xl'
+          }`}
+          ref={searchContainerRef}
+        >
           <form onSubmit={handleSearchSubmit} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
+            <Search
+              className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
+                isSearchActive ? 'text-orange-400' : 'text-gray-500'
+              }`}
+              size={20}
+            />
             <input
               type="search"
               value={searchTerm}
@@ -127,36 +424,50 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
                 setSearchTerm(event.target.value);
                 setShowSearchResults(true);
               }}
-              onFocus={() => setShowSearchResults(true)}
-              placeholder="Rechercher une section..."
-              className="w-full pl-10 pr-4 py-2 bg-dark-700 border border-dark-600 text-white rounded-full focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-500"
+              onFocus={() => {
+                setShowSearchResults(true);
+                setIsInputFocused(true);
+              }}
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setIsInputFocused(false);
+                }, 120);
+              }}
+              placeholder="Rechercher un rider, un défi, un spot..."
+              className={`w-full pr-4 bg-dark-700/90 border border-dark-600 text-white rounded-full focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-500 transition-all duration-300 ${
+                isSearchActive ? 'pl-12 py-3 shadow-lg shadow-orange-500/10' : 'pl-10 py-2'
+              }`}
             />
-            {showSearchResults && filteredSearchItems.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl max-h-72 overflow-y-auto z-10">
-                <div className="py-2 text-xs uppercase tracking-wide text-gray-500 px-3">Résultats</div>
-                {filteredSearchItems.map((item) => {
-                  const Icon = item.icon;
+            {showSearchResults && filteredResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl max-h-80 overflow-y-auto z-10">
+                <div className="py-2 text-xs uppercase tracking-wide text-gray-500 px-3">
+                  {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
+                </div>
+                {filteredResults.map((result) => {
+                  const Icon = result.icon ?? Search;
                   return (
                     <button
-                      key={item.id}
+                      key={result.key}
                       type="button"
-                      onClick={() => {
-                        handleNavigation(item.id);
-                        setSearchTerm('');
-                      }}
-                      className="w-full px-3 py-2 flex items-center gap-3 text-left text-sm text-gray-200 hover:bg-dark-700/80"
+                      onClick={() => handleResultSelect(result)}
+                      className="w-full px-3 py-2 flex items-center gap-3 text-left text-sm text-gray-200 hover:bg-dark-700/80 transition-colors"
                     >
-                      <Icon size={18} />
+                      <span className="w-9 h-9 rounded-full bg-dark-800 flex items-center justify-center text-orange-400">
+                        <Icon size={18} />
+                      </span>
                       <div className="flex flex-col">
-                        <span className="font-medium">{item.label}</span>
-                        <span className="text-xs text-gray-500">{item.category}</span>
+                        <span className="font-medium text-white">{result.label}</span>
+                        <span className="text-xs text-gray-500">
+                          {result.category}
+                          {result.description ? ` • ${result.description}` : ''}
+                        </span>
                       </div>
                     </button>
                   );
                 })}
               </div>
             )}
-            {showSearchResults && filteredSearchItems.length === 0 && (
+            {showSearchResults && filteredResults.length === 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl p-4 text-sm text-gray-400 z-10">
                 Aucun résultat pour « {searchTerm} »
               </div>
@@ -201,7 +512,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
               <div className="hidden sm:flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleNavigation('profile')}
+                  onClick={() => navigateToSection('profile')}
                   className="focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-full"
                   title="Mon profil"
                 >

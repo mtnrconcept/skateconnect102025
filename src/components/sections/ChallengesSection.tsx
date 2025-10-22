@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Trophy, Calendar, Users, Star, Target, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import DailyChallenges from '../DailyChallenges';
@@ -6,13 +6,16 @@ import {
   getStoredChallengeRegistrations,
   registerForChallenge,
 } from '../../lib/engagement';
-import type { Challenge, Profile } from '../../types';
+import { getFallbackChallenges } from '../../data/challengesCatalog';
+import type { Challenge, ContentNavigationOptions, Profile } from '../../types';
 
 interface ChallengesSectionProps {
   profile: Profile | null;
+  focusConfig?: ContentNavigationOptions | null;
+  onFocusHandled?: () => void;
 }
 
-export default function ChallengesSection({ profile }: ChallengesSectionProps) {
+export default function ChallengesSection({ profile, focusConfig, onFocusHandled }: ChallengesSectionProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [filter, setFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<'daily' | 'community'>('daily');
@@ -20,6 +23,7 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, { message: string; tone: 'success' | 'info' }>>({});
   const [joinedIds, setJoinedIds] = useState<string[]>([]);
+  const lastFocusedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadChallenges();
@@ -28,84 +32,6 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
   useEffect(() => {
     setJoinedIds(Array.from(getStoredChallengeRegistrations()));
   }, []);
-
-  const getFallbackChallenges = () => {
-    const now = new Date();
-    const addDays = (days: number) => {
-      const date = new Date(now);
-      date.setDate(date.getDate() + days);
-      return date.toISOString();
-    };
-
-    const fallbackChallenges: Challenge[] = [
-      {
-        id: 'community-fallback-1',
-        created_by: null,
-        title: 'Session DIY à rénover',
-        description:
-          'Rassemble ta crew pour retaper un spot DIY et partage le résultat final avec la communauté.',
-        challenge_type: 'community',
-        difficulty: 3,
-        prize: 'Pack stickers Shredloc + mise en avant sur la page d’accueil',
-        start_date: now.toISOString(),
-        end_date: addDays(10),
-        participants_count: 128,
-        is_active: true,
-        created_at: now.toISOString(),
-      },
-      {
-        id: 'weekly-fallback-1',
-        created_by: null,
-        title: 'Combo créatif filmé',
-        description:
-          'Filme un combo original de trois tricks minimum et publie-le sur le feed communautaire.',
-        challenge_type: 'weekly',
-        difficulty: 4,
-        prize: 'Carte cadeau de 25€ chez notre shop partenaire',
-        start_date: now.toISOString(),
-        end_date: addDays(7),
-        participants_count: 94,
-        is_active: true,
-        created_at: now.toISOString(),
-      },
-      {
-        id: 'brand-fallback-1',
-        created_by: null,
-        title: 'Best trick brandé',
-        description:
-          'Porte une pièce de ta marque préférée et filme ton meilleur trick sur un curb ou une box.',
-        challenge_type: 'brand',
-        difficulty: 2,
-        prize: 'Goodies exclusifs + repost sur le compte de la marque',
-        start_date: now.toISOString(),
-        end_date: addDays(5),
-        participants_count: 57,
-        is_active: true,
-        created_at: now.toISOString(),
-      },
-      {
-        id: 'daily-fallback-1',
-        created_by: null,
-        title: 'Bon plan spot partagé',
-        description:
-          'Ajoute un nouveau spot ou mets à jour un spot existant avec une photo récente.',
-        challenge_type: 'daily',
-        difficulty: 1,
-        prize: '50 XP instantanés',
-        start_date: now.toISOString(),
-        end_date: addDays(1),
-        participants_count: 36,
-        is_active: true,
-        created_at: now.toISOString(),
-      },
-    ];
-
-    if (filter === 'all') {
-      return fallbackChallenges;
-    }
-
-    return fallbackChallenges.filter((challenge) => challenge.challenge_type === filter);
-  };
 
   const loadChallenges = async () => {
     try {
@@ -123,17 +49,71 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
 
       if (error) throw error;
       if (!data || data.length === 0) {
-        setChallenges(getFallbackChallenges());
+        setChallenges(getFallbackChallenges(filter as Challenge['challenge_type'] | 'all'));
       } else {
         setChallenges(data);
       }
     } catch (error) {
       console.error('Error loading challenges:', error);
-      setChallenges(getFallbackChallenges());
+      setChallenges(getFallbackChallenges(filter as Challenge['challenge_type'] | 'all'));
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!focusConfig?.challengeTab) {
+      return;
+    }
+
+    if (focusConfig.challengeTab !== activeTab) {
+      setActiveTab(focusConfig.challengeTab);
+    }
+  }, [focusConfig?.challengeTab, activeTab]);
+
+  useEffect(() => {
+    if (!focusConfig?.scrollToId) {
+      return;
+    }
+
+    const targetId = focusConfig.scrollToId;
+    if (lastFocusedIdRef.current === targetId) {
+      return;
+    }
+
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    const attemptScroll = () => {
+      const element = document.getElementById(targetId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        lastFocusedIdRef.current = targetId;
+        onFocusHandled?.();
+        return true;
+      }
+      return false;
+    };
+
+    const initialScroll = attemptScroll();
+    if (initialScroll) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      if (attemptScroll() || attempts >= maxAttempts) {
+        window.clearInterval(interval);
+        if (attempts >= maxAttempts) {
+          onFocusHandled?.();
+        }
+      }
+    }, 200);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [focusConfig?.scrollToId, activeTab, challenges, loading, onFocusHandled]);
 
   const joinedChallengeSet = useMemo(() => new Set(joinedIds), [joinedIds]);
 
@@ -310,6 +290,7 @@ export default function ChallengesSection({ profile }: ChallengesSectionProps) {
                 return (
                   <div
                     key={challenge.id}
+                    id={`challenge-${challenge.id}`}
                     className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden hover:border-dark-600 transition-all cursor-pointer"
                   >
                     <div className={`h-32 bg-gradient-to-br ${getChallengeColor(challenge.challenge_type)} p-4 flex flex-col justify-between`}>
