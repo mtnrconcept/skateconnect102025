@@ -362,8 +362,6 @@ export default function Header({
     }
   };
 
-  const primaryNavBeforeSearch = primaryNavigationItems.slice(0, -1);
-  const primaryNavAfterSearch = primaryNavigationItems.slice(-1);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 border-b border-dark-700/80 bg-[#0e0e12]/95 backdrop-blur">
@@ -378,8 +376,8 @@ export default function Header({
         {onSectionChange && (
           <nav className="hidden min-w-0 md:flex items-center">
             <div className="flex w-full items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar xl:gap-3">
-              <div className="flex items-center gap-2 xl:gap-3">
-                {primaryNavBeforeSearch.map((item) => {
+              <div className="flex shrink-0 items-center gap-2 xl:gap-3">
+                {primaryNavigationItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentSection === item.id;
 
@@ -403,13 +401,16 @@ export default function Header({
 
               <div
                 ref={searchContainerRef}
-                className={`hidden min-w-[260px] flex-1 items-center transition-all duration-300 ease-out lg:flex ${
-                  isSearchActive ? 'scale-[1.02] drop-shadow-[0_10px_25px_rgba(249,115,22,0.25)]' : ''
-                }`}
+                className="hidden min-w-[260px] flex-1 items-center justify-end lg:flex"
               >
-                <form onSubmit={handleSearchSubmit} className="relative w-full">
+                <form
+                  onSubmit={handleSearchSubmit}
+                  className={`relative w-full transition-[max-width] duration-300 ease-out ${
+                    isSearchActive ? 'max-w-[420px]' : 'max-w-[360px]'
+                  }`}
+                >
                   <Search
-                    className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
+                    className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
                       isSearchActive ? 'text-orange-400' : 'text-gray-500'
                     }`}
                     size={20}
@@ -431,8 +432,8 @@ export default function Header({
                       }, 120);
                     }}
                     placeholder="Rechercher un rider, un défi, un spot..."
-                    className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                      isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/10' : 'pl-12 py-2.5'
+                    className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${
+                      isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
                     }`}
                   />
                   {showSearchResults && filteredResults.length > 0 && (
@@ -472,37 +473,14 @@ export default function Header({
                 </form>
               </div>
 
-              <div className="flex items-center gap-2 xl:gap-3">
-                {primaryNavAfterSearch.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = currentSection === item.id;
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => navigateToSection(item.id)}
-                      className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all shadow-sm ${
-                        isActive
-                          ? 'border-orange-400 bg-orange-500 text-white shadow-orange-500/30'
-                          : 'border-dark-700/50 bg-[#181821] text-gray-300 hover:border-orange-500/50 hover:bg-[#1f1f29] hover:text-white'
-                      }`}
-                    >
-                      <Icon size={18} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-
-                <button
-                  type="button"
-                  onClick={() => onSectionChange?.('settings')}
-                  className="relative shrink-0 rounded-full p-2 transition-colors hover:bg-[#1f1f29]"
-                  title="Paramètres"
-                >
-                  <Settings size={20} className="text-gray-400" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => onSectionChange?.('settings')}
+                className="relative shrink-0 rounded-full p-2 transition-colors hover:bg-[#1f1f29]"
+                title="Paramètres"
+              >
+                <Settings size={20} className="text-gray-400" />
+              </button>
             </div>
           </nav>
         )}
