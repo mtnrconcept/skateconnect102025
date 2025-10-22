@@ -364,7 +364,9 @@ export default function Header({
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-dark-800/95 border-b border-dark-700/80 backdrop-blur z-40">
-      <div className="w-full px-4 lg:px-8 py-4 flex items-center gap-4 xl:gap-6">
+      {/* PASSAGE EN GRID POUR MAÎTRISER LES LARGEURS */}
+      <div className="w-full px-4 lg:px-8 py-4 grid grid-cols-[auto,1fr,minmax(280px,520px),auto] items-center gap-3 xl:gap-6">
+        {/* LOGO */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-3 rounded-2xl bg-dark-900/60 px-4 py-2 border border-dark-700/80">
             <img
@@ -376,9 +378,10 @@ export default function Header({
           </div>
         </div>
 
+        {/* NAV – LAISSE SCROLLER, PAS DE MIN WIDTH RIGIDE */}
         {onSectionChange && (
-          <nav className="hidden md:flex flex-1 min-w-[80px] items-center justify-center lg:justify-start">
-            <div className="flex flex-1 items-center justify-center lg:justify-start gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar">
+          <nav className="hidden md:flex items-center min-w-0">
+            <div className="flex items-center gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar w-full">
               {primaryNavigationItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentSection === item.id;
@@ -388,7 +391,7 @@ export default function Header({
                     key={item.id}
                     type="button"
                     onClick={() => navigateToSection(item.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
+                    className={`flex shrink-0 items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
                       isActive
                         ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
                         : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
@@ -403,13 +406,14 @@ export default function Header({
           </nav>
         )}
 
+        {/* SEARCH – ÉLÉMENT NON FLEXIBLE AVEC LARGEUR CONTRÔLÉE */}
         <div
-          className={`hidden lg:flex items-center flex-1 min-w-[0px] max-w-xl xl:max-w-lg 2xl:max-w-lg transition-all duration-300 ease-out ${
+          className={`hidden lg:flex items-center min-w-0 transition-all duration-300 ease-out ${
             isSearchActive ? 'scale-[1.02] drop-shadow-xl' : ''
           }`}
           ref={searchContainerRef}
         >
-          <form onSubmit={handleSearchSubmit} className="relative">
+          <form onSubmit={handleSearchSubmit} className="relative w-full">
             <Search
               className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
                 isSearchActive ? 'text-orange-400' : 'text-gray-500'
@@ -438,7 +442,7 @@ export default function Header({
               }`}
             />
             {showSearchResults && filteredResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl max-h-80 overflow-y-auto z-10">
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl max-h-80 overflow-y-auto z-50">
                 <div className="py-2 text-xs uppercase tracking-wide text-gray-500 px-3">
                   {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
                 </div>
@@ -467,13 +471,14 @@ export default function Header({
               </div>
             )}
             {showSearchResults && filteredResults.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl p-4 text-sm text-gray-400 z-10">
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl p-4 text-sm text-gray-400 z-50">
                 Aucun résultat pour « {searchTerm} »
               </div>
             )}
           </form>
         </div>
 
+        {/* ACTIONS */}
         <div className="flex items-center gap-2 ml-auto shrink-0">
           <button
             onClick={() => onSectionChange?.('settings')}
