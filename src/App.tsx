@@ -18,13 +18,20 @@ import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
 import TermsSection from './components/sections/TermsSection';
 import SponsorsSection from './components/sections/SponsorsSection';
 import AchievementNotification from './components/AchievementNotification';
-import type { Profile, Section } from './types';
+import type { Profile, Section, ContentNavigationOptions } from './types';
 
 function App() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [currentSection, setCurrentSection] = useState<Section>('feed');
   const [loading, setLoading] = useState(true);
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    section: Section;
+    options?: ContentNavigationOptions;
+  } | null>(null);
+  const [challengeFocus, setChallengeFocus] = useState<ContentNavigationOptions | null>(null);
+  const [mapFocusSpotId, setMapFocusSpotId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -77,6 +84,67 @@ function App() {
     });
   };
 
+  const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions) => {
+    setCurrentSection(section);
+    if (options) {
+      setPendingNavigation({ section, options });
+    } else {
+      setPendingNavigation(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingNavigation) {
+      return;
+    }
+
+    if (currentSection !== pendingNavigation.section) {
+      return;
+    }
+
+    const { options } = pendingNavigation;
+
+    if (pendingNavigation.section === 'challenges') {
+      setChallengeFocus(options ?? null);
+      setPendingNavigation(null);
+      return;
+    }
+
+    if (pendingNavigation.section === 'map' && options?.spotId) {
+      setMapFocusSpotId(options.spotId);
+      setPendingNavigation(null);
+      return;
+    }
+
+    if (options?.scrollToId) {
+      const timeout = window.setTimeout(() => {
+        const element = document.getElementById(options.scrollToId!);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 220);
+
+      setPendingNavigation(null);
+
+      return () => window.clearTimeout(timeout);
+    }
+
+    setPendingNavigation(null);
+  }, [pendingNavigation, currentSection]);
+
+  useEffect(() => {
+    if (currentSection !== 'challenges') {
+      setChallengeFocus(null);
+    }
+    if (currentSection !== 'map') {
+      setMapFocusSpotId(null);
+    }
+  }, [currentSection]);
+
+  const dimmedClass = isSearchActive
+    ? 'transition-all duration-300 ease-out opacity-40 pointer-events-none blur-[1px]'
+    : 'transition-all duration-300 ease-out';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-dark-900 flex items-center justify-center">
@@ -100,14 +168,29 @@ function App() {
         profile={profile}
         currentSection={currentSection}
         onSectionChange={setCurrentSection}
+        onNavigateToContent={handleNavigateToContent}
+        onSearchFocusChange={setIsSearchActive}
       />
-      <MobileNavigation currentSection={currentSection} onNavigate={setCurrentSection} />
+      <div className={dimmedClass}>
+        <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
+      </div>
 
-      <main className="pt-16 pb-16 md:pb-10 lg:pb-8">
-        {currentSection === 'map' && <MapSection />}
+      <main className={`pt-16 pb-16 md:pb-10 lg:pb-8 ${dimmedClass}`}>
+        {currentSection === 'map' && (
+          <MapSection
+            focusSpotId={mapFocusSpotId}
+            onSpotFocusHandled={() => setMapFocusSpotId(null)}
+          />
+        )}
         {currentSection === 'feed' && <FeedSection currentUser={profile} />}
         {currentSection === 'events' && <EventsSection profile={profile} />}
-        {currentSection === 'challenges' && <ChallengesSection profile={profile} />}
+        {currentSection === 'challenges' && (
+          <ChallengesSection
+            profile={profile}
+            focusConfig={challengeFocus}
+            onFocusHandled={() => setChallengeFocus(null)}
+          />
+        )}
         {currentSection === 'sponsors' && <SponsorsSection profile={profile} />}
         {currentSection === 'profile' && (
           <ProfileSection profile={profile} onProfileUpdate={setProfile} />
@@ -123,8 +206,10 @@ function App() {
         {currentSection === 'terms' && <TermsSection onNavigate={setCurrentSection} />}
       </main>
 
-      {profile && <AchievementNotification profile={profile} />}
-      <Footer onSectionChange={setCurrentSection} />
+      <div className={dimmedClass}>{profile && <AchievementNotification profile={profile} />}</div>
+      <div className={dimmedClass}>
+        <Footer onSectionChange={handleNavigateToContent} />
+      </div>
     </div>
   );
 }

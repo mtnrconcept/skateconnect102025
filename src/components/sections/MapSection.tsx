@@ -9,10 +9,16 @@ import type { Spot, SpotMedia } from '../../types';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
-export default function MapSection() {
+interface MapSectionProps {
+  focusSpotId?: string | null;
+  onSpotFocusHandled?: () => void;
+}
+
+export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSectionProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const lastFocusedSpotRef = useRef<string | null>(null);
 
   const [spots, setSpots] = useState<Spot[]>([]);
   const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
@@ -391,6 +397,30 @@ export default function MapSection() {
       setSelectedSpot(spot);
     }
   };
+
+  useEffect(() => {
+    if (!focusSpotId || spots.length === 0) {
+      return;
+    }
+
+    if (focusSpotId === lastFocusedSpotRef.current) {
+      return;
+    }
+
+    const targetSpot = spots.find((spot) => spot.id === focusSpotId);
+
+    if (targetSpot) {
+      flyToSpot(targetSpot);
+      lastFocusedSpotRef.current = focusSpotId;
+      onSpotFocusHandled?.();
+    }
+  }, [focusSpotId, spots, onSpotFocusHandled]);
+
+  useEffect(() => {
+    if (!focusSpotId) {
+      lastFocusedSpotRef.current = null;
+    }
+  }, [focusSpotId]);
 
   const getUserLocation = () => {
     if ('geolocation' in navigator) {

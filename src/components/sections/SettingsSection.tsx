@@ -1,131 +1,14 @@
-import { useMemo, useState } from 'react';
-import type { ComponentType } from 'react';
-import {
-  Bell,
-  Lock,
-  Shield,
-  Users,
-  Volume2,
-  Globe,
-  ChevronRight,
-  ShieldCheck,
-  FileText,
-  Trophy,
-} from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import type { Profile, Section } from '../../types';
+import { settingsCategories, quickSettingsLinks } from '../../data/settingsCatalog';
 
 interface SettingsSectionProps {
   profile: Profile | null;
   onNavigate: (section: Section) => void;
 }
 
-type PreferenceItem = {
-  id: string;
-  title: string;
-  description: string;
-  icon: ComponentType<{ size?: number }>;
-  defaultValue: boolean;
-};
-
-type SettingsCategory = {
-  id: string;
-  title: string;
-  description: string;
-  items: PreferenceItem[];
-};
-
 export default function SettingsSection({ profile, onNavigate }: SettingsSectionProps) {
-  const settingsCategories = useMemo<SettingsCategory[]>(
-    () => [
-      {
-        id: 'general',
-        title: 'Paramètres généraux du compte',
-        description:
-          'Gérez les informations de base visibles sur votre profil et votre expérience sur Shredloc.',
-        items: [
-          {
-            id: 'public-profile',
-            title: 'Profil public',
-            description: "Affichez votre profil et vos posts aux riders qui ne vous suivent pas encore.",
-            icon: Globe,
-            defaultValue: true,
-          },
-          {
-            id: 'session-reminders',
-            title: 'Rappels de sessions',
-            description: 'Recevez des notifications pour rappeler vos sessions enregistrées.',
-            icon: Bell,
-            defaultValue: true,
-          },
-          {
-            id: 'friend-suggestions',
-            title: 'Suggestions de riders',
-            description: 'Recommandations personnalisées basées sur vos spots et défis suivis.',
-            icon: Users,
-            defaultValue: true,
-          },
-        ],
-      },
-      {
-        id: 'security',
-        title: 'Sécurité et connexion',
-        description: 'Renforcez la protection de votre compte et contrôlez les appareils connectés.',
-        items: [
-          {
-            id: 'two-factor',
-            title: 'Connexion à deux facteurs',
-            description: 'Ajoutez un code supplémentaire lors de chaque connexion pour plus de sécurité.',
-            icon: Shield,
-            defaultValue: false,
-          },
-          {
-            id: 'login-alerts',
-            title: 'Alertes de connexion',
-            description: 'Soyez prévenu lorsqu’une nouvelle connexion est détectée.',
-            icon: Lock,
-            defaultValue: true,
-          },
-          {
-            id: 'session-audio',
-            title: 'Audio automatique des clips',
-            description: 'Activez le son automatiquement pour les vidéos dans votre feed.',
-            icon: Volume2,
-            defaultValue: false,
-          },
-        ],
-      },
-      {
-        id: 'community',
-        title: 'Communauté et modération',
-        description: 'Définissez comment vous interagissez avec la communauté et les messages reçus.',
-        items: [
-          {
-            id: 'message-requests',
-            title: 'Demandes de messages',
-            description: 'Filtrer les messages des riders qui ne font pas partie de vos contacts.',
-            icon: Users,
-            defaultValue: true,
-          },
-          {
-            id: 'spot-reviews',
-            title: 'Avis sur les spots',
-            description: 'Recevez une notification lorsqu’un rider laisse un avis sur un spot que vous suivez.',
-            icon: Bell,
-            defaultValue: true,
-          },
-          {
-            id: 'challenge-highlights',
-            title: 'Moments forts des défis',
-            description: 'Mettre en avant vos participations aux défis dans le feed communautaire.',
-            icon: Trophy,
-            defaultValue: true,
-          },
-        ],
-      },
-    ],
-    []
-  );
-
   const [preferences, setPreferences] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     settingsCategories.forEach((category) => {
@@ -143,22 +26,15 @@ export default function SettingsSection({ profile, onNavigate }: SettingsSection
     }));
   };
 
-  const quickLinks = [
-    {
-      id: 'privacy',
-      title: 'Politique de confidentialité',
-      description: 'Découvrez comment vos données sont protégées et comment gérer vos préférences.',
-      icon: ShieldCheck,
-      action: () => onNavigate('privacy'),
-    },
-    {
-      id: 'terms',
-      title: 'Conditions générales',
-      description: 'Apprenez-en plus sur les règles qui encadrent l’utilisation de Shredloc.',
-      icon: FileText,
-      action: () => onNavigate('terms'),
-    },
-  ];
+  const quickLinks = quickSettingsLinks.map((link) => ({
+    ...link,
+    action:
+      link.id === 'privacy'
+        ? () => onNavigate('privacy')
+        : link.id === 'terms'
+          ? () => onNavigate('terms')
+          : () => {},
+  }));
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
@@ -225,6 +101,7 @@ export default function SettingsSection({ profile, onNavigate }: SettingsSection
                 return (
                   <div
                     key={item.id}
+                    id={`setting-${item.id}`}
                     className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-dark-900/60 rounded-2xl px-4 py-5"
                   >
                     <div className="flex items-start gap-4">

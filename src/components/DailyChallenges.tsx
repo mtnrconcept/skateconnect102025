@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Target, CheckCircle, Clock, Zap, Gift } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../types';
+import { createFallbackDailyChallenges } from '../data/challengesCatalog';
 
 interface Challenge {
   id: string;
@@ -57,58 +58,6 @@ export default function DailyChallenges({ profile }: DailyChallengesProps) {
     };
   }, [profile.id]);
 
-  const getFallbackDailyChallenges = () => {
-    const now = new Date();
-    const addDays = (days: number) => {
-      const date = new Date(now);
-      date.setDate(date.getDate() + days);
-      return date.toISOString();
-    };
-
-    return [
-      {
-        id: 'daily-fallback-community-session',
-        title: 'Session matinale au park',
-        description: 'Pose trois manuals consécutifs avant 10h et partage ta meilleure tentative.',
-        challenge_type: 'daily',
-        target_count: 3,
-        xp_reward: 75,
-        start_date: now.toISOString(),
-        end_date: addDays(1),
-      },
-      {
-        id: 'daily-fallback-new-spot',
-        title: 'Nouveau spot référencé',
-        description: 'Ajoute un spot street ou mets à jour les infos d’un spot existant.',
-        challenge_type: 'daily',
-        target_count: 1,
-        xp_reward: 60,
-        start_date: now.toISOString(),
-        end_date: addDays(1),
-      },
-      {
-        id: 'weekly-fallback-tour',
-        title: 'Tour des quartiers',
-        description: 'Valide cinq spots différents dans la semaine et laisse un avis sur chacun.',
-        challenge_type: 'weekly',
-        target_count: 5,
-        xp_reward: 200,
-        start_date: now.toISOString(),
-        end_date: addDays(7),
-      },
-      {
-        id: 'weekly-fallback-clip',
-        title: 'Clip collectif',
-        description: 'Publie une vidéo de groupe avec au moins trois riders différents.',
-        challenge_type: 'weekly',
-        target_count: 1,
-        xp_reward: 250,
-        start_date: now.toISOString(),
-        end_date: addDays(7),
-      },
-    ];
-  };
-
   const loadChallenges = async () => {
     try {
       setLoading(true);
@@ -138,13 +87,13 @@ export default function DailyChallenges({ profile }: DailyChallengesProps) {
       })) || [];
 
       if (challengesWithProgress.length === 0) {
-        setChallenges(getFallbackDailyChallenges());
+        setChallenges(createFallbackDailyChallenges());
       } else {
         setChallenges(challengesWithProgress);
       }
     } catch (error) {
       console.error('Error loading challenges:', error);
-      setChallenges(getFallbackDailyChallenges());
+      setChallenges(createFallbackDailyChallenges());
     } finally {
       setLoading(false);
     }
@@ -182,6 +131,7 @@ export default function DailyChallenges({ profile }: DailyChallengesProps) {
 
     return (
       <div
+        id={`daily-challenge-${challenge.id}`}
         className={`bg-dark-900 rounded-lg p-4 border-2 transition-all ${
           isCompleted
             ? 'border-green-500 bg-green-500/5'

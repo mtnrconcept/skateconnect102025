@@ -93,6 +93,7 @@ export default function EventsSection({ profile }: EventsSectionProps) {
           return (
             <article
               key={event.id}
+              id={`event-${event.id}`}
               className="bg-dark-800 border border-dark-700 rounded-2xl overflow-hidden shadow-lg shadow-black/20"
             >
               <div className="flex flex-col md:flex-row">
