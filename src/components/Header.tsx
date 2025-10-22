@@ -14,11 +14,10 @@ import {
   TrendingUp,
   Settings,
   Handshake,
-  ChevronDown,
-  Users,
-  BookOpen,
   Shield,
   FileText,
+  Menu,
+  X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
@@ -35,9 +34,9 @@ interface HeaderProps {
 export default function Header({ profile, currentSection, onSectionChange }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,54 +61,31 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     window.location.reload();
   };
 
-  const navStructure = useMemo(
+  const navigationGroups = useMemo(
     () => [
       {
-        type: 'direct' as const,
-        id: 'feed' as Section,
-        label: "Fil d'actu",
-        icon: Home,
-      },
-      {
-        type: 'direct' as const,
-        id: 'sponsors' as Section,
-        label: 'Sponsors',
-        icon: Handshake,
-      },
-      {
-        type: 'dropdown' as const,
-        label: 'Explorer',
-        icon: Map,
+        title: 'Navigation principale',
         items: [
+          { id: 'feed' as Section, label: "Fil d'actu", icon: Home },
           { id: 'map' as Section, label: 'Carte', icon: Map },
           { id: 'events' as Section, label: 'Événements', icon: CalendarDays },
           { id: 'challenges' as Section, label: 'Défis', icon: Trophy },
-        ],
-      },
-      {
-        type: 'dropdown' as const,
-        label: 'Communauté',
-        icon: Users,
-        items: [
-          { id: 'messages' as Section, label: 'Messages', icon: Mail },
           { id: 'leaderboard' as Section, label: 'Classement', icon: TrendingUp },
+          { id: 'sponsors' as Section, label: 'Sponsor', icon: Handshake },
           { id: 'rewards' as Section, label: 'Store', icon: Gift },
         ],
       },
       {
-        type: 'dropdown' as const,
-        label: 'Profil',
-        icon: User,
+        title: 'Espace membre',
         items: [
-          { id: 'profile' as Section, label: 'Mon profil', icon: User },
+          { id: 'messages' as Section, label: 'Messages', icon: Mail },
+          { id: 'profile' as Section, label: 'Profil', icon: User },
           { id: 'badges' as Section, label: 'Badges', icon: Award },
           { id: 'settings' as Section, label: 'Paramètres', icon: Settings },
         ],
       },
       {
-        type: 'dropdown' as const,
-        label: 'Infos',
-        icon: BookOpen,
+        title: 'Informations',
         items: [
           { id: 'privacy' as Section, label: 'Confidentialité', icon: Shield },
           { id: 'terms' as Section, label: 'Conditions', icon: FileText },
@@ -119,26 +95,17 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     [],
   );
 
+  const primaryNavItems = navigationGroups[0]?.items ?? [];
+
   const searchableNavItems = useMemo(
     () =>
-      navStructure.flatMap((item) =>
-        item.type === 'direct'
-          ? [
-              {
-                id: item.id,
-                label: item.label,
-                icon: item.icon,
-                category: 'Navigation',
-              },
-            ]
-          : item.items.map((child) => ({
-              id: child.id,
-              label: child.label,
-              icon: child.icon,
-              category: item.label,
-            })),
+      navigationGroups.flatMap((group) =>
+        group.items.map((item) => ({
+          ...item,
+          category: group.title,
+        })),
       ),
-    [navStructure],
+    [navigationGroups],
   );
 
   const filteredSearchItems = useMemo(() => {
@@ -161,14 +128,10 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleDropdownToggle = (label: string) => {
-    setOpenDropdown((prev) => (prev === label ? null : label));
-  };
-
   const handleNavigation = (section: Section) => {
     onSectionChange?.(section);
-    setOpenDropdown(null);
     setShowSearchResults(false);
+    setIsMobileMenuOpen(false);
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -184,6 +147,14 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
     <header className="fixed top-0 left-0 right-0 bg-dark-800/95 border-b border-dark-700/80 backdrop-blur z-40">
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-4 flex items-center justify-between gap-6">
         <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen((previous) => !previous)}
+            className="md:hidden p-2 rounded-full border border-dark-700/60 bg-dark-900/60 text-gray-300 hover:text-white hover:border-orange-500/40 transition-colors"
+            aria-label="Ouvrir le menu"
+          >
+            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
           <div className="flex items-center gap-3 rounded-2xl bg-dark-900/60 px-3 py-1.5 border border-dark-700/80">
             <img
               src="/logo.png"
@@ -197,80 +168,24 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
         {onSectionChange && (
           <nav className="hidden md:flex flex-1 items-center justify-center lg:justify-start mx-4">
             <div className="flex flex-1 items-center justify-center lg:justify-start gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar">
-              {navStructure.map((item) => {
-                if (item.type === 'direct') {
-                  const Icon = item.icon;
-                  const isActive = currentSection === item.id;
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleNavigation(item.id)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
-                        isActive
-                          ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
-                          : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
-                      }`}
-                    >
-                      <Icon size={20} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                }
-
+              {primaryNavItems.map((item) => {
                 const Icon = item.icon;
-                const hasActiveChild = item.items.some((child) => child.id === currentSection);
+                const isActive = currentSection === item.id;
 
                 return (
-                  <div
-                    key={item.label}
-                    className="relative"
-                    onMouseEnter={() => setOpenDropdown(item.label)}
-                    onMouseLeave={() => setOpenDropdown((prev) => (prev === item.label ? null : prev))}
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleNavigation(item.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
+                      isActive
+                        ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
+                        : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
+                    }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleDropdownToggle(item.label)}
-                      aria-haspopup="true"
-                      aria-expanded={openDropdown === item.label}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
-                        hasActiveChild
-                          ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
-                          : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
-                      }`}
-                    >
-                      <Icon size={20} />
-                      <span>{item.label}</span>
-                      <ChevronDown size={16} className="mt-[1px]" />
-                    </button>
-                    <div
-                      className={`absolute top-full left-0 mt-3 min-w-[15rem] rounded-2xl border border-dark-700/80 bg-dark-900/95 p-2 shadow-xl flex-col ${
-                        openDropdown === item.label ? 'flex' : 'hidden'
-                      }`}
-                    >
-                      {item.items.map((child) => {
-                        const ChildIcon = child.icon;
-                        const isChildActive = currentSection === child.id;
-
-                        return (
-                          <button
-                            key={child.id}
-                            type="button"
-                            onClick={() => handleNavigation(child.id)}
-                            className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
-                              isChildActive
-                                ? 'bg-orange-500/20 text-white'
-                                : 'text-gray-300 hover:bg-dark-700 hover:text-white'
-                            }`}
-                          >
-                            <ChildIcon size={18} />
-                            <span>{child.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    <Icon size={20} />
+                    <span>{item.label}</span>
+                  </button>
                 );
               })}
             </div>
@@ -399,6 +314,66 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
           }}
         />
       )}
+
+      <div
+        className={`fixed inset-0 z-50 transition-opacity duration-300 md:hidden ${
+          isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden={!isMobileMenuOpen}
+      >
+        <div
+          className="absolute inset-0 bg-black/60"
+          onClick={() => setIsMobileMenuOpen(false)}
+        ></div>
+        <div
+          className={`absolute inset-y-0 right-0 w-72 max-w-[90%] bg-dark-800 border-l border-dark-700/80 shadow-2xl flex flex-col overflow-y-auto transition-transform duration-300 ease-out ${
+            isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex items-center justify-between px-5 py-4 border-b border-dark-700/60">
+            <span className="text-sm font-semibold text-white uppercase tracking-wide">Menu</span>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-dark-700 transition-colors"
+              aria-label="Fermer le menu"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 divide-y divide-dark-700/60">
+            {navigationGroups.map((group) => (
+              <div key={group.title} className="py-4">
+                <p className="px-5 text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+                  {group.title}
+                </p>
+                <div className="flex flex-col gap-1 px-3">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = currentSection === item.id;
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleNavigation(item.id)}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-orange-500 text-white'
+                            : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                        }`}
+                      >
+                        <Icon size={18} />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </header>
   );
 }

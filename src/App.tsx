@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
 import Header from './components/Header';
-import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import MapSection from './components/sections/MapSection';
 import FeedSection from './components/sections/FeedSection';
@@ -102,7 +101,7 @@ function App() {
         onSectionChange={setCurrentSection}
       />
 
-      <main className="pt-16 pb-28 md:pb-10 lg:pb-8">
+      <main className="pt-16 pb-16 md:pb-10 lg:pb-8">
         {currentSection === 'map' && <MapSection />}
         {currentSection === 'feed' && <FeedSection currentUser={profile} />}
         {currentSection === 'events' && <EventsSection profile={profile} />}
@@ -123,10 +122,7 @@ function App() {
       </main>
 
       {profile && <AchievementNotification profile={profile} />}
-
       <Footer onSectionChange={setCurrentSection} />
-
-      <Navigation currentSection={currentSection} onSectionChange={setCurrentSection} />
     </div>
   );
 }
