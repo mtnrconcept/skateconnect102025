@@ -45,7 +45,7 @@ export const navigationGroups: NavigationGroup[] = [
     items: [
       { id: 'messages', label: 'Messages', icon: Mail },
       { id: 'profile', label: 'Profil', icon: User },
-      { id: 'badges', label: 'Badges', icon: Award },
+      { id: 'badges', label: 'Badge', icon: Award },
       { id: 'settings', label: 'Paramètres', icon: Settings },
     ],
   },
@@ -58,7 +58,14 @@ export const navigationGroups: NavigationGroup[] = [
   },
 ];
 
-export const primaryNavigationItems = navigationGroups[0]?.items ?? [];
+const primaryNavigationBase = navigationGroups[0]?.items ?? [];
+const badgesNavigationItem = navigationGroups
+  .flatMap((group) => group.items)
+  .find((item) => item.id === 'badges');
+
+export const primaryNavigationItems = badgesNavigationItem
+  ? [...primaryNavigationBase, badgesNavigationItem]
+  : primaryNavigationBase;
 
 export const searchableNavigationItems = navigationGroups.flatMap((group) =>
   group.items.map((item) => ({
