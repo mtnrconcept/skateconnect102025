@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import MobileNavigation from './components/MobileNavigation';
 import MapSection from './components/sections/MapSection';
 import FeedSection from './components/sections/FeedSection';
 import EventsSection from './components/sections/EventsSection';
@@ -100,6 +101,7 @@ function App() {
         currentSection={currentSection}
         onSectionChange={setCurrentSection}
       />
+      <MobileNavigation currentSection={currentSection} onNavigate={setCurrentSection} />
 
       <main className="pt-16 pb-16 md:pb-10 lg:pb-8">
         {currentSection === 'map' && <MapSection />}
