@@ -235,7 +235,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2">
+        <div className="flex items-center gap-3 mb-6 mt-4 sm:mt-6 overflow-x-auto pb-2 no-scrollbar">
           <div className="flex-shrink-0 flex flex-col items-center gap-1">
             <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5">
               {currentUser?.avatar_url ? (
