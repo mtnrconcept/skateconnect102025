@@ -370,7 +370,6 @@ export default function Header({
         <div className="shrink-0">
           <div className="flex items-center gap-3 rounded-2xl border border-dark-700/80 bg-[#121219]/90 px-4 py-2">
             <img src="/logo.png" alt="Shredloc" className="h-12 w-auto object-contain" />
-            <span className="font-semibold uppercase tracking-[0.28em] text-xs text-gray-400">Shredloc</span>
           </div>
         </div>
 
