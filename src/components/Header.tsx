@@ -332,7 +332,7 @@ export default function Header({ profile, currentSection, onSectionChange }: Hea
       )}
 
       <div
-        className={`fixed inset-0 z-[70] transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 z-[0] transition-opacity duration-300 md:hidden ${
           isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden={!isMobileMenuOpen}
