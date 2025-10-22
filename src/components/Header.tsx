@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
   Bell,
@@ -362,146 +362,147 @@ export default function Header({
     }
   };
 
+  const primaryNavBeforeSearch = primaryNavigationItems.slice(0, -1);
+  const primaryNavAfterSearch = primaryNavigationItems.slice(-1);
+
   return (
-    <header className="fixed top-0 left-0 right-0 bg-dark-800/95 border-b border-dark-700/80 backdrop-blur z-40">
-      {/* PASSAGE EN GRID POUR MAÎTRISER LES LARGEURS */}
-      <div className="w-full px-4 lg:px-8 py-4 grid grid-cols-[auto,1fr,auto] items-center gap-3 xl:gap-6">
-        {/* LOGO */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-3 rounded-2xl bg-dark-900/60 px-4 py-2 border border-dark-700/80">
-            <img
-              src="/logo.png"
-              alt="Shredloc"
-              className="h-14 w-auto object-contain"
-            />
-            <span className="sr-only">Shredloc</span>
+    <header className="fixed top-0 left-0 right-0 z-40 border-b border-dark-700/80 bg-[#0e0e12]/95 backdrop-blur">
+      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-4 px-4 py-3 lg:gap-6 lg:px-8">
+        <div className="shrink-0">
+          <div className="flex items-center gap-3 rounded-2xl border border-dark-700/80 bg-[#121219]/90 px-4 py-2">
+            <img src="/logo.png" alt="Shredloc" className="h-12 w-auto object-contain" />
+            <span className="font-semibold uppercase tracking-[0.28em] text-xs text-gray-400">Shredloc</span>
           </div>
         </div>
 
-        {/* NAV – LAISSE SCROLLER, PAS DE MIN WIDTH RIGIDE */}
         {onSectionChange && (
-          <nav className="hidden md:flex items-center min-w-0">
-            <div className="flex items-center gap-2 xl:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar w-full">
-              {primaryNavigationItems.map((item, index) => {
-                const Icon = item.icon;
-                const isActive = currentSection === item.id;
-                const isLast = index === primaryNavigationItems.length - 1;
+          <nav className="hidden min-w-0 md:flex items-center">
+            <div className="flex w-full items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar xl:gap-3">
+              <div className="flex items-center gap-2 xl:gap-3">
+                {primaryNavBeforeSearch.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentSection === item.id;
 
-                if (isLast) {
                   return (
-                    <Fragment key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => onSectionChange?.('settings')}
-                        className="relative p-2 hover:bg-dark-700 rounded-full transition-colors shrink-0"
-                        title="Paramètres"
-                      >
-                        <Settings size={20} className="text-gray-400" />
-                      </button>
-
-                      <div
-                        className={`hidden lg:flex items-center min-w-0 transition-all duration-300 ease-out flex-shrink-0 lg:min-w-[260px] lg:max-w-lg ${
-                          isSearchActive ? 'scale-[1.02] drop-shadow-xl' : ''
-                        }`}
-                        ref={searchContainerRef}
-                      >
-                        <form onSubmit={handleSearchSubmit} className="relative w-full">
-                          <Search
-                            className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
-                              isSearchActive ? 'text-orange-400' : 'text-gray-500'
-                            }`}
-                            size={20}
-                          />
-                          <input
-                            type="search"
-                            value={searchTerm}
-                            onChange={(event) => {
-                              setSearchTerm(event.target.value);
-                              setShowSearchResults(true);
-                            }}
-                            onFocus={() => {
-                              setShowSearchResults(true);
-                              setIsInputFocused(true);
-                            }}
-                            onBlur={() => {
-                              window.setTimeout(() => {
-                                setIsInputFocused(false);
-                              }, 120);
-                            }}
-                            placeholder="Rechercher un rider, un défi, un spot..."
-                            className={`w-full pr-4 bg-dark-700/90 border border-dark-600 text-white rounded-full focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-500 transition-all duration-300 ${
-                              isSearchActive ? 'pl-12 py-3 shadow-lg shadow-orange-500/10' : 'pl-10 py-2'
-                            }`}
-                          />
-                          {showSearchResults && filteredResults.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl max-h-80 overflow-y-auto z-50">
-                              <div className="py-2 text-xs uppercase tracking-wide text-gray-500 px-3">
-                                {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
-                              </div>
-                              {filteredResults.map((result) => {
-                                const IconResult = result.icon ?? Search;
-                                return (
-                                  <button
-                                    key={result.key}
-                                    type="button"
-                                    onClick={() => handleResultSelect(result)}
-                                    className="w-full px-3 py-2 flex items-center gap-3 text-left text-sm text-gray-200 hover:bg-dark-700/80 transition-colors"
-                                  >
-                                    <span className="w-9 h-9 rounded-full bg-dark-800 flex items-center justify-center text-orange-400">
-                                      <IconResult size={18} />
-                                    </span>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium text-white">{result.label}</span>
-                                      <span className="text-xs text-gray-500">
-                                        {result.category}
-                                        {result.description ? ` • ${result.description}` : ''}
-                                      </span>
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {showSearchResults && filteredResults.length === 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-dark-700/80 bg-dark-900/95 shadow-xl p-4 text-sm text-gray-400 z-50">
-                              Aucun résultat pour « {searchTerm} »
-                            </div>
-                          )}
-                        </form>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => navigateToSection(item.id)}
-                        className={`flex shrink-0 items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
-                          isActive
-                            ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
-                            : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
-                        }`}
-                      >
-                        <Icon size={20} />
-                        <span>{item.label}</span>
-                      </button>
-                    </Fragment>
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => navigateToSection(item.id)}
+                      className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all shadow-sm ${
+                        isActive
+                          ? 'border-orange-400 bg-orange-500 text-white shadow-orange-500/30'
+                          : 'border-dark-700/50 bg-[#181821] text-gray-300 hover:border-orange-500/50 hover:bg-[#1f1f29] hover:text-white'
+                      }`}
+                    >
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </button>
                   );
-                }
+                })}
+              </div>
 
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => navigateToSection(item.id)}
-                    className={`flex shrink-0 items-center gap-2 px-4 py-2 rounded-full transition-all font-medium border shadow-sm ${
-                      isActive
-                        ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/30'
-                        : 'text-gray-300 border-dark-700/40 bg-dark-800/60 hover:text-white hover:border-orange-500/40 hover:bg-dark-700/80'
+              <div
+                ref={searchContainerRef}
+                className={`hidden min-w-[260px] flex-1 items-center transition-all duration-300 ease-out lg:flex ${
+                  isSearchActive ? 'scale-[1.02] drop-shadow-[0_10px_25px_rgba(249,115,22,0.25)]' : ''
+                }`}
+              >
+                <form onSubmit={handleSearchSubmit} className="relative w-full">
+                  <Search
+                    className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
+                      isSearchActive ? 'text-orange-400' : 'text-gray-500'
                     }`}
-                  >
-                    <Icon size={20} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
+                    size={20}
+                  />
+                  <input
+                    type="search"
+                    value={searchTerm}
+                    onChange={(event) => {
+                      setSearchTerm(event.target.value);
+                      setShowSearchResults(true);
+                    }}
+                    onFocus={() => {
+                      setShowSearchResults(true);
+                      setIsInputFocused(true);
+                    }}
+                    onBlur={() => {
+                      window.setTimeout(() => {
+                        setIsInputFocused(false);
+                      }, 120);
+                    }}
+                    placeholder="Rechercher un rider, un défi, un spot..."
+                    className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                      isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/10' : 'pl-12 py-2.5'
+                    }`}
+                  />
+                  {showSearchResults && filteredResults.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
+                      <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
+                        {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
+                      </div>
+                      {filteredResults.map((result) => {
+                        const IconResult = result.icon ?? Search;
+                        return (
+                          <button
+                            key={result.key}
+                            type="button"
+                            onClick={() => handleResultSelect(result)}
+                            className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-gray-200 transition-colors hover:bg-dark-700/80"
+                          >
+                            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1f1f29] text-orange-400">
+                              <IconResult size={18} />
+                            </span>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-white">{result.label}</span>
+                              <span className="text-xs text-gray-500">
+                                {result.category}
+                                {result.description ? ` • ${result.description}` : ''}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {showSearchResults && filteredResults.length === 0 && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
+                      Aucun résultat pour « {searchTerm} »
+                    </div>
+                  )}
+                </form>
+              </div>
+
+              <div className="flex items-center gap-2 xl:gap-3">
+                {primaryNavAfterSearch.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentSection === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => navigateToSection(item.id)}
+                      className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all shadow-sm ${
+                        isActive
+                          ? 'border-orange-400 bg-orange-500 text-white shadow-orange-500/30'
+                          : 'border-dark-700/50 bg-[#181821] text-gray-300 hover:border-orange-500/50 hover:bg-[#1f1f29] hover:text-white'
+                      }`}
+                    >
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => onSectionChange?.('settings')}
+                  className="relative shrink-0 rounded-full p-2 transition-colors hover:bg-[#1f1f29]"
+                  title="Paramètres"
+                >
+                  <Settings size={20} className="text-gray-400" />
+                </button>
+              </div>
             </div>
           </nav>
         )}
