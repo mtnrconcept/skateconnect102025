@@ -404,12 +404,12 @@ export default function Header({
         )}
 
         <div
-          className={`hidden lg:block flex-[1.2] min-w-[280px] transition-all duration-300 ease-out ${
+          className={`hidden lg:flex items-center flex-1 min-w-[240px] max-w-xl xl:max-w-2xl 2xl:max-w-3xl transition-all duration-300 ease-out ${
             isSearchActive ? 'scale-[1.02] drop-shadow-xl' : ''
           }`}
           ref={searchContainerRef}
         >
-          <form onSubmit={handleSearchSubmit} className="relative">
+          <form onSubmit={handleSearchSubmit} className="relative w-full">
             <Search
               className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
                 isSearchActive ? 'text-orange-400' : 'text-gray-500'
