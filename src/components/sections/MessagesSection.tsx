@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Phone,
@@ -25,9 +25,11 @@ interface Participant {
   lastActive: string;
 }
 
+type ConversationSender = 'me' | 'other' | 'system';
+
 interface ConversationMessage {
   id: string;
-  sender: 'me' | 'other';
+  sender: ConversationSender;
   content: string;
   timestamp: string;
   status?: 'sent' | 'delivered' | 'seen';
@@ -41,11 +43,41 @@ interface ConversationPreview {
   unreadCount: number;
   mood?: string;
   messages: ConversationMessage[];
+  isMuted?: boolean;
+  isPinned?: boolean;
+  isGroup?: boolean;
 }
 
 interface MessagesSectionProps {
   profile: Profile | null;
 }
+
+type HeaderAction = 'call' | 'video' | 'info' | 'more' | 'sparkles';
+type ComposerAction = 'emoji' | 'image' | 'mic' | 'file';
+
+const composerActionCopy: Record<ComposerAction, { title: string; description: string; templates?: string[] }> = {
+  emoji: {
+    title: 'Ajouter une émotion',
+    description: 'Exprimez la vibe de votre message en ajoutant des emojis rapidement.',
+  },
+  image: {
+    title: 'Préparer un média',
+    description: 'Ajoutez une courte description pour contextualiser la photo ou la vidéo que vous allez partager.',
+    templates: ['📷 Nouvelle photo de la session', '🎞️ Clip en slow motion prêt à partager'],
+  },
+  mic: {
+    title: 'Préparer un mémo vocal',
+    description: 'Notez ce que vous allez enregistrer pour que votre crew sache quoi attendre.',
+    templates: ['🎤 Message vocal rapide à enregistrer', '🔁 Feedback audio à envoyer'],
+  },
+  file: {
+    title: 'Partager un document',
+    description: 'Précisez le contenu du fichier pour faciliter l’organisation de vos sessions.',
+    templates: ['📎 Guide des tricks en PDF', '📝 Check-list du contest'],
+  },
+};
+
+const emojiPalette = ['🔥', '🙌', '🎥', '🏆', '🤘', '📍', '💬', '✨'];
 
 const initialConversations: ConversationPreview[] = [
   {
@@ -100,6 +132,8 @@ const initialConversations: ConversationPreview[] = [
         status: 'sent',
       },
     ],
+    isMuted: false,
+    isPinned: true,
   },
   {
     id: 'arnaud-ribeiro',
@@ -131,6 +165,8 @@ const initialConversations: ConversationPreview[] = [
         status: 'seen',
       },
     ],
+    isMuted: false,
+    isPinned: false,
   },
   {
     id: 'sarah-levy',
@@ -161,6 +197,8 @@ const initialConversations: ConversationPreview[] = [
         status: 'seen',
       },
     ],
+    isMuted: false,
+    isPinned: false,
   },
   {
     id: 'crew-chat',
@@ -192,6 +230,9 @@ const initialConversations: ConversationPreview[] = [
         status: 'sent',
       },
     ],
+    isMuted: false,
+    isPinned: false,
+    isGroup: true,
   },
   {
     id: 'coach',
@@ -222,6 +263,8 @@ const initialConversations: ConversationPreview[] = [
         status: 'seen',
       },
     ],
+    isMuted: true,
+    isPinned: false,
   },
 ];
 
@@ -232,6 +275,14 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
   const [messageDraft, setMessageDraft] = useState('');
   const [isMobileView, setIsMobileView] = useState(false);
   const [isMobileConversationOpen, setMobileConversationOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'groups'>('all');
+  const [activeComposerAction, setActiveComposerAction] = useState<ComposerAction | null>(null);
+  const [isInfoDrawerOpen, setInfoDrawerOpen] = useState(false);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const [isMoreOptionsOpen, setMoreOptionsOpen] = useState(false);
+  const [pendingOptions, setPendingOptions] = useState({ isMuted: false, isPinned: false });
+  const [isSparkComposerOpen, setSparkComposerOpen] = useState(false);
+  const [sparkNotes, setSparkNotes] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -255,17 +306,47 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
     }
   }, [isMobileView]);
 
+  useEffect(() => {
+    if (!isMobileView) {
+      setInfoDrawerOpen(false);
+    }
+  }, [isMobileView]);
+
   const filteredConversations = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return conversations;
-    return conversations.filter((conversation) => {
-      const { name } = conversation.participant;
-      return (
-        name.toLowerCase().includes(term) ||
-        conversation.lastMessagePreview.toLowerCase().includes(term)
-      );
+    const base = term
+      ? conversations.filter((conversation) => {
+          const { name } = conversation.participant;
+          return (
+            name.toLowerCase().includes(term) ||
+            conversation.lastMessagePreview.toLowerCase().includes(term)
+          );
+        })
+      : conversations;
+
+    const filteredByType = base.filter((conversation) => {
+      if (activeFilter === 'unread') {
+        return conversation.unreadCount > 0;
+      }
+      if (activeFilter === 'groups') {
+        return conversation.isGroup === true;
+      }
+      return true;
     });
-  }, [conversations, searchTerm]);
+
+    const pinned: ConversationPreview[] = [];
+    const others: ConversationPreview[] = [];
+
+    filteredByType.forEach((conversation) => {
+      if (conversation.isPinned) {
+        pinned.push(conversation);
+      } else {
+        others.push(conversation);
+      }
+    });
+
+    return [...pinned, ...others];
+  }, [activeFilter, conversations, searchTerm]);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId),
@@ -273,10 +354,228 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
   );
   const messagesLength = selectedConversation?.messages.length ?? 0;
 
+  const formatTime = useCallback(
+    (date: Date) =>
+      date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [],
+  );
+
+  const formatDateTime = useCallback(
+    (date: Date) =>
+      date.toLocaleString('fr-FR', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    [],
+  );
+
+  const showToast = useCallback((message: string) => {
+    setToast({ id: Date.now(), message });
+  }, []);
+
+  const appendSystemMessage = useCallback(
+    (conversationId: string, content: string) => {
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                lastMessagePreview: content,
+                lastMessageTime: 'À l’instant',
+                messages: [
+                  ...conversation.messages,
+                  {
+                    id: `system-${Date.now()}`,
+                    sender: 'system',
+                    content,
+                    timestamp: formatTime(new Date()),
+                  },
+                ],
+              }
+            : conversation,
+        ),
+      );
+    },
+    [formatTime],
+  );
+
+  const handleToolbarAction = (action: HeaderAction) => {
+    if (!selectedConversation) {
+      showToast('Sélectionnez une conversation pour utiliser cette action.');
+      return;
+    }
+
+    switch (action) {
+      case 'call': {
+        const content = `📞 Appel audio programmé avec ${selectedConversation.participant.name} (${formatDateTime(new Date())}).`;
+        appendSystemMessage(selectedConversation.id, content);
+        showToast('Appel audio planifié avec succès.');
+        break;
+      }
+      case 'video': {
+        const content = `🎬 Session vidéo prévue avec ${selectedConversation.participant.name} (${formatDateTime(new Date())}).`;
+        appendSystemMessage(selectedConversation.id, content);
+        showToast('Visio session ajoutée à la discussion.');
+        break;
+      }
+      case 'info': {
+        if (isMobileView) {
+          setInfoDrawerOpen(true);
+        } else {
+          showToast('Les informations sont visibles dans le panneau latéral.');
+        }
+        break;
+      }
+      case 'more': {
+        setPendingOptions({
+          isMuted: selectedConversation.isMuted ?? false,
+          isPinned: selectedConversation.isPinned ?? false,
+        });
+        setMoreOptionsOpen(true);
+        break;
+      }
+      case 'sparkles': {
+        const defaultNotes = `Idée de session avec ${selectedConversation.participant.name} à ${selectedConversation.participant.location}`;
+        setSparkNotes((existing) => existing || `${defaultNotes} ✨`);
+        setSparkComposerOpen(true);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
+  const handleComposerAction = (action: ComposerAction) => {
+    setActiveComposerAction((current) => (current === action ? null : action));
+  };
+
+  const insertAttachmentTemplate = (template: string) => {
+    setMessageDraft((previous) => {
+      if (!previous) {
+        return template;
+      }
+      const trimmed = previous.trimEnd();
+      if (!trimmed) {
+        return template;
+      }
+      const lineBreak = '\n';
+      return `${trimmed}${lineBreak}${template}`;
+    });
+    setActiveComposerAction(null);
+    showToast('Contenu ajouté au brouillon.');
+  };
+
+  const handleEmojiSelect = (emoji: string) => {
+    setMessageDraft((previous) => `${previous}${emoji}`);
+    showToast('Emoji ajouté au brouillon.');
+  };
+
+  const handleQuickAction = (action: 'call' | 'video' | 'event') => {
+    if (!selectedConversation) {
+      showToast('Sélectionnez une conversation pour continuer.');
+      return;
+    }
+
+    if (action === 'event') {
+      setSparkNotes((existing) => existing || `Créer un événement communautaire avec ${selectedConversation.participant.name}`);
+      setSparkComposerOpen(true);
+      return;
+    }
+
+    handleToolbarAction(action === 'call' ? 'call' : 'video');
+  };
+
+  const confirmMoreOptions = () => {
+    if (!selectedConversation) {
+      return;
+    }
+
+    setConversations((previous) =>
+      previous.map((conversation) =>
+        conversation.id === selectedConversation.id
+          ? {
+              ...conversation,
+              isMuted: pendingOptions.isMuted,
+              isPinned: pendingOptions.isPinned,
+            }
+          : conversation,
+      ),
+    );
+
+    setMoreOptionsOpen(false);
+
+    const feedbackMessages: string[] = [];
+    feedbackMessages.push(
+      pendingOptions.isMuted
+        ? 'Notifications désactivées pour cette conversation.'
+        : 'Notifications actives pour cette conversation.',
+    );
+    feedbackMessages.push(
+      pendingOptions.isPinned ? 'Conversation épinglée en tête de liste.' : 'Conversation retirée des favoris.',
+    );
+    showToast(feedbackMessages.join(' '));
+  };
+
+  const togglePendingOption = (option: 'isMuted' | 'isPinned') => {
+    setPendingOptions((previous) => ({
+      ...previous,
+      [option]: !previous[option],
+    }));
+  };
+
+  const handleSparkConfirm = () => {
+    if (!selectedConversation) {
+      return;
+    }
+
+    const trimmed = sparkNotes.trim();
+    if (!trimmed) {
+      showToast('Ajoutez quelques détails avant de partager votre plan.');
+      return;
+    }
+
+    appendSystemMessage(selectedConversation.id, `✨ ${trimmed}`);
+    setSparkComposerOpen(false);
+    setSparkNotes('');
+    showToast('Votre plan de session a été partagé.');
+  };
+
+  const composerMetadata = activeComposerAction ? composerActionCopy[activeComposerAction] : null;
+
+  useEffect(() => {
+    setActiveComposerAction(null);
+    setMoreOptionsOpen(false);
+    setSparkComposerOpen(false);
+
+    if (selectedConversation) {
+      setPendingOptions({
+        isMuted: selectedConversation.isMuted ?? false,
+        isPinned: selectedConversation.isPinned ?? false,
+      });
+    } else {
+      setPendingOptions({ isMuted: false, isPinned: false });
+    }
+  }, [selectedConversation]);
+
   useEffect(() => {
     if (!messagesEndRef.current) return;
     messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messagesLength, selectedConversation?.id]);
+
+  useEffect(() => {
+    if (!toast || typeof window === 'undefined') {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setToast(null), 3200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toast]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedId(conversationId);
@@ -301,10 +600,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
       id: `${Date.now()}`,
       sender: 'me',
       content: trimmed,
-      timestamp: new Date().toLocaleTimeString('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      timestamp: formatTime(new Date()),
       status: 'sent',
     };
 
@@ -323,10 +619,13 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
     );
 
     setMessageDraft('');
+    setActiveComposerAction(null);
+    showToast('Message envoyé.');
   };
 
   return (
-    <section className="px-4 py-6 md:px-6 md:py-10">
+    <>
+      <section className="px-4 py-6 md:px-6 md:py-10">
       <div className="max-w-7xl mx-auto">
         <div className="bg-dark-800/80 border border-dark-700 rounded-3xl shadow-xl overflow-hidden backdrop-blur">
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] xl:grid-cols-[320px_1fr_280px] h-[calc(100vh-180px)] min-h-[620px]">
@@ -343,7 +642,12 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                       {profile?.display_name || profile?.username || 'Toi'} · Conversations privées
                     </p>
                   </div>
-                  <button className="p-2 bg-orange-500/10 border border-orange-500/30 rounded-full text-orange-400 hover:bg-orange-500/20 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => handleToolbarAction('sparkles')}
+                    className="p-2 bg-orange-500/10 border border-orange-500/30 rounded-full text-orange-400 hover:bg-orange-500/20 transition-colors"
+                    aria-label="Partager un plan de session"
+                  >
                     <Sparkles size={18} />
                   </button>
                 </div>
@@ -358,13 +662,40 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                   />
                 </div>
                 <div className="flex gap-2 mt-4">
-                  <button className="px-3 py-1.5 text-xs font-medium rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('all')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full border ${
+                      activeFilter === 'all'
+                        ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                        : 'bg-dark-700/70 text-gray-300 border-dark-600 hover:border-orange-400/50'
+                    }`}
+                    aria-pressed={activeFilter === 'all'}
+                  >
                     Tous
                   </button>
-                  <button className="px-3 py-1.5 text-xs font-medium rounded-full bg-dark-700/70 text-gray-300 border border-dark-600">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('unread')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full border ${
+                      activeFilter === 'unread'
+                        ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                        : 'bg-dark-700/70 text-gray-300 border-dark-600 hover:border-orange-400/50'
+                    }`}
+                    aria-pressed={activeFilter === 'unread'}
+                  >
                     Non lus
                   </button>
-                  <button className="px-3 py-1.5 text-xs font-medium rounded-full bg-dark-700/70 text-gray-300 border border-dark-600">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('groups')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full border ${
+                      activeFilter === 'groups'
+                        ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                        : 'bg-dark-700/70 text-gray-300 border-dark-600 hover:border-orange-400/50'
+                    }`}
+                    aria-pressed={activeFilter === 'groups'}
+                  >
                     Groupes
                   </button>
                 </div>
@@ -409,6 +740,21 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                               </p>
                               {conversation.mood && (
                                 <p className="text-xs text-orange-300/80 mt-2">{conversation.mood}</p>
+                              )}
+                              {(conversation.isPinned || conversation.isMuted) && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  {conversation.isPinned && (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[11px] uppercase tracking-wide text-orange-300">
+                                      <Sparkles size={12} />
+                                      Épinglé
+                                    </span>
+                                  )}
+                                  {conversation.isMuted && (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-dark-600 bg-dark-700/80 px-2 py-0.5 text-[11px] uppercase tracking-wide text-gray-400">
+                                      🔕 Muet
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                             {conversation.unreadCount > 0 && (
@@ -466,16 +812,37 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => handleToolbarAction('call')}
+                        className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors"
+                        aria-label="Planifier un appel audio"
+                      >
                         <Phone size={18} />
                       </button>
-                      <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => handleToolbarAction('video')}
+                        className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors"
+                        aria-label="Préparer une visio session"
+                      >
                         <Video size={18} />
                       </button>
-                      <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => handleToolbarAction('info')}
+                        className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors"
+                        aria-label="Afficher les informations de la conversation"
+                      >
                         <Info size={18} />
                       </button>
-                      <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => handleToolbarAction('more')}
+                        className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors"
+                        aria-haspopup="dialog"
+                        aria-label="Plus d'options"
+                      >
                         <MoreVertical size={18} />
                       </button>
                     </div>
@@ -488,18 +855,35 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                       Conversation depuis 3 jours
                     </div>
                     {selectedConversation.messages.map((message) => {
+                      if (message.sender === 'system') {
+                        return (
+                          <div key={message.id} className="flex justify-center">
+                            <div className="max-w-md rounded-full bg-dark-800/80 border border-dark-600/80 px-4 py-2 text-xs text-gray-300 shadow-lg">
+                              <span className="block whitespace-pre-wrap leading-relaxed">{message.content}</span>
+                              <span className="mt-1 block text-[10px] uppercase tracking-wide text-gray-500">
+                                {message.timestamp}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       const isMe = message.sender === 'me';
                       return (
                         <div key={message.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-xl rounded-2xl px-4 py-3 text-sm shadow-lg border ${
-                            isMe
-                              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400/40'
-                              : 'bg-dark-800/80 text-gray-100 border-dark-700'
-                          }`}>
+                          <div
+                            className={`max-w-xl rounded-2xl px-4 py-3 text-sm shadow-lg border ${
+                              isMe
+                                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400/40'
+                                : 'bg-dark-800/80 text-gray-100 border-dark-700'
+                            }`}
+                          >
                             <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                            <div className={`mt-2 text-[11px] flex items-center gap-2 ${
-                              isMe ? 'text-white/80' : 'text-gray-400'
-                            }`}>
+                            <div
+                              className={`mt-2 text-[11px] flex items-center gap-2 ${
+                                isMe ? 'text-white/80' : 'text-gray-400'
+                              }`}
+                            >
                               <span>{message.timestamp}</span>
                               {isMe && (
                                 <span className="uppercase tracking-wide">
@@ -539,19 +923,104 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                         </button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => handleComposerAction('emoji')}
+                          className={`p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors ${
+                            activeComposerAction === 'emoji' ? 'bg-dark-700 text-orange-300 border-orange-400/60' : ''
+                          }`}
+                          aria-pressed={activeComposerAction === 'emoji'}
+                          aria-label="Ajouter un emoji"
+                        >
                           <Smile size={18} />
                         </button>
-                        <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => handleComposerAction('image')}
+                          className={`p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors ${
+                            activeComposerAction === 'image' ? 'bg-dark-700 text-orange-300 border-orange-400/60' : ''
+                          }`}
+                          aria-pressed={activeComposerAction === 'image'}
+                          aria-label="Préparer un média"
+                        >
                           <Image size={18} />
                         </button>
-                        <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => handleComposerAction('mic')}
+                          className={`p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors ${
+                            activeComposerAction === 'mic' ? 'bg-dark-700 text-orange-300 border-orange-400/60' : ''
+                          }`}
+                          aria-pressed={activeComposerAction === 'mic'}
+                          aria-label="Préparer un mémo vocal"
+                        >
                           <Mic size={18} />
                         </button>
-                        <button className="p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => handleComposerAction('file')}
+                          className={`p-2 rounded-full border border-dark-600 text-gray-300 hover:bg-dark-700 transition-colors ${
+                            activeComposerAction === 'file' ? 'bg-dark-700 text-orange-300 border-orange-400/60' : ''
+                          }`}
+                          aria-pressed={activeComposerAction === 'file'}
+                          aria-label="Préparer un document"
+                        >
                           <Paperclip size={18} />
                         </button>
                       </div>
+                      {composerMetadata && (
+                        <div className="rounded-2xl border border-dark-700 bg-dark-800/70 px-4 py-3 text-sm text-gray-300">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-semibold text-white">{composerMetadata.title}</h3>
+                              <p className="text-xs text-gray-400 mt-1">{composerMetadata.description}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setActiveComposerAction(null)}
+                              className="text-xs font-medium text-orange-300 hover:text-orange-200"
+                              aria-label="Fermer le panneau de préparation"
+                            >
+                              Fermer
+                            </button>
+                          </div>
+                          {activeComposerAction === 'emoji' ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {emojiPalette.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => handleEmojiSelect(`${emoji} `)}
+                                  className="px-2 py-1 rounded-full border border-dark-600 bg-dark-700/70 hover:border-orange-400/60 text-lg"
+                                  aria-label={`Insérer ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {composerMetadata.templates?.map((template) => (
+                                <button
+                                  key={template}
+                                  type="button"
+                                  onClick={() => insertAttachmentTemplate(template)}
+                                  className="px-3 py-1.5 rounded-xl border border-dark-600 bg-dark-700/70 text-xs text-gray-200 hover:border-orange-400/60"
+                                >
+                                  {template}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => insertAttachmentTemplate('Note personnelle à compléter :')}
+                                className="px-3 py-1.5 rounded-xl border border-dark-600 bg-dark-700/70 text-xs text-gray-200 hover:border-orange-400/60"
+                              >
+                                + Ajouter une note
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </footer>
                 </>
@@ -622,15 +1091,27 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                   <div>
                     <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wide">Actions rapides</h3>
                     <div className="mt-3 grid grid-cols-1 gap-3">
-                      <button className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dark-700 bg-dark-800/80 hover:border-orange-400/60 transition-colors text-left">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickAction('call')}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dark-700 bg-dark-800/80 hover:border-orange-400/60 transition-colors text-left"
+                      >
                         <Phone size={18} className="text-orange-300" />
                         <span className="text-sm text-white">Planifier un appel</span>
                       </button>
-                      <button className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dark-700 bg-dark-800/80 hover:border-orange-400/60 transition-colors text-left">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickAction('video')}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dark-700 bg-dark-800/80 hover:border-orange-400/60 transition-colors text-left"
+                      >
                         <Video size={18} className="text-orange-300" />
                         <span className="text-sm text-white">Lancer une visio session</span>
                       </button>
-                      <button className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dark-700 bg-dark-800/80 hover:border-orange-400/60 transition-colors text-left">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickAction('event')}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dark-700 bg-dark-800/80 hover:border-orange-400/60 transition-colors text-left"
+                      >
                         <Sparkles size={18} className="text-orange-300" />
                         <span className="text-sm text-white">Créer un événement</span>
                       </button>
@@ -647,5 +1128,241 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
         </div>
       </div>
     </section>
+
+      {isInfoDrawerOpen && selectedConversation && (
+        <div
+          className="fixed inset-0 z-40 flex flex-col justify-end bg-black/60 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Informations sur ${selectedConversation.participant.name}`}
+          onClick={() => setInfoDrawerOpen(false)}
+        >
+          <div
+            className="relative bg-dark-900/95 border-t border-dark-700 rounded-t-3xl p-6 space-y-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{selectedConversation.participant.name}</h2>
+                <p className="text-xs text-gray-400">Dernière activité : {selectedConversation.participant.lastActive}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInfoDrawerOpen(false)}
+                className="text-sm font-medium text-orange-300 hover:text-orange-200"
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-4 text-sm text-gray-300">
+              <div className="flex justify-between">
+                <span>Spot favori</span>
+                <span className="font-medium text-white">{selectedConversation.participant.location}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Statut</span>
+                <span className={`font-medium ${selectedConversation.participant.isOnline ? 'text-emerald-400' : 'text-gray-400'}`}>
+                  {selectedConversation.participant.isOnline ? 'En ligne' : 'Hors ligne'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Notifications</span>
+                <span className="font-medium text-white">{selectedConversation.isMuted ? 'En sourdine' : 'Actives'}</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Actions rapides</h3>
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickAction('call')}
+                  className="flex items-center justify-between rounded-xl border border-dark-700 bg-dark-800/80 px-4 py-3 text-left text-sm text-gray-200"
+                >
+                  <span>Planifier un appel</span>
+                  <Phone size={16} className="text-orange-300" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAction('video')}
+                  className="flex items-center justify-between rounded-xl border border-dark-700 bg-dark-800/80 px-4 py-3 text-left text-sm text-gray-200"
+                >
+                  <span>Lancer une visio session</span>
+                  <Video size={16} className="text-orange-300" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAction('event')}
+                  className="flex items-center justify-between rounded-xl border border-dark-700 bg-dark-800/80 px-4 py-3 text-left text-sm text-gray-200"
+                >
+                  <span>Partager un plan</span>
+                  <Sparkles size={16} className="text-orange-300" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMoreOptionsOpen && selectedConversation && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="conversation-options-title"
+        >
+          <div className="w-full max-w-md rounded-3xl border border-dark-700 bg-dark-900/95 p-6 space-y-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="conversation-options-title" className="text-lg font-semibold text-white">
+                  Options de la conversation
+                </h2>
+                <p className="text-sm text-gray-400 mt-1">Personnalisez les notifications et la mise en avant.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoreOptionsOpen(false)}
+                className="text-sm font-medium text-orange-300 hover:text-orange-200"
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="space-y-3 text-sm text-gray-300">
+              <button
+                type="button"
+                onClick={() => togglePendingOption('isMuted')}
+                className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
+                  pendingOptions.isMuted
+                    ? 'border-orange-500/50 bg-orange-500/10 text-orange-200'
+                    : 'border-dark-700 bg-dark-800/80 hover:border-orange-400/50'
+                }`}
+              >
+                <span>Mettre en sourdine</span>
+                <span className="text-xs uppercase tracking-wide">
+                  {pendingOptions.isMuted ? 'Activé' : 'Désactivé'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => togglePendingOption('isPinned')}
+                className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
+                  pendingOptions.isPinned
+                    ? 'border-orange-500/50 bg-orange-500/10 text-orange-200'
+                    : 'border-dark-700 bg-dark-800/80 hover:border-orange-400/50'
+                }`}
+              >
+                <span>Épingler en haut de la liste</span>
+                <span className="text-xs uppercase tracking-wide">
+                  {pendingOptions.isPinned ? 'Activé' : 'Désactivé'}
+                </span>
+              </button>
+            </div>
+            <div className="flex justify-end gap-3 text-sm">
+              <button
+                type="button"
+                onClick={() => setMoreOptionsOpen(false)}
+                className="px-4 py-2 rounded-full border border-dark-700 text-gray-300 hover:border-orange-400/60"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmMoreOptions}
+                className="px-4 py-2 rounded-full bg-orange-500 text-white font-semibold shadow-lg shadow-orange-500/30 hover:bg-orange-400"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isSparkComposerOpen && selectedConversation && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="spark-composer-title"
+        >
+          <div className="w-full max-w-lg rounded-3xl border border-dark-700 bg-dark-900/95 p-6 space-y-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="spark-composer-title" className="text-lg font-semibold text-white">
+                  Partager un plan de session
+                </h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Préparez un message pour organiser votre prochaine sortie avec {selectedConversation.participant.name}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSparkComposerOpen(false)}
+                className="text-sm font-medium text-orange-300 hover:text-orange-200"
+              >
+                Fermer
+              </button>
+            </div>
+            <textarea
+              value={sparkNotes}
+              onChange={(event) => setSparkNotes(event.target.value)}
+              rows={4}
+              placeholder="Décrivez votre idée de session..."
+              className="w-full rounded-2xl border border-dark-700 bg-dark-800/80 px-4 py-3 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/60"
+            />
+            <div className="flex flex-wrap justify-between gap-3 text-sm">
+              <button
+                type="button"
+                onClick={() =>
+                  setSparkNotes((previous) => {
+                    const base = previous?.trim();
+                    const additions = `Rendez-vous au spot ${selectedConversation.participant.location} ?`;
+                    return [base, additions].filter(Boolean).join('\n');
+                  })
+                }
+                className="px-4 py-2 rounded-full border border-dark-700 text-gray-300 hover:border-orange-400/60"
+              >
+                Proposer un lieu
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSparkNotes((previous) => {
+                    const base = previous?.trim();
+                    const additions = 'Objectif tricks : nosegrind + line filmée.';
+                    return [base, additions].filter(Boolean).join('\n');
+                  })
+                }
+                className="px-4 py-2 rounded-full border border-dark-700 text-gray-300 hover:border-orange-400/60"
+              >
+                Suggérer un objectif
+              </button>
+            </div>
+            <div className="flex justify-end gap-3 text-sm">
+              <button
+                type="button"
+                onClick={() => setSparkComposerOpen(false)}
+                className="px-4 py-2 rounded-full border border-dark-700 text-gray-300 hover:border-orange-400/60"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleSparkConfirm}
+                className="px-4 py-2 rounded-full bg-orange-500 text-white font-semibold shadow-lg shadow-orange-500/30 hover:bg-orange-400"
+              >
+                Partager dans la conversation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed inset-x-4 bottom-4 z-50 flex justify-center md:inset-auto md:right-6 md:left-auto md:bottom-6">
+          <div className="rounded-2xl border border-orange-500/40 bg-dark-900/90 px-4 py-3 text-sm text-orange-100 shadow-xl shadow-orange-500/30">
+            {toast.message}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

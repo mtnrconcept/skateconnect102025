@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { Profile, Section } from '../../types';
 import { settingsCategories, quickSettingsLinks } from '../../data/settingsCatalog';
@@ -8,22 +8,64 @@ interface SettingsSectionProps {
   onNavigate: (section: Section) => void;
 }
 
-export default function SettingsSection({ profile, onNavigate }: SettingsSectionProps) {
-  const [preferences, setPreferences] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    settingsCategories.forEach((category) => {
-      category.items.forEach((item) => {
-        initial[item.id] = item.defaultValue;
-      });
+const STORAGE_KEY = 'shredloc:settings-preferences';
+
+const buildDefaultPreferences = () => {
+  const defaults: Record<string, boolean> = {};
+  settingsCategories.forEach((category) => {
+    category.items.forEach((item) => {
+      defaults[item.id] = item.defaultValue;
     });
-    return initial;
+  });
+  return defaults;
+};
+
+export default function SettingsSection({ profile, onNavigate }: SettingsSectionProps) {
+  const defaultPreferences = useMemo(() => buildDefaultPreferences(), []);
+
+  const [preferences, setPreferences] = useState<Record<string, boolean>>(() => {
+    if (typeof window === 'undefined') {
+      return defaultPreferences;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (!stored) {
+        return defaultPreferences;
+      }
+
+      const parsed = JSON.parse(stored) as Record<string, boolean> | null;
+      if (!parsed || typeof parsed !== 'object') {
+        return defaultPreferences;
+      }
+
+      return { ...defaultPreferences, ...parsed };
+    } catch (error) {
+      console.error('Impossible de charger les préférences sauvegardées :', error);
+      return defaultPreferences;
+    }
   });
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+    } catch (error) {
+      console.error('Impossible de sauvegarder les préférences :', error);
+    }
+  }, [preferences]);
+
   const togglePreference = (id: string) => {
-    setPreferences((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+    setPreferences((previous) => {
+      const nextValue = !previous[id];
+      return {
+        ...previous,
+        [id]: nextValue,
+      };
+    });
   };
 
   const quickLinks = quickSettingsLinks.map((link) => ({
@@ -128,7 +170,22 @@ export default function SettingsSection({ profile, onNavigate }: SettingsSection
                           enabled ? 'translate-x-8' : 'translate-x-0'
                         }`}
                       />
+                      <span className="sr-only" aria-live="polite">
+                        {enabled ? `${item.title} activé` : `${item.title} désactivé`}
+                      </span>
                     </button>
+                    <div className="text-sm text-gray-400 md:text-right">
+                      <span
+                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium ${
+                          enabled
+                            ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
+                            : 'border-dark-600 text-gray-400 bg-dark-700/60'
+                        }`}
+                      >
+                        <span className={`h-2 w-2 rounded-full ${enabled ? 'bg-emerald-400' : 'bg-gray-500'}`} />
+                        {enabled ? 'Activé' : 'Désactivé'}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
