@@ -6,17 +6,58 @@ import { uploadFile } from '../../lib/storage';
 import { filterOutProfileMediaPosts } from '../../lib/postUtils';
 import { compressImage, validateMediaFile } from '../../lib/imageCompression';
 import CommentSection from '../CommentSection';
+import FakeCommentSection from '../FakeCommentSection';
 import PostMediaViewer from '../PostMediaViewer';
 import FakeProfileModal from '../FakeProfileModal';
+import FakeDirectMessageModal from '../FakeDirectMessageModal';
 import ProfilePreviewModal from '../ProfilePreviewModal';
-import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId } from '../../data/fakeFeed';
-import type { Post, Profile } from '../../types';
+import {
+  fakeFeedPosts,
+  fakeProfilesById,
+  fakePostsByProfileId,
+  fakeMessagesByProfileId,
+} from '../../data/fakeFeed';
+import type { FakeMessage, FakeProfileDetails } from '../../data/fakeFeed';
+import type { Comment, Post, Profile } from '../../types';
 
 type FeedPost = Post & {
   liked_by_user?: boolean;
   isFake?: boolean;
   segments?: ('all' | 'following' | 'local')[];
 };
+
+type FeedComment = Comment & {
+  user: Profile | FakeProfileDetails;
+};
+
+const fakeReplyTemplates: Record<string, string[]> = {
+  'fake-rider-aurora': [
+    'Grave partante, je t’envoie le plan pour filmer ça !',
+    'Merci pour ton message, on cale une session sunrise très vite.',
+  ],
+  'fake-rider-keita': [
+    'Toujours chaud pour des manuals combos, on se capte ce week-end ?',
+    'Je réserve une heure ce soir pour qu’on ride ensemble.',
+  ],
+  'fake-rider-ivy': [
+    'Avec plaisir ! Je prépare déjà quelques spots rooftops à explorer.',
+    'Yes ! On tourne une capsule pour le crew très bientôt.',
+  ],
+  'fake-rider-tom': [
+    'Ramène ta créativité sur le DIY, on a besoin de nouvelles idées.',
+    'Toujours open pour partager des tips sur la construction.',
+  ],
+  'fake-rider-sahana': [
+    'J’adore parler voyages skate, on prépare une carte ensemble ?',
+    'Je t’envoie mes spots préférés dès que possible ✨',
+  ],
+};
+
+const defaultFakeReplies = [
+  'Merci pour ton message ! On se coordonne bientôt.',
+  'On se motive pour rider ensemble très vite 🚀',
+  'Toujours partant·e pour échanger sur les sessions !',
+];
 
 interface FeedSectionProps {
   currentUser: Profile | null;
@@ -40,6 +81,31 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const [followLoadingMap, setFollowLoadingMap] = useState<Record<string, boolean>>({});
+  const [fakeFollowingMap, setFakeFollowingMap] = useState<Record<string, boolean>>({});
+  const [fakeCommentsMap, setFakeCommentsMap] = useState<Record<string, FeedComment[]>>(() => {
+    const initial: Record<string, FeedComment[]> = {};
+    fakeFeedPosts.forEach((post) => {
+      initial[post.id] = (post.fakeComments ?? []).map((comment) => ({
+        ...comment,
+        user: comment.user,
+      }));
+    });
+    return initial;
+  });
+  const [fakeMessagesMap, setFakeMessagesMap] = useState<Record<string, FakeMessage[]>>(() => {
+    const initial: Record<string, FakeMessage[]> = {};
+    Object.entries(fakeMessagesByProfileId).forEach(([profileId, messages]) => {
+      initial[profileId] = messages.map((message) => ({ ...message }));
+    });
+    return initial;
+  });
+  const [activeFakeMessageProfileId, setActiveFakeMessageProfileId] = useState<string | null>(null);
+  const replyTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => () => {
+    replyTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    replyTimeoutsRef.current = [];
+  }, []);
 
   useEffect(() => {
     loadPosts();
@@ -65,7 +131,10 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     [...data].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const loadFallbackPosts = () => {
-    const clones = fakeFeedPosts.map((post) => ({ ...post }));
+    const clones = fakeFeedPosts.map((post) => ({
+      ...post,
+      comments_count: fakeCommentsMap[post.id]?.length ?? 0,
+    }));
     const filtered = applyFilter(clones);
     setPosts(sortPostsByDateDesc(filtered));
     setFollowingMap({});
@@ -116,12 +185,10 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
 
   const loadPosts = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('posts')
         .select('*, user:profiles(*), spot:spots(*)')
         .order('created_at', { ascending: false });
-
-      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -143,7 +210,10 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
         }));
       }
 
-      const fakePostsForFeed = fakeFeedPosts.map((post) => ({ ...post }));
+      const fakePostsForFeed = fakeFeedPosts.map((post) => ({
+        ...post,
+        comments_count: fakeCommentsMap[post.id]?.length ?? 0,
+      }));
       const combinedPosts = [...postsWithLikes, ...fakePostsForFeed];
       const applied = applyFilter(combinedPosts);
       const sorted = sortPostsByDateDesc(applied);
@@ -154,6 +224,117 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       loadFallbackPosts();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleFakeFollow = (profileId: string) => {
+    if (!currentUser) {
+      alert('Connectez-vous pour suivre ce profil.');
+      return;
+    }
+
+    setFakeFollowingMap((previous) => {
+      const next = { ...previous };
+      if (next[profileId]) {
+        delete next[profileId];
+      } else {
+        next[profileId] = true;
+      }
+      return next;
+    });
+  };
+
+  const handleFakeCommentAdd = (postId: string, content: string) => {
+    if (!currentUser) {
+      alert('Connectez-vous pour commenter ce post.');
+      return;
+    }
+
+    const newComment: FeedComment = {
+      id: `local-${postId}-${Date.now()}`,
+      post_id: postId,
+      user_id: currentUser.id,
+      content,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user: currentUser,
+    };
+
+    setFakeCommentsMap((previous) => {
+      const existing = previous[postId] ?? [];
+      const nextList = [...existing, newComment];
+      const nextMap = { ...previous, [postId]: nextList };
+      setPosts((currentPosts) =>
+        currentPosts.map((post) =>
+          post.id === postId && post.isFake
+            ? { ...post, comments_count: nextList.length }
+            : post,
+        ),
+      );
+      return nextMap;
+    });
+  };
+
+  const handleFakeCommentDelete = (postId: string, commentId: string) => {
+    setFakeCommentsMap((previous) => {
+      const existing = previous[postId] ?? [];
+      const target = existing.find((comment) => comment.id === commentId);
+      if (target && currentUser && target.user_id !== currentUser.id) {
+        return previous;
+      }
+
+      const nextList = existing.filter((comment) => comment.id !== commentId);
+      const nextMap = { ...previous, [postId]: nextList };
+      setPosts((currentPosts) =>
+        currentPosts.map((post) =>
+          post.id === postId && post.isFake
+            ? { ...post, comments_count: nextList.length }
+            : post,
+        ),
+      );
+      return nextMap;
+    });
+  };
+
+  const handleSendFakeMessage = (profileId: string, message: string) => {
+    if (!currentUser) {
+      alert('Connectez-vous pour envoyer un message.');
+      return;
+    }
+
+    const userMessage: FakeMessage = {
+      id: `user-${profileId}-${Date.now()}`,
+      sender: 'user',
+      content: message,
+      timestamp: new Date().toISOString(),
+    };
+
+    setFakeMessagesMap((previous) => {
+      const existing = previous[profileId] ?? [];
+      const next = [...existing, userMessage];
+      return { ...previous, [profileId]: next };
+    });
+
+    const replies = fakeReplyTemplates[profileId] ?? defaultFakeReplies;
+    const replyContent = replies[Math.floor(Math.random() * replies.length)];
+
+    if (typeof window !== 'undefined') {
+      const timeoutId = window.setTimeout(() => {
+        replyTimeoutsRef.current = replyTimeoutsRef.current.filter((id) => id !== timeoutId);
+        const replyMessage: FakeMessage = {
+          id: `fake-${profileId}-${Date.now()}`,
+          sender: 'fake',
+          content: replyContent,
+          timestamp: new Date().toISOString(),
+        };
+
+        setFakeMessagesMap((previous) => {
+          const existing = previous[profileId] ?? [];
+          return { ...previous, [profileId]: [...existing, replyMessage] };
+        });
+      }, 900 + Math.random() * 1200);
+
+      replyTimeoutsRef.current.push(timeoutId);
     }
   };
 
@@ -372,6 +553,22 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     return fakeProfilesById[activeFakeProfileId] ?? null;
   }, [activeFakeProfileId]);
 
+  const activeFakeMessageProfile = useMemo(() => {
+    if (!activeFakeMessageProfileId) return null;
+    return fakeProfilesById[activeFakeMessageProfileId] ?? null;
+  }, [activeFakeMessageProfileId]);
+
+  const getFakeFollowerCount = useCallback(
+    (profileId: string) => {
+      const profile = fakeProfilesById[profileId];
+      if (!profile) {
+        return 0;
+      }
+      return profile.followers + (fakeFollowingMap[profileId] ? 1 : 0);
+    },
+    [fakeFollowingMap],
+  );
+
   const activeFakeProfilePosts = useMemo(() => {
     if (!activeFakeProfileId) return [];
     const fallback = fakePostsByProfileId[activeFakeProfileId] || [];
@@ -412,6 +609,22 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
+          {filterButtons.map((button) => (
+            <button
+              key={button.id}
+              type="button"
+              onClick={() => setFilter(button.id)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors border ${
+                filter === button.id
+                  ? 'bg-orange-500 text-white border-orange-500'
+                  : 'border-dark-700 text-gray-400 hover:text-white hover:border-orange-500/60'
+              }`}
+            >
+              {button.label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-3 mb-6 mt-4 sm:mt-6 overflow-x-auto pb-2 no-scrollbar">
           <div className="flex-shrink-0 flex flex-col items-center gap-1">
             <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5">
@@ -645,6 +858,19 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                       )}
                     </button>
                   )}
+                  {currentUser && post.isFake && (
+                    <button
+                      type="button"
+                      onClick={() => toggleFakeFollow(post.user_id)}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                        fakeFollowingMap[post.user_id]
+                          ? 'border border-orange-500/60 bg-orange-500/15 text-orange-200 hover:bg-orange-500/25'
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                      }`}
+                    >
+                      {fakeFollowingMap[post.user_id] ? 'Suivi·e' : 'Suivre'}
+                    </button>
+                  )}
                 </div>
 
                 {post.content && (
@@ -708,7 +934,20 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   >
                     <MessageCircle size={24} />
                   </button>
-                  <button className="text-gray-400 hover:text-white transition-colors">
+                  <button
+                    className={`text-gray-400 transition-colors ${post.isFake ? 'hover:text-white' : 'opacity-60 cursor-not-allowed'}`}
+                    onClick={() => {
+                      if (!post.isFake) {
+                        return;
+                      }
+                      if (!currentUser) {
+                        alert('Connectez-vous pour envoyer un message.');
+                        return;
+                      }
+                      setActiveFakeMessageProfileId(post.user_id);
+                    }}
+                    type="button"
+                  >
                     <Send size={24} />
                   </button>
                 </div>
@@ -740,11 +979,20 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
 
               {expandedComments.has(post.id) && (
                 <div className="border-t border-dark-700 px-4 py-4">
-                  <CommentSection
-                    postId={post.id}
-                    currentUser={currentUser}
-                    onCommentCountChange={(count) => handleCommentCountChange(post.id, count)}
-                  />
+                  {post.isFake ? (
+                    <FakeCommentSection
+                      comments={fakeCommentsMap[post.id] ?? []}
+                      currentUser={currentUser}
+                      onAddComment={(content) => handleFakeCommentAdd(post.id, content)}
+                      onDeleteComment={(commentId) => handleFakeCommentDelete(post.id, commentId)}
+                    />
+                  ) : (
+                    <CommentSection
+                      postId={post.id}
+                      currentUser={currentUser}
+                      onCommentCountChange={(count) => handleCommentCountChange(post.id, count)}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -768,6 +1016,17 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           posts={activeFakeProfilePosts}
           onClose={() => setActiveFakeProfileId(null)}
           onPostLike={handleLike}
+          onToggleFollow={() => toggleFakeFollow(activeFakeProfile.id)}
+          isFollowing={!!fakeFollowingMap[activeFakeProfile.id]}
+          onMessage={() => {
+            if (!currentUser) {
+              alert('Connectez-vous pour envoyer un message.');
+              return;
+            }
+            setActiveFakeProfileId(null);
+            setActiveFakeMessageProfileId(activeFakeProfile.id);
+          }}
+          followerCount={getFakeFollowerCount(activeFakeProfile.id)}
         />
       )}
       {activeProfileId && (
@@ -778,6 +1037,15 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           onToggleFollow={toggleFollow}
           isFollowing={!!followingMap[activeProfileId]}
           isFollowLoading={!!followLoadingMap[activeProfileId]}
+        />
+      )}
+      {activeFakeMessageProfile && (
+        <FakeDirectMessageModal
+          profile={activeFakeMessageProfile}
+          messages={fakeMessagesMap[activeFakeMessageProfile.id] ?? []}
+          currentUser={currentUser}
+          onClose={() => setActiveFakeMessageProfileId(null)}
+          onSendMessage={(message) => handleSendFakeMessage(activeFakeMessageProfile.id, message)}
         />
       )}
     </div>
