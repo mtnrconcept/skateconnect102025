@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
 import Header from './components/Header';
@@ -19,6 +19,17 @@ import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
 import TermsSection from './components/sections/TermsSection';
 import SponsorsSection from './components/sections/SponsorsSection';
 import AchievementNotification from './components/AchievementNotification';
+import SubscriptionUpgradeNotice from './components/subscription/SubscriptionUpgradeNotice';
+import { SubscriptionProvider, type RestrictionNotice } from './contexts/SubscriptionContext';
+import {
+  DEFAULT_SUBSCRIPTION_PLAN,
+  SUBSCRIPTION_STORAGE_KEY,
+  canAccessSection,
+  findNextEligiblePlan,
+  getUpgradeMessage,
+  isSubscriptionPlan,
+  type SubscriptionPlan,
+} from './lib/subscription';
 import type { Profile, Section, ContentNavigationOptions } from './types';
 
 function App() {
@@ -33,6 +44,52 @@ function App() {
   } | null>(null);
   const [challengeFocus, setChallengeFocus] = useState<ContentNavigationOptions | null>(null);
   const [mapFocusSpotId, setMapFocusSpotId] = useState<string | null>(null);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlan>(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_SUBSCRIPTION_PLAN;
+    }
+
+    const stored = window.localStorage.getItem(SUBSCRIPTION_STORAGE_KEY);
+    if (stored && isSubscriptionPlan(stored)) {
+      return stored;
+    }
+
+    return DEFAULT_SUBSCRIPTION_PLAN;
+  });
+  const [restrictionNotice, setRestrictionNotice] = useState<RestrictionNotice | null>(null);
+
+  const sectionDisplayNames = useMemo<Record<Section, string>>(
+    () => ({
+      feed: "le fil d'actu",
+      map: 'la carte',
+      events: 'les événements',
+      challenges: 'les défis sponsorisés',
+      sponsors: "l’espace sponsor",
+      pricing: 'les abonnements',
+      profile: 'ton profil avancé',
+      messages: 'la messagerie avancée',
+      badges: 'les badges actifs',
+      rewards: 'le store des récompenses',
+      leaderboard: 'le classement',
+      settings: 'les paramètres',
+      privacy: 'la politique de confidentialité',
+      terms: 'les conditions générales',
+      notifications: 'les notifications',
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(SUBSCRIPTION_STORAGE_KEY, subscriptionPlan);
+    } catch (error) {
+      console.error('Impossible de sauvegarder le mode abonnement :', error);
+    }
+  }, [subscriptionPlan]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -85,13 +142,37 @@ function App() {
     });
   };
 
-  const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions) => {
+  const handlePlanChange = (plan: SubscriptionPlan) => {
+    setSubscriptionPlan(plan);
+    setRestrictionNotice(null);
+  };
+
+  const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions): boolean => {
+    if (!canAccessSection(subscriptionPlan, section)) {
+      setPendingNavigation(null);
+      const requiredPlan = findNextEligiblePlan(subscriptionPlan, section);
+      if (requiredPlan) {
+        const message = getUpgradeMessage(subscriptionPlan, section, {
+          displayName: sectionDisplayNames[section] ?? 'cette section',
+        });
+        setRestrictionNotice({
+          target: section,
+          requiredPlan,
+          message,
+        });
+      }
+      return false;
+    }
+
+    setRestrictionNotice(null);
     setCurrentSection(section);
     if (options) {
       setPendingNavigation({ section, options });
     } else {
       setPendingNavigation(null);
     }
+
+    return true;
   };
 
   useEffect(() => {
@@ -142,12 +223,35 @@ function App() {
     }
   }, [currentSection]);
 
+  useEffect(() => {
+    if (canAccessSection(subscriptionPlan, currentSection)) {
+      return;
+    }
+
+    const fallbackOrder: Section[] = ['feed', 'map', 'pricing'];
+    const fallback = fallbackOrder.find((section) => canAccessSection(subscriptionPlan, section)) ?? 'feed';
+    setCurrentSection(fallback);
+    setPendingNavigation(null);
+  }, [subscriptionPlan, currentSection]);
+
   const dimmedClass = isSearchActive
     ? 'transition-all duration-300 ease-out opacity-40 pointer-events-none blur-[1px]'
     : 'transition-all duration-300 ease-out';
 
+  const subscriptionContextValue = useMemo(
+    () => ({
+      plan: subscriptionPlan,
+      setPlan: handlePlanChange,
+      lastRestriction: restrictionNotice,
+      setRestriction: setRestrictionNotice,
+    }),
+    [subscriptionPlan, restrictionNotice, handlePlanChange],
+  );
+
+  let content: JSX.Element;
+
   if (loading) {
-    return (
+    content = (
       <div className="min-h-screen bg-dark-900 flex items-center justify-center">
         <div className="text-center">
           <div className="flex justify-center mb-6">
@@ -157,62 +261,75 @@ function App() {
         </div>
       </div>
     );
-  }
+  } else if (!session) {
+    content = <Auth onAuthSuccess={handleAuthSuccess} />;
+  } else {
+    content = (
+      <div className="min-h-screen bg-dark-900">
+        <Header
+          profile={profile}
+          currentSection={currentSection}
+          onSectionChange={handleNavigateToContent}
+          onNavigateToContent={handleNavigateToContent}
+          onSearchFocusChange={setIsSearchActive}
+        />
+        <div className={dimmedClass}>
+          <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
+        </div>
 
-  if (!session) {
-    return <Auth onAuthSuccess={handleAuthSuccess} />;
+        <main className={`pt-16 pb-16 md:pb-10 lg:pb-8 ${dimmedClass}`}>
+          {currentSection === 'map' && (
+            <MapSection
+              focusSpotId={mapFocusSpotId}
+              onSpotFocusHandled={() => setMapFocusSpotId(null)}
+            />
+          )}
+          {currentSection === 'feed' && <FeedSection currentUser={profile} />}
+          {currentSection === 'events' && <EventsSection profile={profile} />}
+          {currentSection === 'challenges' && (
+            <ChallengesSection
+              profile={profile}
+              focusConfig={challengeFocus}
+              onFocusHandled={() => setChallengeFocus(null)}
+            />
+          )}
+          {currentSection === 'sponsors' && <SponsorsSection profile={profile} />}
+          {currentSection === 'pricing' && <PricingSection />}
+          {currentSection === 'profile' && (
+            <ProfileSection profile={profile} onProfileUpdate={setProfile} />
+          )}
+          {currentSection === 'badges' && <BadgesSection profile={profile} />}
+          {currentSection === 'rewards' && <RewardsSection profile={profile} />}
+          {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
+          {currentSection === 'messages' && <MessagesSection profile={profile} />}
+          {currentSection === 'settings' && (
+            <SettingsSection profile={profile} onNavigate={handleNavigateToContent} />
+          )}
+          {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={handleNavigateToContent} />}
+          {currentSection === 'terms' && <TermsSection onNavigate={handleNavigateToContent} />}
+        </main>
+
+        <div className={dimmedClass}>{profile && <AchievementNotification profile={profile} />}</div>
+        <div className={dimmedClass}>
+          <Footer onSectionChange={handleNavigateToContent} />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-dark-900">
-      <Header
-        profile={profile}
-        currentSection={currentSection}
-        onSectionChange={setCurrentSection}
-        onNavigateToContent={handleNavigateToContent}
-        onSearchFocusChange={setIsSearchActive}
-      />
-      <div className={dimmedClass}>
-        <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
-      </div>
-
-      <main className={`pt-16 pb-16 md:pb-10 lg:pb-8 ${dimmedClass}`}>
-        {currentSection === 'map' && (
-          <MapSection
-            focusSpotId={mapFocusSpotId}
-            onSpotFocusHandled={() => setMapFocusSpotId(null)}
-          />
-        )}
-        {currentSection === 'feed' && <FeedSection currentUser={profile} />}
-        {currentSection === 'events' && <EventsSection profile={profile} />}
-        {currentSection === 'challenges' && (
-          <ChallengesSection
-            profile={profile}
-            focusConfig={challengeFocus}
-            onFocusHandled={() => setChallengeFocus(null)}
-          />
-        )}
-        {currentSection === 'sponsors' && <SponsorsSection profile={profile} />}
-        {currentSection === 'pricing' && <PricingSection />}
-        {currentSection === 'profile' && (
-          <ProfileSection profile={profile} onProfileUpdate={setProfile} />
-        )}
-        {currentSection === 'badges' && <BadgesSection profile={profile} />}
-        {currentSection === 'rewards' && <RewardsSection profile={profile} />}
-        {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
-        {currentSection === 'messages' && <MessagesSection profile={profile} />}
-        {currentSection === 'settings' && (
-          <SettingsSection profile={profile} onNavigate={setCurrentSection} />
-        )}
-        {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={setCurrentSection} />}
-        {currentSection === 'terms' && <TermsSection onNavigate={setCurrentSection} />}
-      </main>
-
-      <div className={dimmedClass}>{profile && <AchievementNotification profile={profile} />}</div>
-      <div className={dimmedClass}>
-        <Footer onSectionChange={handleNavigateToContent} />
-      </div>
-    </div>
+    <SubscriptionProvider value={subscriptionContextValue}>
+      {restrictionNotice && session && (
+        <SubscriptionUpgradeNotice
+          notice={restrictionNotice}
+          currentPlan={subscriptionPlan}
+          onClose={() => setRestrictionNotice(null)}
+          onSimulateUpgrade={handlePlanChange}
+          onViewPricing={() => handleNavigateToContent('pricing')}
+        />
+      )}
+      {content}
+    </SubscriptionProvider>
   );
 }
 

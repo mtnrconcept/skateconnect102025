@@ -5,7 +5,7 @@ import type { Section } from '../types';
 
 interface MobileNavigationProps {
   currentSection?: Section;
-  onNavigate?: (section: Section) => void;
+  onNavigate?: (section: Section) => boolean | void;
 }
 
 export default function MobileNavigation({ currentSection, onNavigate }: MobileNavigationProps) {
@@ -28,7 +28,10 @@ export default function MobileNavigation({ currentSection, onNavigate }: MobileN
   }, [isOpen]);
 
   const handleNavigate = (section: Section) => {
-    onNavigate?.(section);
+    const result = onNavigate?.(section);
+    if (result === false) {
+      return;
+    }
     setIsOpen(false);
   };
 

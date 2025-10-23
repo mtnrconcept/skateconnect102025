@@ -1,12 +1,15 @@
 import type { Section } from '../types';
 
 interface FooterProps {
-  onSectionChange?: (section: Section) => void;
+  onSectionChange?: (section: Section) => boolean | void;
 }
 
 export default function Footer({ onSectionChange }: FooterProps) {
   const handleNavigate = (section: Section) => {
-    onSectionChange?.(section);
+    const result = onSectionChange?.(section);
+    if (result === false) {
+      return;
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

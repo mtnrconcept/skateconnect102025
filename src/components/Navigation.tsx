@@ -3,7 +3,7 @@ import type { Section } from '../types';
 
 interface NavigationProps {
   currentSection: Section;
-  onSectionChange: (section: Section) => void;
+  onSectionChange: (section: Section) => boolean | void;
 }
 
 export default function Navigation({ currentSection, onSectionChange }: NavigationProps) {
