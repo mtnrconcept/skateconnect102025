@@ -369,7 +369,7 @@ export default function Header({
       <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-4 px-4 py-3 lg:gap-6 lg:px-8">
         <div className="shrink-0">
           <div className="flex items-center gap-3 rounded-2xl border border-dark-700/80 bg-[#121219]/90 px-4 py-2">
-            <img src="/logo.png" className="h-12 w-auto object-contain" />
+            <img src="/logo2.png" className="neon-logo h-12 w-auto object-contain" />
           </div>
         </div>
 

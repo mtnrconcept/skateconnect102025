@@ -205,7 +205,7 @@ const initialConversations: ConversationPreview[] = [
     participant: {
       id: 'crew',
       name: 'Shredloc Crew',
-      avatar: '/logo.png',
+      avatar: '/logo2.png',
       isOnline: false,
       location: 'Chat de groupe',
       lastActive: 'Actif il y a 5 h',
@@ -353,6 +353,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
     [conversations, selectedId],
   );
   const messagesLength = selectedConversation?.messages.length ?? 0;
+  const isShredlocSelected = selectedConversation?.participant.avatar?.includes('logo2.png');
 
   const formatTime = useCallback(
     (date: Date) =>
@@ -708,6 +709,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                   <ul className="divide-y divide-dark-700/60">
                     {filteredConversations.map((conversation) => {
                       const isActive = conversation.id === selectedConversation?.id;
+                      const isShredlocConversation = conversation.participant.avatar?.includes('logo2.png');
                       return (
                         <li key={conversation.id}>
                           <button
@@ -720,7 +722,9 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                               <img
                                 src={conversation.participant.avatar}
                                 alt={conversation.participant.name}
-                                className="w-12 h-12 rounded-full object-cover border border-dark-600"
+                                className={`w-12 h-12 object-cover border border-dark-600 ${
+                                  isShredlocConversation ? 'neon-logo rounded-xl bg-[#121219]' : 'rounded-full'
+                                }`}
                               />
                               {conversation.participant.isOnline && (
                                 <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-400 border-2 border-dark-800 rounded-full" />
@@ -793,7 +797,9 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
                         <img
                           src={selectedConversation.participant.avatar}
                           alt={selectedConversation.participant.name}
-                          className="w-12 h-12 rounded-full object-cover border border-dark-600"
+                          className={`w-12 h-12 object-cover border border-dark-600 ${
+                            isShredlocSelected ? 'neon-logo rounded-xl bg-[#121219]' : 'rounded-full'
+                          }`}
                         />
                         {selectedConversation.participant.isOnline && (
                           <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-400 border-2 border-dark-800 rounded-full" />
