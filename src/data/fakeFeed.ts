@@ -1,4 +1,4 @@
-import type { Post, Profile } from '../types';
+import type { Post, Profile, UserXP } from '../types';
 
 export type FeedSegment = 'all' | 'following' | 'local';
 
@@ -15,6 +15,10 @@ export type FakeFeedPost = Post & {
   user: FakeProfileDetails;
   isFake: true;
   segments: FeedSegment[];
+};
+
+export type FakeLeaderboardEntry = UserXP & {
+  profile: FakeProfileDetails;
 };
 
 const createProfile = (profile: FakeProfileDetails): FakeProfileDetails => profile;
@@ -233,6 +237,54 @@ export const fakeFeedPosts: FakeFeedPost[] = [
     liked_by_user: false,
     isFake: true,
     segments: ['all', 'following'],
+  },
+];
+
+export const fakeLeaderboardEntries: FakeLeaderboardEntry[] = [
+  {
+    user_id: 'fake-rider-tom',
+    total_xp: 24850,
+    current_level: 27,
+    xp_to_next_level: 650,
+    level_title: 'Architecte du Spot',
+    updated_at: daysAgo(1),
+    profile: fakeProfiles[3],
+  },
+  {
+    user_id: 'fake-rider-aurora',
+    total_xp: 23640,
+    current_level: 26,
+    xp_to_next_level: 860,
+    level_title: 'Réalisatrice de Flow',
+    updated_at: daysAgo(1),
+    profile: fakeProfiles[0],
+  },
+  {
+    user_id: 'fake-rider-ivy',
+    total_xp: 22190,
+    current_level: 24,
+    xp_to_next_level: 410,
+    level_title: 'Visionnaire Rooftop',
+    updated_at: daysAgo(2),
+    profile: fakeProfiles[2],
+  },
+  {
+    user_id: 'fake-rider-sahana',
+    total_xp: 20510,
+    current_level: 22,
+    xp_to_next_level: 990,
+    level_title: 'Cartographe Nomade',
+    updated_at: daysAgo(3),
+    profile: fakeProfiles[4],
+  },
+  {
+    user_id: 'fake-rider-keita',
+    total_xp: 18940,
+    current_level: 21,
+    xp_to_next_level: 780,
+    level_title: 'Maître des Lines',
+    updated_at: daysAgo(2),
+    profile: fakeProfiles[1],
   },
 ];
 

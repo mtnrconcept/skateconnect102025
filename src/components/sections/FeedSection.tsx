@@ -61,9 +61,13 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     });
   };
 
+  const sortPostsByDateDesc = (data: FeedPost[]) =>
+    [...data].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
   const loadFallbackPosts = () => {
-    const filtered = applyFilter(fakeFeedPosts).map((post) => ({ ...post }));
-    setPosts(filtered);
+    const clones = fakeFeedPosts.map((post) => ({ ...post }));
+    const filtered = applyFilter(clones);
+    setPosts(sortPostsByDateDesc(filtered));
     setFollowingMap({});
     setFollowLoadingMap({});
   };
@@ -77,6 +81,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     const uniqueUserIds = Array.from(
       new Set(
         fetchedPosts
+          .filter((post) => !post.isFake)
           .map((post) => post.user_id)
           .filter((id): id is string => Boolean(id && id !== currentUser.id)),
       ),
@@ -121,33 +126,29 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       if (error) throw error;
 
       const filteredData = filterOutProfileMediaPosts(data || []) as FeedPost[];
+      let postsWithLikes: FeedPost[] = filteredData.map((post) => ({ ...post }));
 
-      if (!filteredData || filteredData.length === 0) {
-        loadFallbackPosts();
-        return;
-      }
-
-      if (currentUser && filteredData.length > 0) {
-        const postIds = filteredData.map(p => p.id);
+      if (currentUser && postsWithLikes.length > 0) {
+        const postIds = postsWithLikes.map((p) => p.id);
         const { data: likes } = await supabase
           .from('likes')
           .select('post_id')
           .eq('user_id', currentUser.id)
           .in('post_id', postIds);
 
-        const likedIds = new Set(likes?.map(l => l.post_id) || []);
-        const postsWithLikes = filteredData.map(p => ({
+        const likedIds = new Set(likes?.map((l) => l.post_id) || []);
+        postsWithLikes = postsWithLikes.map((p) => ({
           ...p,
           liked_by_user: likedIds.has(p.id),
         }));
-        const applied = applyFilter(postsWithLikes as FeedPost[]);
-        setPosts(applied);
-        await loadFollowingState(applied);
-      } else {
-        const applied = applyFilter(filteredData);
-        setPosts(applied);
-        await loadFollowingState(applied);
       }
+
+      const fakePostsForFeed = fakeFeedPosts.map((post) => ({ ...post }));
+      const combinedPosts = [...postsWithLikes, ...fakePostsForFeed];
+      const applied = applyFilter(combinedPosts);
+      const sorted = sortPostsByDateDesc(applied);
+      setPosts(sorted);
+      await loadFollowingState(sorted);
     } catch (error) {
       console.error('Error loading posts:', error);
       loadFallbackPosts();
