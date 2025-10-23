@@ -96,9 +96,9 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="bg-orange 500 text-white p-6 sticky top-0 z-10">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto no-scrollbar">
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl">
+        <div className="bg-gradient-to-r from-orange-500 via-orange-400 to-orange-600 text-white p-6 sticky top-0 z-10">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Bell className="w-6 h-6" />
@@ -129,7 +129,7 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
           )}
         </div>
 
-        <div className="overflow-y-auto max-h-[calc(90vh-160px)]">
+        <div className="overflow-y-auto max-h-[calc(90vh-160px)] no-scrollbar">
           {loading ? (
             <div className="p-8 text-center text-gray-500">
               <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
