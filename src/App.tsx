@@ -12,6 +12,7 @@ import ProfileSection from './components/sections/ProfileSection';
 import BadgesSection from './components/sections/BadgesSection';
 import RewardsSection from './components/sections/RewardsSection';
 import LeaderboardSection from './components/sections/LeaderboardSection';
+import PricingSection from './components/sections/PricingSection';
 import SettingsSection from './components/sections/SettingsSection';
 import MessagesSection from './components/sections/MessagesSection';
 import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
@@ -192,6 +193,7 @@ function App() {
           />
         )}
         {currentSection === 'sponsors' && <SponsorsSection profile={profile} />}
+        {currentSection === 'pricing' && <PricingSection />}
         {currentSection === 'profile' && (
           <ProfileSection profile={profile} onProfileUpdate={setProfile} />
         )}
