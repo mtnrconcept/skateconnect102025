@@ -297,6 +297,7 @@ export type Section =
   | 'events'
   | 'challenges'
   | 'sponsors'
+  | 'pricing'
   | 'profile'
   | 'messages'
   | 'notifications'
