@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Heart, MessageCircle, MapPin, Send, Video, X, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Heart, MessageCircle, MapPin, Send, Video, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { uploadFile } from '../../lib/storage';
@@ -8,6 +8,7 @@ import { compressImage, validateMediaFile } from '../../lib/imageCompression';
 import CommentSection from '../CommentSection';
 import PostMediaViewer from '../PostMediaViewer';
 import FakeProfileModal from '../FakeProfileModal';
+import ProfilePreviewModal from '../ProfilePreviewModal';
 import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId } from '../../data/fakeFeed';
 import type { Post, Profile } from '../../types';
 
@@ -36,10 +37,13 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [activeStoryMediaIndex, setActiveStoryMediaIndex] = useState(0);
   const [activeFakeProfileId, setActiveFakeProfileId] = useState<string | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+  const [followLoadingMap, setFollowLoadingMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadPosts();
-  }, [filter]);
+  }, [filter, currentUser?.id]);
 
   const applyFilter = (data: FeedPost[]) => {
     if (filter === 'all') {
@@ -60,7 +64,50 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const loadFallbackPosts = () => {
     const filtered = applyFilter(fakeFeedPosts).map((post) => ({ ...post }));
     setPosts(filtered);
+    setFollowingMap({});
+    setFollowLoadingMap({});
   };
+
+  const loadFollowingState = useCallback(async (fetchedPosts: FeedPost[]) => {
+    if (!currentUser) {
+      setFollowingMap({});
+      return;
+    }
+
+    const uniqueUserIds = Array.from(
+      new Set(
+        fetchedPosts
+          .map((post) => post.user_id)
+          .filter((id): id is string => Boolean(id && id !== currentUser.id)),
+      ),
+    );
+
+    if (uniqueUserIds.length === 0) {
+      setFollowingMap({});
+      return;
+    }
+
+    try {
+      const { data: followRows, error } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUser.id)
+        .in('following_id', uniqueUserIds);
+
+      if (error) throw error;
+
+      const map: Record<string, boolean> = {};
+      (followRows ?? []).forEach((row: { following_id: string | null }) => {
+        if (row.following_id) {
+          map[row.following_id] = true;
+        }
+      });
+
+      setFollowingMap(map);
+    } catch (error) {
+      console.error('Error loading follow status:', error);
+    }
+  }, [currentUser]);
 
   const loadPosts = async () => {
     try {
@@ -93,9 +140,13 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           ...p,
           liked_by_user: likedIds.has(p.id),
         }));
-        setPosts(applyFilter(postsWithLikes as FeedPost[]));
+        const applied = applyFilter(postsWithLikes as FeedPost[]);
+        setPosts(applied);
+        await loadFollowingState(applied);
       } else {
-        setPosts(applyFilter(filteredData));
+        const applied = applyFilter(filteredData);
+        setPosts(applied);
+        await loadFollowingState(applied);
       }
     } catch (error) {
       console.error('Error loading posts:', error);
@@ -104,6 +155,56 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       setLoading(false);
     }
   };
+
+  const toggleFollow = useCallback(async (userId: string): Promise<boolean | null> => {
+    if (!currentUser || !userId || userId === currentUser.id) {
+      return null;
+    }
+
+    const isFollowing = !!followingMap[userId];
+
+    setFollowLoadingMap((prev) => ({ ...prev, [userId]: true }));
+
+    try {
+      if (isFollowing) {
+        const { error } = await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', userId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('follows')
+          .insert({ follower_id: currentUser.id, following_id: userId });
+
+        if (error) throw error;
+      }
+
+      setFollowingMap((prev) => {
+        const next = { ...prev };
+        if (isFollowing) {
+          delete next[userId];
+        } else {
+          next[userId] = true;
+        }
+        return next;
+      });
+
+      return !isFollowing;
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+      alert('Échec de la mise à jour du suivi');
+      return null;
+    } finally {
+      setFollowLoadingMap((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }
+  }, [currentUser, followingMap]);
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,8 +382,15 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   }, [activeFakeProfileId, posts]);
 
   const handleAvatarClick = (post: FeedPost) => {
-    if (!post.isFake) return;
-    setActiveFakeProfileId(post.user_id);
+    if (post.isFake) {
+      setActiveProfileId(null);
+      setActiveFakeProfileId(post.user_id);
+      return;
+    }
+    if (post.user_id) {
+      setActiveFakeProfileId(null);
+      setActiveProfileId(post.user_id);
+    }
   };
 
   const isVideoUrl = (url: string) => {
@@ -491,13 +599,12 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
             <div key={post.id} className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
               <div className="p-4">
                 <div className="flex items-start gap-3 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => handleAvatarClick(post)}
-                    className={`group relative flex-shrink-0 focus:outline-none ${post.isFake ? 'rounded-full focus-visible:ring-2 focus-visible:ring-orange-500' : ''}`}
-                    title={post.isFake ? 'Voir le profil' : getUserDisplayName(post.user)}
-                    disabled={!post.isFake}
-                  >
+                    <button
+                      type="button"
+                      onClick={() => handleAvatarClick(post)}
+                      className={`group relative flex-shrink-0 focus:outline-none ${post.isFake ? 'rounded-full focus-visible:ring-2 focus-visible:ring-orange-500' : ''}`}
+                      title={post.isFake ? 'Voir le profil' : getUserDisplayName(post.user)}
+                    >
                     {post.user?.avatar_url ? (
                       <img
                         src={post.user.avatar_url}
@@ -517,9 +624,26 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                     </div>
                     <div className="text-xs text-gray-500">{formatDate(post.created_at)}</div>
                   </div>
-                  <button className="bg-orange-500 text-white px-4 py-1.5 rounded-lg hover:bg-orange-600 transition-colors text-sm font-semibold">
-                    Follow
-                  </button>
+                  {currentUser && !post.isFake && post.user_id !== currentUser.id && (
+                    <button
+                      type="button"
+                      onClick={() => void toggleFollow(post.user_id)}
+                      disabled={!!followLoadingMap[post.user_id]}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                        followingMap[post.user_id]
+                          ? 'border border-orange-500/60 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20'
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                      } ${followLoadingMap[post.user_id] ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    >
+                      {followLoadingMap[post.user_id] ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : followingMap[post.user_id] ? (
+                        'Abonné·e'
+                      ) : (
+                        'Suivre'
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {post.content && (
@@ -643,6 +767,16 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           posts={activeFakeProfilePosts}
           onClose={() => setActiveFakeProfileId(null)}
           onPostLike={handleLike}
+        />
+      )}
+      {activeProfileId && (
+        <ProfilePreviewModal
+          profileId={activeProfileId}
+          currentUserId={currentUser?.id}
+          onClose={() => setActiveProfileId(null)}
+          onToggleFollow={toggleFollow}
+          isFollowing={!!followingMap[activeProfileId]}
+          isFollowLoading={!!followLoadingMap[activeProfileId]}
         />
       )}
     </div>

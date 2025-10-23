@@ -73,6 +73,8 @@ export default function StatsDisplay({ profile }: StatsDisplayProps) {
 
       const userRank = rankData.data?.findIndex(u => u.user_id === profile.id) ?? -1;
 
+      const baseFollowers = profile.legacy_followers_count ?? 0;
+
       setStats({
         totalXP: xpData.data?.total_xp || 0,
         level: xpData.data?.current_level || 1,
@@ -81,7 +83,7 @@ export default function StatsDisplay({ profile }: StatsDisplayProps) {
         totalSpots: spotsData.count || 0,
         totalComments: commentsData.count || 0,
         totalLikes: likesData.count || 0,
-        totalFollowers: followersData.count || 0,
+        totalFollowers: (followersData.count || 0) + baseFollowers,
         totalBadges: badgesData.count || 0,
         videosPosted: videos,
         photosPosted: photos,

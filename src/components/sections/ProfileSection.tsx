@@ -108,11 +108,14 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
           setUserPosts(filteredPosts);
         }
 
+        const baseFollowers = profile?.legacy_followers_count ?? 0;
+        const baseFollowing = profile?.legacy_following_count ?? 0;
+
         setStats({
           postsCount: filteredPosts.length,
           spotsCount: spotsResult.count || 0,
-          followersCount: followersResult.count || 0,
-          followingCount: followingResult.count || 0,
+          followersCount: (followersResult.count || 0) + baseFollowers,
+          followingCount: (followingResult.count || 0) + baseFollowing,
         });
         setUserXP(xpResult.data);
         setUserBadges(badgesResult.data || []);
@@ -122,7 +125,7 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
         setLoading(false);
       }
     },
-    [profile?.id],
+    [profile?.id, profile?.legacy_followers_count, profile?.legacy_following_count],
   );
 
   useEffect(() => {
