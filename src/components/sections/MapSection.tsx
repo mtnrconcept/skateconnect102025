@@ -5,7 +5,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase';
 import SpotDetailModal from '../SpotDetailModal';
 import AddSpotModal from '../AddSpotModal';
-import type { Spot, SpotMedia } from '../../types';
+import type { Spot } from '../../types';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
@@ -25,10 +25,10 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const [filter, setFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
     loadSpots();
   }, [filter]);
 
@@ -372,7 +372,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     });
   };
 
-  const getMarkerColor = (type: string): string => {
+  const getMarkerColor = (_type: string): string => {
     return '#ff8c00';
   };
 
@@ -427,7 +427,6 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const coords: [number, number] = [position.coords.longitude, position.coords.latitude];
-          setUserLocation(coords);
 
           if (map.current) {
             map.current.flyTo({
@@ -459,95 +458,165 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   ];
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="bg-dark-800 border-b border-dark-700 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-white">SPOT MAP</h2>
-          <div className="flex items-center gap-2">
-            <button className="text-gray-400 hover:text-white transition-colors">
-              <Filter size={20} />
+    <div className="relative flex flex-col overflow-hidden rounded-3xl border border-dark-700 bg-dark-900/70 shadow-2xl shadow-orange-900/10 min-h-[640px] lg:h-[calc(100vh-8rem)] lg:max-h-[calc(100vh-8rem)]">
+      <div className="border-b border-dark-700 bg-dark-900/80 px-6 py-6 backdrop-blur">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.35em] text-orange-400/80 mb-2">Explorer</p>
+            <div className="flex items-center gap-3">
+              <h2 className="text-3xl font-bold text-white">Spot Map</h2>
+              <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase text-orange-200">
+                {spots.length} spots
+              </span>
+            </div>
+            <p className="mt-2 max-w-xl text-sm text-gray-400">
+              Découvre les parks, bowls, DIY et transitions autour de toi. La carte reste visible pendant que tu explores les spots détaillés.
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-3 lg:w-80">
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+              <input
+                type="text"
+                placeholder="Rechercher un spot ou une ville"
+                className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+              />
+            </div>
+            <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70">
+              <Filter size={18} className="text-orange-400" />
+              Affiner les filtres
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mb-4">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Find new spots..."
-              className="w-full pl-10 pr-4 py-2 bg-dark-700 border border-dark-600 text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-gray-500"
-            />
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-          </div>
-          <button className="px-3 py-2 bg-dark-700 border border-dark-600 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors text-sm">
-            Park
-          </button>
-          <button className="px-3 py-2 bg-dark-700 border border-dark-600 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors text-sm">
-            DIY
-          </button>
-          <button className="px-3 py-2 bg-dark-700 border border-dark-600 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors text-sm">
-            Indoor
-          </button>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          {filterButtons.map((button) => (
+            <button
+              key={button.id}
+              onClick={() => setFilter(button.id)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                filter === button.id
+                  ? 'border border-orange-500/60 bg-orange-500/20 text-orange-100 shadow-[0_0_15px_rgba(255,153,0,0.15)]'
+                  : 'border border-dark-600 bg-dark-800/70 text-gray-300 hover:border-orange-500/40 hover:text-orange-100'
+              }`}
+            >
+              {button.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-2 h-full">
-          <div className="relative h-full min-h-[400px]">
+        <div className="grid h-full grid-cols-1 lg:grid-cols-[1.5fr,1fr]">
+          <div className="relative h-[360px] overflow-hidden border-b border-dark-800 lg:h-full lg:border-b-0 lg:border-r lg:border-dark-800">
             <div ref={mapContainer} className="absolute inset-0" />
-            <button
-              onClick={getUserLocation}
-              className="absolute top-4 left-4 bg-dark-800 rounded-lg p-3 shadow-lg hover:bg-dark-700 transition-colors z-10 border border-dark-700"
-              title="Ma position"
-            >
-              <Navigation size={20} className="text-orange-500" />
-            </button>
-          </div>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark-900/70 to-transparent" />
 
-          <div className="bg-dark-900 overflow-y-auto p-4">
-            {loading ? (
-              <div className="text-center py-8 text-gray-400">Chargement des spots...</div>
-            ) : spots.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <MapPin size={48} className="mx-auto mb-2 opacity-30" />
-                <p>Aucun spot trouvé</p>
-                <p className="text-sm mt-1">Soyez le premier à en ajouter un!</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {spots.map((spot) => (
-                  <div
-                    key={spot.id}
-                    className="bg-dark-800 border border-dark-700 rounded-lg p-4 hover:bg-dark-700 transition-colors cursor-pointer"
-                    onClick={() => flyToSpot(spot)}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-white">{spot.name}</h3>
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-orange-500 text-white">
-                        {getSpotTypeLabel(spot.spot_type)}
-                      </span>
-                    </div>
-                    {spot.description && (
-                      <p className="text-sm text-gray-400 mb-2 line-clamp-2">{spot.description}</p>
-                    )}
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{spot.address || 'Adresse non spécifiée'}</span>
-                      <span className="flex items-center gap-1 text-orange-500">
-                        {'⭐'.repeat(spot.difficulty)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="absolute left-4 top-4 flex flex-col gap-3">
+              <button
+                onClick={getUserLocation}
+                className="inline-flex items-center gap-2 rounded-xl border border-dark-700 bg-dark-900/80 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-black/50 transition-colors hover:border-orange-500/50 hover:bg-dark-800/90"
+                title="Centrer sur ma position"
+              >
+                <Navigation size={18} className="text-orange-400" />
+                <span>Ma position</span>
+              </button>
+            </div>
 
             <button
               onClick={() => setShowAddModal(true)}
-              className="fixed bottom-24 left-1/2 -translate-x-1/2 md:bottom-6 flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition-colors shadow-lg font-semibold"
+              className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-orange-900/30 transition-transform hover:-translate-y-1 hover:bg-orange-400"
             >
-              <Plus size={20} />
-              <span>Add a Spot</span>
+              <Plus size={18} />
+              Ajouter un spot
             </button>
+          </div>
+
+          <div className="relative bg-dark-900/80">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-dark-900 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-dark-900 to-transparent" />
+            <div className="relative flex h-full flex-col overflow-hidden">
+              {loading ? (
+                <div className="flex flex-1 items-center justify-center px-6 py-10 text-gray-400">
+                  Chargement des spots...
+                </div>
+              ) : spots.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-gray-400">
+                  <MapPin size={48} className="opacity-40" />
+                  <p>Aucun spot trouvé</p>
+                  <p className="text-sm text-gray-500">Ajoute le premier spot dans cette catégorie.</p>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto px-6 py-6">
+                  <div className="grid gap-4">
+                    {spots.map((spot) => {
+                      const coverPhotoUrl = spotCoverPhotos[spot.id];
+                      const difficulty = Math.max(0, Math.min(5, spot.difficulty ?? 0));
+
+                      return (
+                        <button
+                          key={spot.id}
+                          onClick={() => flyToSpot(spot)}
+                          className="group overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
+                        >
+                          <div className="relative h-36 w-full overflow-hidden">
+                            {coverPhotoUrl ? (
+                              <img
+                                src={coverPhotoUrl}
+                                alt={spot.name}
+                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900 text-xs uppercase tracking-widest text-gray-500">
+                                Aucun média
+                              </div>
+                            )}
+                            <div className="absolute left-4 top-4 flex items-center gap-2">
+                              <span className="rounded-full bg-orange-500/90 px-3 py-1 text-xs font-semibold uppercase text-white">
+                                {getSpotTypeLabel(spot.spot_type)}
+                              </span>
+                            </div>
+                            <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-dark-900/80 px-3 py-1 text-xs font-semibold text-amber-300">
+                              {Array.from({ length: 5 }).map((_, index) => (
+                                <Star
+                                  key={index}
+                                  size={14}
+                                  className={index < difficulty ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-3 p-5">
+                            <div className="flex items-start justify-between gap-3">
+                              <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
+                              {spot.creator?.username && (
+                                <span className="rounded-full border border-dark-600 bg-dark-900/70 px-3 py-1 text-xs text-gray-400">
+                                  @{spot.creator.username}
+                                </span>
+                              )}
+                            </div>
+                            {spot.description && (
+                              <p className="line-clamp-2 text-sm text-gray-300">{spot.description}</p>
+                            )}
+                            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
+                              <div className="flex items-center gap-2 text-gray-300">
+                                <MapPin size={14} className="text-orange-400" />
+                                <span>{spot.address || 'Adresse non spécifiée'}</span>
+                              </div>
+                              <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-200">
+                                Voir sur la carte
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

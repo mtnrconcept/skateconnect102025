@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import {
   Crown,
   Users,
@@ -17,7 +18,11 @@ import {
   Camera,
   Gift,
   ShieldCheck,
+  CheckCircle2,
+  ArrowRight,
 } from 'lucide-react';
+import { useSubscription } from '../../contexts/SubscriptionContext';
+import { getPlanDefinition, type SubscriptionPlan } from '../../lib/subscription';
 
 interface TierFeatureGroup {
   label: string;
@@ -239,8 +244,50 @@ const nextSteps = [
 ];
 
 export default function PricingSection() {
+  const { plan: activePlan, setPlan } = useSubscription();
+  const [confirmation, setConfirmation] = useState<SubscriptionPlan | null>(null);
+
+  const orderedTiers = useMemo(() => {
+    const planOrder: SubscriptionPlan[] = ['free-ride', 'shred-pass', 'pro-loc', 'brand-crew'];
+    return [...tiers].sort((a, b) => planOrder.indexOf(a.id as SubscriptionPlan) - planOrder.indexOf(b.id as SubscriptionPlan));
+  }, []);
+
+  useEffect(() => {
+    if (!confirmation) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setConfirmation(null);
+    }, 2600);
+
+    return () => window.clearTimeout(timeout);
+  }, [confirmation]);
+
+  const handlePlanSelection = (plan: SubscriptionPlan) => {
+    setPlan(plan);
+    setConfirmation(plan);
+  };
+
+  const confirmationLabel = useMemo(() => {
+    if (!confirmation) {
+      return null;
+    }
+
+    const definition = getPlanDefinition(confirmation);
+    return `Le plan « ${definition.label} » est maintenant actif.`;
+  }, [confirmation]);
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="relative max-w-6xl mx-auto px-4 py-6">
+      {confirmation && confirmationLabel && (
+        <div className="fixed inset-x-0 top-24 flex justify-center z-30">
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-5 py-3 shadow-xl text-sm text-emerald-50 backdrop-blur">
+            <CheckCircle2 className="text-emerald-300" size={20} />
+            <span>{confirmationLabel}</span>
+          </div>
+        </div>
+      )}
       <div className="bg-gradient-to-r from-orange-500/20 via-purple-500/10 to-emerald-500/10 border border-dark-700 rounded-2xl p-8 mb-8">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div>
@@ -250,7 +297,7 @@ export default function PricingSection() {
             </div>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">ShredLoc Tiers System</h1>
             <p className="text-gray-300 max-w-2xl">
-              Une offre modulaire en trois axes — Visibilité, Performance, Avantage — pour servir riders, pros et marques. Chaque palier renforce l’engagement et ouvre de nouveaux leviers de monétisation.
+              Une offre modulaire en trois axes — Visibilité, Performance, Avantage — pour servir riders, pros et marques. Chaque palier renforce l’engagement et ouvre de nouveaux leviers de monétisation. Sélectionne librement un plan pour l’activer instantanément.
             </p>
           </div>
           <div className="bg-dark-900/70 border border-dark-700 rounded-xl p-5 text-sm text-gray-300 shadow-xl">
@@ -294,20 +341,29 @@ export default function PricingSection() {
       <div className="space-y-6 mb-12">
         <h2 className="text-2xl font-bold text-white">Paliers d’abonnement</h2>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-          {tiers.map((tier) => (
-            <div
-              key={tier.id}
-              className={`relative bg-dark-800 border rounded-2xl p-6 flex flex-col gap-5 transition-transform hover:-translate-y-1 hover:border-orange-500/40 ${
-                tier.badge ? 'border-orange-500/40 shadow-lg shadow-orange-500/10' : 'border-dark-700'
-              }`}
-            >
+          {orderedTiers.map((tier) => {
+            const isActive = activePlan === tier.id;
+            return (
+              <div
+                key={tier.id}
+                className={`relative bg-dark-800 border rounded-2xl p-6 flex flex-col gap-5 transition-transform hover:-translate-y-1 ${
+                  tier.badge ? 'border-orange-500/40 shadow-lg shadow-orange-500/10' : 'border-dark-700'
+                } ${isActive ? 'ring-2 ring-orange-400/60' : ''}`}
+              >
               {tier.badge && (
                 <span className="absolute -top-3 right-4 bg-orange-500 text-xs font-semibold uppercase tracking-wide text-white px-3 py-1 rounded-full">
                   {tier.badge}
                 </span>
               )}
+              {isActive && (
+                <span className="absolute -top-3 left-4 bg-emerald-500 text-xs font-semibold uppercase tracking-wide text-white px-3 py-1 rounded-full">
+                  Plan actuel
+                </span>
+              )}
               {tier.isB2B && (
-                <span className="absolute -top-3 left-4 bg-purple-500 text-xs font-semibold uppercase tracking-wide text-white px-3 py-1 rounded-full">
+                <span
+                  className={`absolute ${isActive ? 'top-6' : '-top-3'} left-4 bg-purple-500 text-xs font-semibold uppercase tracking-wide text-white px-3 py-1 rounded-full transition-all`}
+                >
                   B2B
                 </span>
               )}
@@ -342,12 +398,19 @@ export default function PricingSection() {
 
               <button
                 type="button"
-                className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl border border-orange-500/60 bg-orange-500/20 text-orange-200 hover:bg-orange-500/30 transition-colors px-4 py-2 text-sm font-semibold"
+                onClick={() => handlePlanSelection(tier.id as SubscriptionPlan)}
+                className={`mt-auto inline-flex items-center justify-center gap-2 rounded-xl border transition-colors px-4 py-2 text-sm font-semibold ${
+                  isActive
+                    ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
+                    : 'border-orange-500/60 bg-orange-500/20 text-orange-200 hover:bg-orange-500/30'
+                }`}
               >
-                Découvrir ce palier
+                <span>{isActive ? 'Plan actif' : 'Activer ce plan'}</span>
+                {!isActive && <ArrowRight size={16} className="shrink-0" />}
               </button>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
 
