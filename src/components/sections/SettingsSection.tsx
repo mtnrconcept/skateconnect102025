@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { Profile, Section } from '../../types';
 import { settingsCategories, quickSettingsLinks } from '../../data/settingsCatalog';
+import SubscriptionPlanTester from '../subscription/SubscriptionPlanTester';
 
 interface SettingsSectionProps {
   profile: Profile | null;
-  onNavigate: (section: Section) => void;
+  onNavigate: (section: Section) => boolean | void;
 }
 
 const STORAGE_KEY = 'shredloc:settings-preferences';
@@ -97,6 +98,8 @@ export default function SettingsSection({ profile, onNavigate }: SettingsSection
           )}
         </div>
       </div>
+
+      <SubscriptionPlanTester />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {quickLinks.map((link) => {

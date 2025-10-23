@@ -33,8 +33,8 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 interface HeaderProps {
   profile: Profile | null;
   currentSection?: Section;
-  onSectionChange?: (section: Section) => void;
-  onNavigateToContent?: (section: Section, options?: ContentNavigationOptions) => void;
+  onSectionChange?: (section: Section) => boolean | void;
+  onNavigateToContent?: (section: Section, options?: ContentNavigationOptions) => boolean | void;
   onSearchFocusChange?: (isActive: boolean) => void;
 }
 
@@ -393,11 +393,17 @@ export default function Header({
   };
 
   const navigateToSection = (section: Section, options?: ContentNavigationOptions) => {
+    let navigationResult: boolean | void = undefined;
     if (onNavigateToContent) {
-      onNavigateToContent(section, options);
+      navigationResult = onNavigateToContent(section, options);
     } else {
-      onSectionChange?.(section);
+      navigationResult = onSectionChange?.(section);
     }
+
+    if (navigationResult === false) {
+      return;
+    }
+
     setSearchTerm('');
     closeSearch();
   };
@@ -534,7 +540,7 @@ export default function Header({
 
               <button
                 type="button"
-                onClick={() => onSectionChange?.('settings')}
+                onClick={() => navigateToSection('settings')}
                 className="relative shrink-0 rounded-full p-2 transition-colors hover:bg-[#1f1f29]"
                 title="Paramètres"
               >
@@ -558,7 +564,7 @@ export default function Header({
             )}
           </button>
           <button
-            onClick={() => onSectionChange?.('messages')}
+            onClick={() => navigateToSection('messages')}
             className={`relative p-2 rounded-full transition-colors ${
               currentSection === 'messages' ? 'bg-orange-500/20 text-orange-400' : 'hover:bg-dark-700'
             }`}
