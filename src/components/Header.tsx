@@ -22,6 +22,14 @@ import { settingsCategories, quickSettingsLinks } from '../data/settingsCatalog'
 import type { Profile, Section, ContentNavigationOptions } from '../types';
 import type { LucideIcon } from 'lucide-react';
 
+const normalizeSearchValue = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 interface HeaderProps {
   profile: Profile | null;
   currentSection?: Section;
@@ -302,18 +310,70 @@ export default function Header({
   }, []);
 
   const filteredResults = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = searchTerm.trim();
     if (!term) {
+      return searchIndex.slice(0, 20);
+    }
+
+    const normalizedTokens = term
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => normalizeSearchValue(token));
+
+    if (normalizedTokens.length === 0) {
       return searchIndex.slice(0, 20);
     }
 
     return searchIndex
       .filter((item) => {
-        const haystack = `${item.label} ${item.description ?? ''} ${item.category}`.toLowerCase();
-        return haystack.includes(term);
+        const haystack = normalizeSearchValue(`${item.label} ${item.description ?? ''} ${item.category}`);
+        return normalizedTokens.every((token) => haystack.includes(token));
       })
       .slice(0, 20);
   }, [searchIndex, searchTerm]);
+
+  useEffect(() => {
+    if (searchTerm.trim().length > 0) {
+      setShowSearchResults(true);
+    }
+  }, [searchTerm]);
+
+  const highlightTokens = useMemo(() =>
+    searchTerm
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean),
+  [searchTerm]);
+
+  const highlightTokensLower = useMemo(
+    () => highlightTokens.map((token) => token.toLowerCase()),
+    [highlightTokens],
+  );
+
+  const highlightRegex = useMemo(() => {
+    if (highlightTokens.length === 0) {
+      return null;
+    }
+    const escaped = highlightTokens.map((token) => escapeRegExp(token));
+    return new RegExp(`(${escaped.join('|')})`, 'gi');
+  }, [highlightTokens]);
+
+  const renderHighlightedText = (text: string) => {
+    if (!highlightRegex || highlightTokensLower.length === 0) {
+      return text;
+    }
+
+    return text.split(highlightRegex).map((part, index) => {
+      const match = highlightTokensLower.includes(part.toLowerCase());
+      return match ? (
+        <span key={`${part}-${index}`} className="text-orange-400">
+          {part}
+        </span>
+      ) : (
+        <span key={`${part}-${index}`}>{part}</span>
+      );
+    });
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -454,10 +514,9 @@ export default function Header({
                               <IconResult size={18} />
                             </span>
                             <div className="flex flex-col">
-                              <span className="font-medium text-white">{result.label}</span>
+                              <span className="font-medium text-white">{renderHighlightedText(result.label)}</span>
                               <span className="text-xs text-gray-500">
-                                {result.category}
-                                {result.description ? ` • ${result.description}` : ''}
+                                {renderHighlightedText(result.description ? `${result.category} • ${result.description}` : result.category)}
                               </span>
                             </div>
                           </button>
