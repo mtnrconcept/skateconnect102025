@@ -7,6 +7,12 @@ export interface Profile {
   cover_url: string | null;
   skill_level: string | null;
   stance: string | null;
+  location?: string | null;
+  sponsors?: string[] | null;
+  favorite_tricks?: string[] | null;
+  achievements?: string[] | null;
+  legacy_followers_count?: number | null;
+  legacy_following_count?: number | null;
   created_at: string;
   updated_at: string;
 }
