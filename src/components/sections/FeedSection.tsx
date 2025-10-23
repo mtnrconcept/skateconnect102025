@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, MapPin, Send, Camera, Video, X, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Heart, MessageCircle, MapPin, Send, Video, X, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { uploadFile } from '../../lib/storage';
@@ -7,14 +7,22 @@ import { filterOutProfileMediaPosts } from '../../lib/postUtils';
 import { compressImage, validateMediaFile } from '../../lib/imageCompression';
 import CommentSection from '../CommentSection';
 import PostMediaViewer from '../PostMediaViewer';
+import FakeProfileModal from '../FakeProfileModal';
+import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId } from '../../data/fakeFeed';
 import type { Post, Profile } from '../../types';
+
+type FeedPost = Post & {
+  liked_by_user?: boolean;
+  isFake?: boolean;
+  segments?: ('all' | 'following' | 'local')[];
+};
 
 interface FeedSectionProps {
   currentUser: Profile | null;
 }
 
 export default function FeedSection({ currentUser }: FeedSectionProps) {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [newPostContent, setNewPostContent] = useState('');
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -27,10 +35,32 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const [showStoryViewer, setShowStoryViewer] = useState(false);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [activeStoryMediaIndex, setActiveStoryMediaIndex] = useState(0);
+  const [activeFakeProfileId, setActiveFakeProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     loadPosts();
   }, [filter]);
+
+  const applyFilter = (data: FeedPost[]) => {
+    if (filter === 'all') {
+      return data;
+    }
+
+    return data.filter((post) => {
+      if (!post.isFake) {
+        return true;
+      }
+      if (!post.segments || post.segments.length === 0) {
+        return filter === 'all';
+      }
+      return post.segments.includes(filter as 'following' | 'local');
+    });
+  };
+
+  const loadFallbackPosts = () => {
+    const filtered = applyFilter(fakeFeedPosts).map((post) => ({ ...post }));
+    setPosts(filtered);
+  };
 
   const loadPosts = async () => {
     try {
@@ -43,7 +73,12 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
 
       if (error) throw error;
 
-      const filteredData = filterOutProfileMediaPosts(data || []);
+      const filteredData = filterOutProfileMediaPosts(data || []) as FeedPost[];
+
+      if (!filteredData || filteredData.length === 0) {
+        loadFallbackPosts();
+        return;
+      }
 
       if (currentUser && filteredData.length > 0) {
         const postIds = filteredData.map(p => p.id);
@@ -58,12 +93,13 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           ...p,
           liked_by_user: likedIds.has(p.id),
         }));
-        setPosts(postsWithLikes);
+        setPosts(applyFilter(postsWithLikes as FeedPost[]));
       } else {
-        setPosts(filteredData);
+        setPosts(applyFilter(filteredData));
       }
     } catch (error) {
       console.error('Error loading posts:', error);
+      loadFallbackPosts();
     } finally {
       setLoading(false);
     }
@@ -161,6 +197,18 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     if (!post) return;
 
     try {
+      if (post.isFake) {
+        setPosts(prev => prev.map(p =>
+          p.id === postId
+            ? {
+              ...p,
+              liked_by_user: !p.liked_by_user,
+              likes_count: Math.max(0, (p.likes_count || 0) + (p.liked_by_user ? -1 : 1)),
+            }
+            : p
+        ));
+        return;
+      }
       if (post.liked_by_user) {
         await supabase
           .from('likes')
@@ -216,6 +264,26 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   };
 
   const storyPosts = posts.filter((post) => post.media_urls && post.media_urls.length > 0);
+
+  const activeFakeProfile = useMemo(() => {
+    if (!activeFakeProfileId) return null;
+    return fakeProfilesById[activeFakeProfileId] ?? null;
+  }, [activeFakeProfileId]);
+
+  const activeFakeProfilePosts = useMemo(() => {
+    if (!activeFakeProfileId) return [];
+    const fallback = fakePostsByProfileId[activeFakeProfileId] || [];
+    const inFeed = posts.filter((post) => post.user_id === activeFakeProfileId && post.isFake);
+    if (inFeed.length > 0) {
+      return inFeed;
+    }
+    return fallback;
+  }, [activeFakeProfileId, posts]);
+
+  const handleAvatarClick = (post: FeedPost) => {
+    if (!post.isFake) return;
+    setActiveFakeProfileId(post.user_id);
+  };
 
   const isVideoUrl = (url: string) => {
     try {
@@ -423,17 +491,25 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
             <div key={post.id} className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
               <div className="p-4">
                 <div className="flex items-start gap-3 mb-3">
-                  {post.user?.avatar_url ? (
-                    <img
-                      src={post.user.avatar_url}
-                      alt={getUserDisplayName(post.user)}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-orange-500"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold">
-                      {getUserInitial(post.user)}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleAvatarClick(post)}
+                    className={`group relative flex-shrink-0 focus:outline-none ${post.isFake ? 'rounded-full focus-visible:ring-2 focus-visible:ring-orange-500' : ''}`}
+                    title={post.isFake ? 'Voir le profil' : getUserDisplayName(post.user)}
+                    disabled={!post.isFake}
+                  >
+                    {post.user?.avatar_url ? (
+                      <img
+                        src={post.user.avatar_url}
+                        alt={getUserDisplayName(post.user)}
+                        className={`w-10 h-10 rounded-full object-cover border-2 ${post.isFake ? 'border-orange-500 transition-colors group-hover:border-orange-400' : 'border-orange-500'}`}
+                      />
+                    ) : (
+                      <div className={`w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold ${post.isFake ? 'transition-colors group-hover:bg-orange-400' : ''}`}>
+                        {getUserInitial(post.user)}
+                      </div>
+                    )}
+                  </button>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-white">{getUserDisplayName(post.user)}</span>
@@ -559,6 +635,14 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           onLike={handleLike}
           currentUser={currentUser}
           onCommentCountChange={handleCommentCountChange}
+        />
+      )}
+      {activeFakeProfile && (
+        <FakeProfileModal
+          profile={activeFakeProfile}
+          posts={activeFakeProfilePosts}
+          onClose={() => setActiveFakeProfileId(null)}
+          onPostLike={handleLike}
         />
       )}
     </div>
