@@ -1,4 +1,4 @@
-import type { Post, Profile, UserXP } from '../types';
+import type { Comment, Post, Profile, UserXP } from '../types';
 
 export type FeedSegment = 'all' | 'following' | 'local';
 
@@ -11,10 +11,22 @@ export type FakeProfileDetails = Profile & {
   achievements: string[];
 };
 
+export type FakeComment = Comment & {
+  user: FakeProfileDetails;
+};
+
+export type FakeMessage = {
+  id: string;
+  sender: 'fake' | 'user';
+  content: string;
+  timestamp: string;
+};
+
 export type FakeFeedPost = Post & {
   user: FakeProfileDetails;
   isFake: true;
   segments: FeedSegment[];
+  fakeComments?: FakeComment[];
 };
 
 export type FakeLeaderboardEntry = UserXP & {
@@ -136,13 +148,51 @@ export const fakeFeedPosts: FakeFeedPost[] = [
     spot_id: null,
     post_type: 'photo',
     likes_count: 1284,
-    comments_count: 42,
+    comments_count: 4,
     created_at: daysAgo(1),
     updated_at: daysAgo(1),
     user: fakeProfiles[0],
     liked_by_user: false,
     isFake: true,
     segments: ['all', 'following'],
+    fakeComments: [
+      {
+        id: 'fake-comment-aurora-1',
+        post_id: 'fake-post-aurora-1',
+        user_id: 'fake-rider-keita',
+        content: 'La lumière est dingue, on cale une session sunrise ensemble bientôt !',
+        created_at: daysAgo(1),
+        updated_at: daysAgo(1),
+        user: fakeProfiles[1],
+      },
+      {
+        id: 'fake-comment-aurora-2',
+        post_id: 'fake-post-aurora-1',
+        user_id: 'fake-rider-ivy',
+        content: 'Toujours partante pour filmer ta prochaine part, c’est hypnotisant ✨',
+        created_at: daysAgo(1),
+        updated_at: daysAgo(1),
+        user: fakeProfiles[2],
+      },
+      {
+        id: 'fake-comment-aurora-3',
+        post_id: 'fake-post-aurora-1',
+        user_id: 'fake-rider-sahana',
+        content: 'Les vibes de Barcelone me manquent, merci pour l’inspiration !',
+        created_at: daysAgo(1),
+        updated_at: daysAgo(1),
+        user: fakeProfiles[4],
+      },
+      {
+        id: 'fake-comment-aurora-4',
+        post_id: 'fake-post-aurora-1',
+        user_id: 'fake-rider-tom',
+        content: 'La plaza est parfaite pour shooter un clip de nuit aussi 👀',
+        created_at: daysAgo(1),
+        updated_at: daysAgo(1),
+        user: fakeProfiles[3],
+      },
+    ],
   },
   {
     id: 'fake-post-keita-1',
@@ -156,13 +206,42 @@ export const fakeFeedPosts: FakeFeedPost[] = [
     spot_id: null,
     post_type: 'photo',
     likes_count: 876,
-    comments_count: 31,
+    comments_count: 3,
     created_at: daysAgo(2),
     updated_at: daysAgo(2),
     user: fakeProfiles[1],
     liked_by_user: false,
     isFake: true,
     segments: ['all', 'local'],
+    fakeComments: [
+      {
+        id: 'fake-comment-keita-1',
+        post_id: 'fake-post-keita-1',
+        user_id: 'fake-rider-aurora',
+        content: 'Tu veux que je filme ce soir ? J’ai une nouvelle focale à tester.',
+        created_at: daysAgo(2),
+        updated_at: daysAgo(2),
+        user: fakeProfiles[0],
+      },
+      {
+        id: 'fake-comment-keita-2',
+        post_id: 'fake-post-keita-1',
+        user_id: 'fake-rider-ivy',
+        content: 'Je passe avec le crew Berlin en visite, on amène l’énergie !',
+        created_at: daysAgo(2),
+        updated_at: daysAgo(2),
+        user: fakeProfiles[2],
+      },
+      {
+        id: 'fake-comment-keita-3',
+        post_id: 'fake-post-keita-1',
+        user_id: 'fake-rider-sahana',
+        content: 'Grave chaud, j’ai un stabilisateur à tester pour les manuals 🔥',
+        created_at: daysAgo(2),
+        updated_at: daysAgo(2),
+        user: fakeProfiles[4],
+      },
+    ],
   },
   {
     id: 'fake-post-ivy-1',
@@ -175,13 +254,60 @@ export const fakeFeedPosts: FakeFeedPost[] = [
     spot_id: null,
     post_type: 'photo',
     likes_count: 1420,
-    comments_count: 65,
+    comments_count: 5,
     created_at: daysAgo(3),
     updated_at: daysAgo(3),
     user: fakeProfiles[2],
     liked_by_user: false,
     isFake: true,
     segments: ['all', 'following'],
+    fakeComments: [
+      {
+        id: 'fake-comment-ivy-1',
+        post_id: 'fake-post-ivy-1',
+        user_id: 'fake-rider-aurora',
+        content: 'Ce toit est une œuvre d’art ! Tu partages le plan d’accès ?',
+        created_at: daysAgo(3),
+        updated_at: daysAgo(3),
+        user: fakeProfiles[0],
+      },
+      {
+        id: 'fake-comment-ivy-2',
+        post_id: 'fake-post-ivy-1',
+        user_id: 'fake-rider-keita',
+        content: 'Les lines de ce spot ont l’air irréelles, je veux tester ça !',
+        created_at: daysAgo(3),
+        updated_at: daysAgo(3),
+        user: fakeProfiles[1],
+      },
+      {
+        id: 'fake-comment-ivy-3',
+        post_id: 'fake-post-ivy-1',
+        user_id: 'fake-rider-tom',
+        content: 'Je peux t’aider à bétonner une extension si tu veux !',
+        created_at: daysAgo(3),
+        updated_at: daysAgo(3),
+        user: fakeProfiles[3],
+      },
+      {
+        id: 'fake-comment-ivy-4',
+        post_id: 'fake-post-ivy-1',
+        user_id: 'fake-rider-sahana',
+        content: 'Ça me donne envie de faire un tour de toits à Lisbonne ✨',
+        created_at: daysAgo(3),
+        updated_at: daysAgo(3),
+        user: fakeProfiles[4],
+      },
+      {
+        id: 'fake-comment-ivy-5',
+        post_id: 'fake-post-ivy-1',
+        user_id: 'fake-rider-aurora',
+        content: 'J’apporte le drone la prochaine fois qu’on ride ensemble !',
+        created_at: daysAgo(3),
+        updated_at: daysAgo(3),
+        user: fakeProfiles[0],
+      },
+    ],
   },
   {
     id: 'fake-post-tom-1',
@@ -194,13 +320,42 @@ export const fakeFeedPosts: FakeFeedPost[] = [
     spot_id: null,
     post_type: 'photo',
     likes_count: 990,
-    comments_count: 28,
+    comments_count: 3,
     created_at: daysAgo(4),
     updated_at: daysAgo(4),
     user: fakeProfiles[3],
     liked_by_user: false,
     isFake: true,
     segments: ['all', 'local'],
+    fakeComments: [
+      {
+        id: 'fake-comment-tom-1',
+        post_id: 'fake-post-tom-1',
+        user_id: 'fake-rider-keita',
+        content: 'Tu me montres comment vous avez coulé ça ? Je veux lancer un spot DIY chez moi.',
+        created_at: daysAgo(4),
+        updated_at: daysAgo(4),
+        user: fakeProfiles[1],
+      },
+      {
+        id: 'fake-comment-tom-2',
+        post_id: 'fake-post-tom-1',
+        user_id: 'fake-rider-ivy',
+        content: 'Je viens filmer la session nocturne, c’est trop beau !',
+        created_at: daysAgo(4),
+        updated_at: daysAgo(4),
+        user: fakeProfiles[2],
+      },
+      {
+        id: 'fake-comment-tom-3',
+        post_id: 'fake-post-tom-1',
+        user_id: 'fake-rider-aurora',
+        content: 'On pourrait organiser un atelier DIY pour la communauté 👷‍♀️',
+        created_at: daysAgo(4),
+        updated_at: daysAgo(4),
+        user: fakeProfiles[0],
+      },
+    ],
   },
   {
     id: 'fake-post-sahana-1',
@@ -213,13 +368,33 @@ export const fakeFeedPosts: FakeFeedPost[] = [
     spot_id: null,
     post_type: 'photo',
     likes_count: 654,
-    comments_count: 17,
+    comments_count: 2,
     created_at: daysAgo(5),
     updated_at: daysAgo(5),
     user: fakeProfiles[4],
     liked_by_user: false,
     isFake: true,
     segments: ['all'],
+    fakeComments: [
+      {
+        id: 'fake-comment-sahana-1',
+        post_id: 'fake-post-sahana-1',
+        user_id: 'fake-rider-aurora',
+        content: 'Tes cartes sont devenues indispensables pour mes trips européens.',
+        created_at: daysAgo(5),
+        updated_at: daysAgo(5),
+        user: fakeProfiles[0],
+      },
+      {
+        id: 'fake-comment-sahana-2',
+        post_id: 'fake-post-sahana-1',
+        user_id: 'fake-rider-keita',
+        content: 'J’ai envie de découvrir l’Alfama maintenant, merci pour les bonnes ondes !',
+        created_at: daysAgo(5),
+        updated_at: daysAgo(5),
+        user: fakeProfiles[1],
+      },
+    ],
   },
   {
     id: 'fake-post-aurora-2',
@@ -230,15 +405,78 @@ export const fakeFeedPosts: FakeFeedPost[] = [
     spot_id: null,
     post_type: 'text',
     likes_count: 532,
-    comments_count: 12,
+    comments_count: 2,
     created_at: daysAgo(6),
     updated_at: daysAgo(6),
     user: fakeProfiles[0],
     liked_by_user: false,
     isFake: true,
     segments: ['all', 'following'],
+    fakeComments: [
+      {
+        id: 'fake-comment-aurora-5',
+        post_id: 'fake-post-aurora-2',
+        user_id: 'fake-rider-ivy',
+        content: 'On réserve nos places ! Tu organises un Q&A après la projo ?',
+        created_at: daysAgo(6),
+        updated_at: daysAgo(6),
+        user: fakeProfiles[2],
+      },
+      {
+        id: 'fake-comment-aurora-6',
+        post_id: 'fake-post-aurora-2',
+        user_id: 'fake-rider-keita',
+        content: 'J’ai hâte de voir ça, tu vas inspirer tout le monde.',
+        created_at: daysAgo(6),
+        updated_at: daysAgo(6),
+        user: fakeProfiles[1],
+      },
+    ],
   },
 ];
+
+export const fakeMessagesByProfileId: Record<string, FakeMessage[]> = {
+  'fake-rider-aurora': [
+    {
+      id: 'fake-message-aurora-1',
+      sender: 'fake',
+      content: 'Merci pour le soutien sur “Lines of Light” ! Tu viens à la première ?',
+      timestamp: daysAgo(1),
+    },
+  ],
+  'fake-rider-keita': [
+    {
+      id: 'fake-message-keita-1',
+      sender: 'fake',
+      content: 'Toujours partant pour une session à République, envoie quand tu veux !',
+      timestamp: daysAgo(2),
+    },
+  ],
+  'fake-rider-ivy': [
+    {
+      id: 'fake-message-ivy-1',
+      sender: 'fake',
+      content: 'Si tu veux qu’on filme un clip ensemble, je suis open la semaine prochaine.',
+      timestamp: daysAgo(3),
+    },
+  ],
+  'fake-rider-tom': [
+    {
+      id: 'fake-message-tom-1',
+      sender: 'fake',
+      content: 'On organise une session DIY vendredi soir, tu passes ?',
+      timestamp: daysAgo(4),
+    },
+  ],
+  'fake-rider-sahana': [
+    {
+      id: 'fake-message-sahana-1',
+      sender: 'fake',
+      content: 'Je t’envoie la carte des spots cachés si tu veux préparer un trip.',
+      timestamp: daysAgo(5),
+    },
+  ],
+};
 
 export const fakeLeaderboardEntries: FakeLeaderboardEntry[] = [
   {

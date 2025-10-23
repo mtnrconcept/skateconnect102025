@@ -8,12 +8,25 @@ interface FakeProfileModalProps {
   posts: (Post & { isFake?: boolean })[];
   onClose: () => void;
   onPostLike: (postId: string) => void;
+  onToggleFollow: () => void;
+  isFollowing: boolean;
+  onMessage: () => void;
+  followerCount: number;
 }
 
-export default function FakeProfileModal({ profile, posts, onClose, onPostLike }: FakeProfileModalProps) {
+export default function FakeProfileModal({
+  profile,
+  posts,
+  onClose,
+  onPostLike,
+  onToggleFollow,
+  isFollowing,
+  onMessage,
+  followerCount,
+}: FakeProfileModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm px-4 py-6">
-      <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-dark-700 bg-[#101019] shadow-2xl">
+      <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-dark-700 bg-[#101019] shadow-2xl max-h-[92vh]">
         <button
           type="button"
           onClick={onClose}
@@ -31,7 +44,7 @@ export default function FakeProfileModal({ profile, posts, onClose, onPostLike }
           <div className="h-32 w-full bg-gradient-to-r from-orange-500/40 via-pink-500/30 to-purple-500/40" />
         )}
 
-        <div className="-mt-12 px-6 pb-6">
+        <div className="-mt-12 px-6 pb-6 overflow-y-auto max-h-[calc(92vh-6rem)]">
           <div className="flex flex-col gap-6 rounded-3xl border border-dark-700 bg-[#13131d] p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
               <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-3xl border-2 border-orange-500/70 bg-orange-500">
@@ -64,11 +77,32 @@ export default function FakeProfileModal({ profile, posts, onClose, onPostLike }
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={onToggleFollow}
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                  isFollowing
+                    ? 'border-orange-500 bg-orange-500/20 text-orange-200 hover:bg-orange-500/30'
+                    : 'border-orange-500 bg-orange-500 text-white hover:bg-orange-600'
+                }`}
+              >
+                {isFollowing ? 'Suivi·e' : 'Suivre'}
+              </button>
+              <button
+                type="button"
+                onClick={onMessage}
+                className="inline-flex items-center gap-2 rounded-full border border-dark-600 px-4 py-2 text-sm font-semibold text-white hover:border-orange-500/70 hover:text-orange-200"
+              >
+                Envoyer un message
+              </button>
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-dark-700 bg-[#181821] px-4 py-3">
                 <div className="text-xs uppercase tracking-wide text-gray-500">Followers</div>
                 <div className="text-xl font-semibold text-white">
-                  {new Intl.NumberFormat('fr-FR').format(profile.followers)}
+                  {new Intl.NumberFormat('fr-FR').format(followerCount)}
                 </div>
               </div>
               <div className="rounded-2xl border border-dark-700 bg-[#181821] px-4 py-3">
