@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, TrendingUp, Award, Crown, Medal } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { fakeLeaderboardEntries } from '../../data/fakeFeed';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import type { Profile, UserXP } from '../../types';
 
@@ -18,6 +19,18 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
   const [userRank, setUserRank] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'global' | 'week' | 'month'>('global');
+
+  const buildRankedLeaderboard = (entries: (UserXP & { profile?: Profile })[]): LeaderboardEntry[] => {
+    const realEntries = entries.map((entry) => ({ ...entry }));
+    const fakeEntries = fakeLeaderboardEntries.map((entry) => ({ ...entry }));
+
+    return [...realEntries, ...fakeEntries]
+      .sort((a, b) => b.total_xp - a.total_xp)
+      .map((entry, index) => ({
+        ...entry,
+        rank: index + 1,
+      }));
+  };
 
   useEffect(() => {
     if (profile) {
@@ -37,17 +50,19 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
 
       if (error) throw error;
 
-      const rankedData: LeaderboardEntry[] = (data || []).map((entry, index) => ({
-        ...entry,
-        rank: index + 1,
-      }));
+      const supabaseEntries: (UserXP & { profile?: Profile })[] = (data || []).map((entry) => ({ ...entry }));
+      const rankedData = buildRankedLeaderboard(supabaseEntries);
 
       setLeaderboard(rankedData);
 
-      const currentUserRank = rankedData.find(entry => entry.user_id === profile.id);
-      setUserRank(currentUserRank || null);
+      const currentUserRank = rankedData.find(entry => entry.user_id === profile.id) || null;
+      setUserRank(currentUserRank);
     } catch (error) {
       console.error('Error loading leaderboard:', error);
+      const fallbackData = buildRankedLeaderboard([]);
+      setLeaderboard(fallbackData);
+      const fallbackRank = fallbackData.find(entry => entry.user_id === profile.id) || null;
+      setUserRank(fallbackRank);
     } finally {
       setLoading(false);
     }
