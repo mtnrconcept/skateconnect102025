@@ -32,6 +32,10 @@
   scrollbar-width: none;
 }
 
+.neon-logo {
+  filter: drop-shadow(0 0 12px rgba(255, 140, 0, 0.7)) drop-shadow(0 0 28px rgba(255, 140, 0, 0.45));
+}
+
 .spot-hover-popup {
   z-index: 9999 !important;
   position: relative !important;
