@@ -141,3 +141,35 @@
 .animate-slide-up {
   animation: slide-up 0.4s ease-out both;
 }
+
+@keyframes cards-leave-up {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+}
+
+.animate-card-leave {
+  animation: cards-leave-up 0.3s ease-in forwards;
+}
+
+@keyframes cards-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-card-enter {
+  animation: cards-enter-up 0.3s ease-out forwards;
+}
