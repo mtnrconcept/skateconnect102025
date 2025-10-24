@@ -97,7 +97,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [mapWidthRatio, isDesktop]);
+  }, [isDesktop]);
 
   useEffect(() => {
     if (!map.current || loading) return;
