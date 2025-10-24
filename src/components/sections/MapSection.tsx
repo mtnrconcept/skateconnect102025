@@ -602,7 +602,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
               Découvre les parks, bowls, DIY et transitions autour de toi. La carte reste visible pendant que tu explores les spots détaillés.
             </p>
           </div>
-          <div className="flex w-full flex-col gap-3 lg:w-80">
+          <div className="flex w-full flex-col gap-3 lg:w-80 lg:hidden">
             <div className="relative">
               <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
               <input
@@ -636,11 +636,28 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div className="grid h-full grid-cols-1 lg:grid-cols-[minmax(0,1fr),minmax(0,1.35fr)]">
+        <div className="grid h-full grid-cols-1 lg:grid-cols-[minmax(0,0.9fr),minmax(0,1.6fr)]">
           <div className="relative h-[360px] overflow-hidden border-b border-dark-800 lg:h-full lg:border-b-0 lg:border-r lg:border-dark-800">
             <div ref={mapContainer} className="absolute inset-0" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark-900/70 to-transparent" />
+
+            <div className="absolute inset-x-0 top-6 hidden justify-center px-6 lg:flex">
+              <div className="flex w-full max-w-2xl items-center gap-3 rounded-2xl border border-dark-700/70 bg-dark-900/90 p-4 shadow-xl shadow-black/30 backdrop-blur">
+                <div className="relative flex-1">
+                  <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Rechercher un spot ou une ville"
+                    className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+                  />
+                </div>
+                <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70">
+                  <Filter size={18} className="text-orange-400" />
+                  Affiner les filtres
+                </button>
+              </div>
+            </div>
 
             <div className="absolute left-4 top-4 flex flex-col gap-3">
               <button
@@ -678,8 +695,8 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                 </div>
               ) : (
                 <div className="flex h-full flex-col">
-                  <div ref={cardsContainerRef} className="flex-1 overflow-y-auto px-6 py-6">
-                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div ref={cardsContainerRef} className="flex-1 overflow-y-auto px-6 pt-6 pb-12 lg:pb-16">
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                       {visibleSpots.map((spot) => {
                         const coverPhotoUrl = spotCoverPhotos[spot.id];
                         const difficulty = Math.max(0, Math.min(5, spot.difficulty ?? 0));
@@ -697,7 +714,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                             }`}
                             data-eighteenth-card={spot.id === eighteenthSpotId ? 'true' : undefined}
                           >
-                            <div className="relative h-36 w-full overflow-hidden">
+                            <div className="relative h-32 w-full overflow-hidden xl:h-36">
                               {coverPhotoUrl ? (
                                 <img
                                   src={coverPhotoUrl}
@@ -725,7 +742,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                               </div>
                             </div>
 
-                            <div className="flex flex-col gap-3 p-5">
+                            <div className="flex flex-col gap-3 p-4 sm:p-5">
                               <div className="flex items-start justify-between gap-3">
                                 <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
                                 {spot.creator?.username && (
