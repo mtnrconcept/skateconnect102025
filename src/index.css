@@ -150,7 +150,7 @@
 
   to {
     opacity: 0;
-    transform: translateY(-24px);
+    transform: translateY(-110%);
   }
 }
 
@@ -161,7 +161,7 @@
 @keyframes cards-enter-up {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(110%);
   }
 
   to {
