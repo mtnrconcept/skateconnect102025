@@ -423,7 +423,6 @@ function App() {
           </div>
           <p className="text-gray-400">Chargement...</p>
         </div>
-      </div>
     );
   } else if (!session) {
     content = <Auth onAuthSuccess={handleAuthSuccess} />;
