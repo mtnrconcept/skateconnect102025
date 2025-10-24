@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { MapPin, Filter, Plus, Navigation } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -27,11 +28,48 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [isDesktop, setIsDesktop] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
+  const [mapWidthRatio, setMapWidthRatio] = useState(0.38);
+  const [isResizing, setIsResizing] = useState(false);
+  const pointerMoveHandlerRef = useRef<((event: PointerEvent) => void) | null>(null);
+  const pointerUpHandlerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setLoading(true);
     loadSpots();
   }, [filter]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleViewportChange = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    handleViewportChange();
+    window.addEventListener('resize', handleViewportChange);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isDesktop) return;
+
+    if (pointerMoveHandlerRef.current) {
+      window.removeEventListener('pointermove', pointerMoveHandlerRef.current);
+      pointerMoveHandlerRef.current = null;
+    }
+
+    if (pointerUpHandlerRef.current) {
+      window.removeEventListener('pointerup', pointerUpHandlerRef.current);
+      pointerUpHandlerRef.current = null;
+    }
+
+    setIsResizing(false);
+  }, [isDesktop]);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -72,6 +110,25 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       map.current = null;
     };
   }, []);
+
+  useEffect(() => () => {
+    if (pointerMoveHandlerRef.current) {
+      window.removeEventListener('pointermove', pointerMoveHandlerRef.current);
+    }
+    if (pointerUpHandlerRef.current) {
+      window.removeEventListener('pointerup', pointerUpHandlerRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!map.current || !isDesktop) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      map.current?.resize();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [mapWidthRatio, isDesktop]);
 
   useEffect(() => {
     if (!map.current || loading) return;
@@ -439,6 +496,51 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     }
   };
 
+  const MIN_RATIO = 0.28;
+  const MAX_RATIO = 0.68;
+
+  const updateMapWidthFromPointer = (clientX: number) => {
+    if (!layoutRef.current) return;
+    const rect = layoutRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const relativeX = clientX - rect.left;
+    const ratio = relativeX / rect.width;
+    const clampedRatio = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio));
+    setMapWidthRatio(clampedRatio);
+  };
+
+  const handleResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isDesktop) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    setIsResizing(true);
+    updateMapWidthFromPointer(event.clientX);
+
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
+      updateMapWidthFromPointer(pointerEvent.clientX);
+    };
+
+    const handlePointerUp = () => {
+      setIsResizing(false);
+      if (pointerMoveHandlerRef.current) {
+        window.removeEventListener('pointermove', pointerMoveHandlerRef.current);
+      }
+      if (pointerUpHandlerRef.current) {
+        window.removeEventListener('pointerup', pointerUpHandlerRef.current);
+      }
+      pointerMoveHandlerRef.current = null;
+      pointerUpHandlerRef.current = null;
+    };
+
+    pointerMoveHandlerRef.current = handlePointerMove;
+    pointerUpHandlerRef.current = handlePointerUp;
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+  };
+
   const filterButtons = [
     { id: 'all', label: 'Tous' },
     { id: 'street', label: 'Street' },
@@ -447,8 +549,13 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     { id: 'diy', label: 'DIY' },
   ];
 
+  const mapColumnWidth = Math.round(mapWidthRatio * 1000) / 10;
+  const gridTemplateColumns = isDesktop
+    ? `${mapColumnWidth}% 20px calc(100% - ${mapColumnWidth}% - 20px)`
+    : undefined;
+
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-3xl border border-dark-700 bg-dark-900/70 shadow-2xl shadow-orange-900/10 min-h-[640px] lg:h-[calc(100vh-8rem)] lg:max-h-[calc(100vh-8rem)]">
+    <div className="relative flex flex-col overflow-hidden rounded-3xl border border-dark-700 bg-dark-900/70 shadow-2xl shadow-orange-900/10 min-h-[640px] lg:h-[calc(100vh-13rem)] lg:max-h-[calc(100vh-13rem)]">
       <div className="border-b border-dark-700 bg-dark-900/80 px-6 py-6 backdrop-blur">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -497,7 +604,11 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div className="grid h-full grid-cols-1 lg:grid-cols-[minmax(0,0.9fr),minmax(0,1.6fr)]">
+        <div
+          ref={layoutRef}
+          className="grid h-full grid-cols-1"
+          style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
+        >
           <div className="relative h-[360px] overflow-hidden border-b border-dark-800 lg:h-full lg:border-b-0 lg:border-r lg:border-dark-800">
             <div ref={mapContainer} className="absolute inset-0" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
@@ -538,6 +649,22 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
               <Plus size={18} />
               Ajouter un spot
             </button>
+          </div>
+
+          <div className="hidden lg:flex items-center justify-center">
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Redimensionner la carte"
+              onPointerDown={handleResizeStart}
+              className={`relative h-full w-5 cursor-col-resize rounded-full transition-colors ${
+                isResizing ? 'bg-orange-500/70 shadow-[0_0_0_1px_rgba(251,191,36,0.45)]' : 'bg-dark-700/60 hover:bg-orange-400/40'
+              }`}
+            >
+              <span className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 text-[10px] font-semibold uppercase tracking-[0.3em] text-orange-200/80 xl:block">
+                ← →
+              </span>
+            </div>
           </div>
 
           <div className="relative bg-dark-900/80">

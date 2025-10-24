@@ -56,7 +56,7 @@ export default function SpotGrid({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="relative flex-1 overflow-y-auto px-6 pt-6 pb-28">
+      <div className="relative flex-1 overflow-y-auto px-6 pt-6 pb-28 lg:pb-48">
         <div
           id={gridId}
           className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
@@ -75,7 +75,7 @@ export default function SpotGrid({
                 className="group overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
                 role="listitem"
               >
-                <div className="relative h-32 w-full overflow-hidden xl:h-36">
+                <div className="relative w-full overflow-hidden aspect-square">
                   {mediaUrl ? (
                     <img
                       src={mediaUrl}
@@ -129,17 +129,28 @@ export default function SpotGrid({
         </div>
 
         {shouldShowToggle && (
-          <div className="sticky bottom-0 -mx-6 mt-6 bg-gradient-to-t from-dark-900 via-dark-900/95 to-dark-900/20 px-6 pb-4 pt-6">
+          <>
+            <div className="sticky bottom-0 -mx-6 mt-6 bg-gradient-to-t from-dark-900 via-dark-900/95 to-dark-900/20 px-6 pb-4 pt-6 lg:hidden">
+              <button
+                type="button"
+                onClick={handleToggle}
+                className="w-full rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl"
+                aria-expanded={expanded}
+                aria-controls={gridId}
+              >
+                {toggleLabel}
+              </button>
+            </div>
             <button
               type="button"
               onClick={handleToggle}
-              className="w-full rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl"
+              className="hidden lg:fixed lg:bottom-[7.5rem] lg:right-16 lg:z-40 lg:inline-flex lg:min-w-[240px] lg:items-center lg:justify-center rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.35em] text-white shadow-lg shadow-orange-900/40 transition-transform hover:-translate-y-1 hover:shadow-xl"
               aria-expanded={expanded}
               aria-controls={gridId}
             >
               {toggleLabel}
             </button>
-          </div>
+          </>
         )}
       </div>
     </div>
