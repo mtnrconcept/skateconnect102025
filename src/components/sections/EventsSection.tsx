@@ -3,6 +3,7 @@ import { Calendar, MapPin, Users, CheckCircle2, AlertCircle, Share2 } from 'luci
 import { getStoredEventRegistrations, registerForEvent } from '../../lib/engagement';
 import type { CommunityEvent, Profile } from '../../types';
 import { eventsCatalog } from '../../data/eventsCatalog';
+import { generateICS, getICSFileName } from '../../lib/calendar';
 
 interface EventsSectionProps {
   profile?: Profile | null;
@@ -68,6 +69,61 @@ export default function EventsSection({ profile }: EventsSectionProps) {
         ...prev,
         [event.id]: {
           message: result.message,
+          tone: 'info',
+        },
+      }));
+    }
+  };
+
+  const handleAddToCalendar = async (event: CommunityEvent) => {
+    try {
+      const icsContent = generateICS(event);
+      const fileName = getICSFileName(event);
+
+      if (typeof navigator !== 'undefined' && 'share' in navigator && typeof File !== 'undefined') {
+        const file = new File([icsContent], fileName, { type: 'text/calendar' });
+        const shareData: ShareData & { files?: File[] } = {
+          title: event.title,
+          text: `${event.title} – ${event.location}`,
+          files: [file],
+        };
+
+        if (!('canShare' in navigator) || navigator.canShare({ files: [file] })) {
+          await navigator.share(shareData);
+          setFeedback((prev) => ({
+            ...prev,
+            [event.id]: {
+              message: "Événement partagé avec ton agenda !",
+              tone: 'success',
+            },
+          }));
+          return;
+        }
+      }
+
+      const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setFeedback((prev) => ({
+        ...prev,
+        [event.id]: {
+          message: "Fichier ICS téléchargé. Ajoute-le à ton agenda !",
+          tone: 'success',
+        },
+      }));
+    } catch (error) {
+      console.error('calendar-export-error', error);
+      setFeedback((prev) => ({
+        ...prev,
+        [event.id]: {
+          message: "Impossible d'ouvrir le partage. Télécharge le fichier ICS manuellement.",
           tone: 'info',
         },
       }));
@@ -164,6 +220,7 @@ export default function EventsSection({ profile }: EventsSectionProps) {
                     </button>
                     <button
                       type="button"
+                      onClick={() => handleAddToCalendar(event)}
                       className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-dark-600 text-gray-300 hover:border-orange-400 hover:text-white transition-colors gap-2"
                     >
                       <Share2 size={18} />
