@@ -423,9 +423,10 @@ function App() {
           </div>
           <p className="text-gray-400">Chargement...</p>
         </div>
+      </div>
     );
   } else if (!session) {
-    content = <Auth onAuthSuccess={handleAuthSuccess} />
+    content = <Auth onAuthSuccess={handleAuthSuccess} />;
   } else {
     content = (
       <SponsorProvider profile={activeProfile}>
