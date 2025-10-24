@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import type { Profile, Section } from '../../types';
+import { ChevronRight, Megaphone, Sparkles } from 'lucide-react';
+import type { Profile, ProfileExperienceMode, Section } from '../../types';
 import { settingsCategories, quickSettingsLinks } from '../../data/settingsCatalog';
 import SubscriptionPlanTester from '../subscription/SubscriptionPlanTester';
+import { sponsorModeHighlights } from '../../data/sponsorExperience';
 
 interface SettingsSectionProps {
   profile: Profile | null;
   onNavigate: (section: Section) => boolean | void;
+  profileMode: ProfileExperienceMode;
+  onProfileModeChange: (mode: ProfileExperienceMode) => void;
 }
 
 const STORAGE_KEY = 'shredloc:settings-preferences';
@@ -21,7 +24,7 @@ const buildDefaultPreferences = () => {
   return defaults;
 };
 
-export default function SettingsSection({ profile, onNavigate }: SettingsSectionProps) {
+export default function SettingsSection({ profile, onNavigate, profileMode, onProfileModeChange }: SettingsSectionProps) {
   const defaultPreferences = useMemo(() => buildDefaultPreferences(), []);
 
   const [preferences, setPreferences] = useState<Record<string, boolean>>(() => {
@@ -79,6 +82,13 @@ export default function SettingsSection({ profile, onNavigate }: SettingsSection
           : () => {},
   }));
 
+  const isSponsorMode = profileMode === 'sponsor';
+  const sponsorToggleLabel = isSponsorMode ? 'Revenir au profil rider' : 'Activer le profil sponsor';
+  const sponsorStatusLabel = isSponsorMode ? 'Profil sponsor actif' : 'Mode sponsor inactif';
+  const handleSponsorModeToggle = () => {
+    onProfileModeChange(isSponsorMode ? 'rider' : 'sponsor');
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
       <div className="bg-gradient-to-r from-orange-500/90 via-orange-500 to-orange-600 rounded-3xl p-8 text-white shadow-xl">
@@ -98,6 +108,63 @@ export default function SettingsSection({ profile, onNavigate }: SettingsSection
           )}
         </div>
       </div>
+
+      <section className="bg-dark-800 border border-dark-700 rounded-3xl p-6 md:p-8 shadow-lg shadow-orange-500/5">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-orange-300">
+              <Megaphone size={16} />
+              Mode sponsor immersif
+            </span>
+            <h2 className="text-2xl font-semibold text-white">Pilotez Shredloc comme un sponsor</h2>
+            <p className="text-gray-400 max-w-2xl">
+              Activez un profil sponsor pour débloquer le dashboard, les outils marketing et tester la collaboration marque ×
+              riders sans attendre la validation d&apos;un compte partenaire.
+            </p>
+          </div>
+          <div className="flex flex-col items-start gap-3 min-w-[220px]">
+            <span
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+                isSponsorMode
+                  ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-400/40'
+                  : 'bg-dark-700 text-gray-400 border border-dark-600'
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${isSponsorMode ? 'bg-emerald-300' : 'bg-gray-500'}`} />
+              {sponsorStatusLabel}
+            </span>
+            <button
+              type="button"
+              onClick={handleSponsorModeToggle}
+              className="w-full rounded-full bg-orange-500/80 hover:bg-orange-500 text-white px-5 py-2.5 text-sm font-semibold transition-colors"
+            >
+              {sponsorToggleLabel}
+            </button>
+            {isSponsorMode && (
+              <button
+                type="button"
+                onClick={() => onNavigate('sponsors')}
+                className="w-full rounded-full border border-orange-500/60 px-5 py-2.5 text-sm font-semibold text-orange-300 hover:bg-orange-500/10 transition-colors"
+              >
+                Ouvrir le cockpit sponsor
+              </button>
+            )}
+          </div>
+        </div>
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {sponsorModeHighlights.map((highlight) => (
+            <li
+              key={highlight}
+              className="flex items-start gap-3 rounded-2xl bg-dark-900/60 border border-dark-700 px-4 py-3 text-sm text-gray-300"
+            >
+              <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-orange-500/15 text-orange-400">
+                <Sparkles size={18} />
+              </span>
+              <span>{highlight}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <SubscriptionPlanTester />
 

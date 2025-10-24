@@ -32,15 +32,25 @@ import {
   isSubscriptionPlan,
   type SubscriptionPlan,
 } from './lib/subscription';
-import type { Profile, Section, ContentNavigationOptions } from './types';
+import type { Profile, Section, ContentNavigationOptions, ProfileExperienceMode } from './types';
+import { buildSponsorExperienceProfile } from './data/sponsorExperience';
 import type { FakeDirectMessagePayload } from './types/messages';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const isMapAvailable = typeof mapboxToken === 'string' && mapboxToken.trim().length > 0;
+const PROFILE_MODE_STORAGE_KEY = 'shredloc:profile-mode';
 
 function App() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileMode, setProfileMode] = useState<ProfileExperienceMode>(() => {
+    if (typeof window === 'undefined') {
+      return 'rider';
+    }
+
+    const stored = window.localStorage.getItem(PROFILE_MODE_STORAGE_KEY);
+    return stored === 'sponsor' ? 'sponsor' : 'rider';
+  });
   const [currentSection, setCurrentSection] = useState<Section>('feed');
   const [loading, setLoading] = useState(true);
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -86,6 +96,18 @@ function App() {
     [],
   );
 
+  const activeProfile = useMemo(() => {
+    if (!profile) {
+      return null;
+    }
+
+    if (profileMode !== 'sponsor') {
+      return profile;
+    }
+
+    return buildSponsorExperienceProfile(profile);
+  }, [profile, profileMode]);
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -97,6 +119,24 @@ function App() {
       console.error('Impossible de sauvegarder le mode abonnement :', error);
     }
   }, [subscriptionPlan]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(PROFILE_MODE_STORAGE_KEY, profileMode);
+    } catch (error) {
+      console.error('Impossible de sauvegarder le mode sponsor :', error);
+    }
+  }, [profileMode]);
+
+  useEffect(() => {
+    if (profile?.role === 'sponsor') {
+      setProfileMode('sponsor');
+    }
+  }, [profile?.role]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -213,6 +253,43 @@ function App() {
       previous.filter((payload) => !messageIds.includes(payload.message.id)),
     );
   }, []);
+
+  const handleProfileUpdated = useCallback(
+    (updated: Profile) => {
+      setProfile((previous) => {
+        if (!previous) {
+          return updated;
+        }
+
+        if (previous.role === 'sponsor') {
+          return updated;
+        }
+
+        if (profileMode === 'sponsor') {
+          return {
+            ...updated,
+            role: previous.role,
+            sponsor_branding: previous.sponsor_branding ?? null,
+            sponsor_contact: previous.sponsor_contact ?? null,
+            sponsor_permissions: previous.sponsor_permissions ?? null,
+          };
+        }
+
+        return updated;
+      });
+    },
+    [profileMode],
+  );
+
+  const handleProfileModeChange = useCallback(
+    (mode: ProfileExperienceMode) => {
+      setProfileMode(mode);
+      if (mode === 'sponsor') {
+        handleNavigateToContent('sponsors');
+      }
+    },
+    [handleNavigateToContent],
+  );
 
   const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions): boolean => {
     if (section === 'map' && !isMapAvailable) {
@@ -352,10 +429,10 @@ function App() {
     content = <Auth onAuthSuccess={handleAuthSuccess} />;
   } else {
     content = (
-      <SponsorProvider profile={profile}>
+      <SponsorProvider profile={activeProfile}>
         <div className="min-h-screen bg-dark-900 flex flex-col">
           <Header
-            profile={profile}
+            profile={activeProfile}
             currentSection={currentSection}
             onSectionChange={handleNavigateToContent}
             onNavigateToContent={handleNavigateToContent}
@@ -373,37 +450,44 @@ function App() {
                 isMapAvailable={isMapAvailable}
               />
             )}
-            {currentSection === 'feed' && <FeedSection currentUser={profile} />}
-            {currentSection === 'events' && <EventsSection profile={profile} />}
+            {currentSection === 'feed' && <FeedSection currentUser={activeProfile} />}
+            {currentSection === 'events' && <EventsSection profile={activeProfile} />}
             {currentSection === 'challenges' && (
               <ChallengesSection
-                profile={profile}
+                profile={activeProfile}
                 focusConfig={challengeFocus}
                 onFocusHandled={() => setChallengeFocus(null)}
               />
             )}
             {currentSection === 'sponsors' &&
-              (profile?.role === 'sponsor' ? (
+              (activeProfile?.role === 'sponsor' ? (
                 <SponsorDashboard />
               ) : (
-                <SponsorsSection profile={profile} />
+                <SponsorsSection profile={activeProfile} />
               ))}
             {currentSection === 'pricing' && <PricingSection />}
             {currentSection === 'profile' && (
-              <ProfileSection profile={profile} onProfileUpdate={setProfile} />
+              <ProfileSection profile={activeProfile} onProfileUpdate={handleProfileUpdated} />
             )}
-            {currentSection === 'badges' && <BadgesSection profile={profile} />}
-            {currentSection === 'rewards' && <RewardsSection profile={profile} />}
-            {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
-            {currentSection === 'messages' && <MessagesSection profile={profile} />}
+            {currentSection === 'badges' && <BadgesSection profile={activeProfile} />}
+            {currentSection === 'rewards' && <RewardsSection profile={activeProfile} />}
+            {currentSection === 'leaderboard' && <LeaderboardSection profile={activeProfile} />}
+            {currentSection === 'messages' && <MessagesSection profile={activeProfile} />}
             {currentSection === 'settings' && (
-              <SettingsSection profile={profile} onNavigate={handleNavigateToContent} />
+              <SettingsSection
+                profile={activeProfile}
+                onNavigate={handleNavigateToContent}
+                profileMode={profileMode}
+                onProfileModeChange={handleProfileModeChange}
+              />
             )}
             {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={handleNavigateToContent} />}
             {currentSection === 'terms' && <TermsSection onNavigate={handleNavigateToContent} />}
           </main>
 
-          <div className={dimmedClass}>{profile && <AchievementNotification profile={profile} />}</div>
+          <div className={dimmedClass}>
+            {activeProfile && <AchievementNotification profile={activeProfile} />}
+          </div>
           <div className={`${dimmedClass} lg:mt-auto`}>
             <Footer onSectionChange={handleNavigateToContent} />
           </div>

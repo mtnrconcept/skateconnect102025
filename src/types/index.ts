@@ -24,6 +24,8 @@ export interface SponsorPermissions {
   canManageApiKeys: boolean;
 }
 
+export type ProfileExperienceMode = 'rider' | 'sponsor';
+
 export interface Profile {
   id: string;
   username: string;
