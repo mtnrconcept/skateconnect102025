@@ -9,7 +9,7 @@ import type { Spot } from '../../types';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
-const INITIAL_CARD_COUNT = 6;
+const INITIAL_CARD_COUNT = 18;
 const CARD_TRANSITION_DURATION = 300;
 
 interface MapSectionProps {
@@ -24,6 +24,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const lastFocusedSpotRef = useRef<string | null>(null);
   const leavingTimeoutRef = useRef<number | null>(null);
   const enteringTimeoutRef = useRef<number | null>(null);
+  const cardsContainerRef = useRef<HTMLDivElement>(null);
 
   const [spots, setSpots] = useState<Spot[]>([]);
   const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
@@ -33,6 +34,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [transitionPhase, setTransitionPhase] = useState<'idle' | 'leaving' | 'entering'>('idle');
+  const [isLoadMoreButtonVisible, setIsLoadMoreButtonVisible] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -71,6 +73,8 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
 
   useEffect(() => {
     if (transitionPhase === 'entering') {
+      cardsContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+
       if (enteringTimeoutRef.current) {
         window.clearTimeout(enteringTimeoutRef.current);
       }
@@ -531,6 +535,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     currentPage * INITIAL_CARD_COUNT + INITIAL_CARD_COUNT
   );
   const hasMoreSpots = currentPage < totalPages - 1;
+  const eighteenthSpotId = visibleSpots[INITIAL_CARD_COUNT - 1]?.id;
 
   const handleLoadMore = () => {
     if (!hasMoreSpots || transitionPhase !== 'idle') {
@@ -549,6 +554,37 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       leavingTimeoutRef.current = null;
     }, CARD_TRANSITION_DURATION);
   };
+
+  useEffect(() => {
+    if (!hasMoreSpots || !eighteenthSpotId) {
+      setIsLoadMoreButtonVisible(false);
+      return;
+    }
+
+    const container = cardsContainerRef.current;
+    const target = container?.querySelector<HTMLButtonElement>('[data-eighteenth-card="true"]');
+
+    if (!container || !target) {
+      setIsLoadMoreButtonVisible(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsLoadMoreButtonVisible(entry.isIntersecting);
+      },
+      {
+        root: container,
+        threshold: 0.9,
+      }
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMoreSpots, eighteenthSpotId, visibleSpots.length]);
 
   return (
     <div className="relative flex flex-col overflow-hidden rounded-3xl border border-dark-700 bg-dark-900/70 shadow-2xl shadow-orange-900/10 min-h-[640px] lg:h-[calc(100vh-8rem)] lg:max-h-[calc(100vh-8rem)]">
@@ -642,7 +678,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                 </div>
               ) : (
                 <div className="flex h-full flex-col">
-                  <div className="flex-1 overflow-y-auto px-6 py-6">
+                  <div ref={cardsContainerRef} className="flex-1 overflow-y-auto px-6 py-6">
                     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                       {visibleSpots.map((spot) => {
                         const coverPhotoUrl = spotCoverPhotos[spot.id];
@@ -659,6 +695,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                                   ? 'animate-card-enter'
                                   : 'animate-slide-up'
                             }`}
+                            data-eighteenth-card={spot.id === eighteenthSpotId ? 'true' : undefined}
                           >
                             <div className="relative h-36 w-full overflow-hidden">
                               {coverPhotoUrl ? (
@@ -717,7 +754,14 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                   </div>
 
                   {hasMoreSpots && (
-                    <div className="border-t border-dark-800/60 bg-dark-900/80 px-6 py-4">
+                    <div
+                      className={`-mx-6 mt-6 overflow-hidden border-t border-dark-800/60 bg-dark-900/80 px-6 transition-all duration-300 ${
+                        isLoadMoreButtonVisible
+                          ? 'max-h-32 py-4 opacity-100'
+                          : 'max-h-0 py-0 opacity-0 pointer-events-none'
+                      }`}
+                      aria-hidden={!isLoadMoreButtonVisible}
+                    >
                       <button
                         onClick={handleLoadMore}
                         disabled={transitionPhase !== 'idle'}
