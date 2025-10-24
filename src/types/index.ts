@@ -1,3 +1,29 @@
+export interface SponsorContactInfo {
+  email: string;
+  phone?: string | null;
+  contact_name?: string | null;
+  language?: string | null;
+  address?: string | null;
+}
+
+export interface SponsorBranding {
+  brand_name: string;
+  logo_url?: string | null;
+  banner_url?: string | null;
+  primary_color?: string | null;
+  secondary_color?: string | null;
+  website_url?: string | null;
+  tagline?: string | null;
+  social_links?: Record<string, string> | null;
+}
+
+export interface SponsorPermissions {
+  canAccessAnalytics: boolean;
+  canManageSpotlights: boolean;
+  canManageShop: boolean;
+  canManageApiKeys: boolean;
+}
+
 export interface Profile {
   id: string;
   username: string;
@@ -7,6 +33,10 @@ export interface Profile {
   cover_url: string | null;
   skill_level: string | null;
   stance: string | null;
+  role: 'skater' | 'sponsor' | 'admin';
+  sponsor_contact?: SponsorContactInfo | null;
+  sponsor_branding?: SponsorBranding | null;
+  sponsor_permissions?: SponsorPermissions | null;
   location?: string | null;
   sponsors?: string[] | null;
   favorite_tricks?: string[] | null;
@@ -289,6 +319,62 @@ export interface LeaderboardEntry {
   level_title: string;
   rank: number;
   profile?: Profile;
+}
+
+export interface CommunityAnalyticsSnapshot {
+  id: string;
+  sponsor_id: string;
+  metric_date: string;
+  reach: number;
+  engagement_rate: number;
+  activation_count: number;
+  top_regions: string[];
+  trending_tags: string[];
+  created_at: string;
+}
+
+export interface SponsorSpotlight {
+  id: string;
+  sponsor_id: string;
+  title: string;
+  description: string | null;
+  media_url: string | null;
+  call_to_action: string | null;
+  call_to_action_url: string | null;
+  status: 'draft' | 'scheduled' | 'active' | 'completed';
+  start_date: string | null;
+  end_date: string | null;
+  performance: Record<string, number> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SponsorShopItem {
+  id: string;
+  sponsor_id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  currency: string;
+  stock: number;
+  is_active: boolean;
+  image_url: string | null;
+  metadata: Record<string, string | number> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SponsorApiKey {
+  id: string;
+  sponsor_id: string;
+  name: string;
+  key_prefix: string;
+  key_hash: string;
+  scopes: string[];
+  status: 'active' | 'revoked';
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
 }
 
 export type Section =

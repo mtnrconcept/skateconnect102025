@@ -18,9 +18,11 @@ import MessagesSection from './components/sections/MessagesSection';
 import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
 import TermsSection from './components/sections/TermsSection';
 import SponsorsSection from './components/sections/SponsorsSection';
+import SponsorDashboard from './components/sponsors/SponsorDashboard';
 import AchievementNotification from './components/AchievementNotification';
 import SubscriptionUpgradeNotice from './components/subscription/SubscriptionUpgradeNotice';
 import { SubscriptionProvider, type RestrictionNotice } from './contexts/SubscriptionContext';
+import { SponsorProvider } from './contexts/SponsorContext';
 import {
   DEFAULT_SUBSCRIPTION_PLAN,
   SUBSCRIPTION_STORAGE_KEY,
@@ -163,7 +165,21 @@ function App() {
         .maybeSingle();
 
       if (error) throw error;
-      setProfile(data);
+
+      if (!data) {
+        setProfile(null);
+        return;
+      }
+
+      const normalizedProfile: Profile = {
+        ...data,
+        role: (data.role ?? 'skater') as Profile['role'],
+        sponsor_contact: data.sponsor_contact ?? null,
+        sponsor_branding: data.sponsor_branding ?? null,
+        sponsor_permissions: data.sponsor_permissions ?? null,
+      };
+
+      setProfile(normalizedProfile);
     } catch (error) {
       console.error('Error loading profile:', error);
     } finally {
@@ -313,18 +329,60 @@ function App() {
     content = <Auth onAuthSuccess={handleAuthSuccess} />;
   } else {
     content = (
-      <div className="min-h-screen bg-dark-900 flex flex-col">
-        <Header
-          profile={profile}
-          currentSection={currentSection}
-          onSectionChange={handleNavigateToContent}
-          onNavigateToContent={handleNavigateToContent}
-          onSearchFocusChange={setIsSearchActive}
-        />
-        <div className={dimmedClass}>
-          <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
-        </div>
+      <SponsorProvider profile={profile}>
+        <div className="min-h-screen bg-dark-900 flex flex-col">
+          <Header
+            profile={profile}
+            currentSection={currentSection}
+            onSectionChange={handleNavigateToContent}
+            onNavigateToContent={handleNavigateToContent}
+            onSearchFocusChange={setIsSearchActive}
+          />
+          <div className={dimmedClass}>
+            <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
+          </div>
 
+          <main className={`flex-1 pt-16 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
+            {currentSection === 'map' && (
+              <MapSection
+                focusSpotId={mapFocusSpotId}
+                onSpotFocusHandled={() => setMapFocusSpotId(null)}
+              />
+            )}
+            {currentSection === 'feed' && <FeedSection currentUser={profile} />}
+            {currentSection === 'events' && <EventsSection profile={profile} />}
+            {currentSection === 'challenges' && (
+              <ChallengesSection
+                profile={profile}
+                focusConfig={challengeFocus}
+                onFocusHandled={() => setChallengeFocus(null)}
+              />
+            )}
+            {currentSection === 'sponsors' &&
+              (profile?.role === 'sponsor' ? (
+                <SponsorDashboard />
+              ) : (
+                <SponsorsSection profile={profile} />
+              ))}
+            {currentSection === 'pricing' && <PricingSection />}
+            {currentSection === 'profile' && (
+              <ProfileSection profile={profile} onProfileUpdate={setProfile} />
+            )}
+            {currentSection === 'badges' && <BadgesSection profile={profile} />}
+            {currentSection === 'rewards' && <RewardsSection profile={profile} />}
+            {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
+            {currentSection === 'messages' && <MessagesSection profile={profile} />}
+            {currentSection === 'settings' && (
+              <SettingsSection profile={profile} onNavigate={handleNavigateToContent} />
+            )}
+            {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={handleNavigateToContent} />}
+            {currentSection === 'terms' && <TermsSection onNavigate={handleNavigateToContent} />}
+          </main>
+
+          <div className={dimmedClass}>{profile && <AchievementNotification profile={profile} />}</div>
+          <div className={`${dimmedClass} lg:mt-auto`}>
+            <Footer onSectionChange={handleNavigateToContent} />
+          </div>
         <main className={`flex-1 pt-16 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
           {currentSection === 'map' && (
             <MapSection
@@ -367,7 +425,7 @@ function App() {
         <div className={`${dimmedClass} lg:mt-auto`}>
           <Footer onSectionChange={handleNavigateToContent} />
         </div>
-      </div>
+      </SponsorProvider>
     );
   }
 
