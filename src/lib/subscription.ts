@@ -58,6 +58,7 @@ const sectionRequirements: Record<Section, SubscriptionPlan> = {
   map: 'free-ride',
   feed: 'free-ride',
   events: 'free-ride',
+  search: 'free-ride',
   pricing: 'free-ride',
   profile: 'free-ride',
   settings: 'free-ride',
