@@ -41,16 +41,24 @@ const writeLocalIds = (key: string, ids: Set<string>) => {
 export const getStoredChallengeRegistrations = () => readLocalIds(CHALLENGE_STORAGE_KEY);
 export const getStoredEventRegistrations = () => readLocalIds(EVENT_STORAGE_KEY);
 
+interface RegistrationOptions {
+  sponsor?: boolean;
+}
+
 export async function registerForChallenge(
   userId: string,
   challengeId: string,
+  options?: RegistrationOptions,
 ): Promise<RegistrationResult> {
-  const payload = { user_id: userId, challenge_id: challengeId };
+  const isSponsorChallenge = options?.sponsor === true;
+  const payload = isSponsorChallenge
+    ? { user_id: userId, sponsor_challenge_id: challengeId }
+    : { user_id: userId, challenge_id: challengeId };
+  const tableName = isSponsorChallenge ? 'sponsor_challenge_participants' : 'challenge_participants';
+  const conflictTarget = isSponsorChallenge ? 'sponsor_challenge_id,user_id' : 'challenge_id,user_id';
 
   try {
-    const { error } = await supabase
-      .from('challenge_participants')
-      .upsert(payload, { onConflict: 'challenge_id,user_id' });
+    const { error } = await supabase.from(tableName).upsert(payload, { onConflict: conflictTarget });
 
     if (error) throw error;
 
@@ -76,11 +84,20 @@ export async function registerForChallenge(
   }
 }
 
-export async function registerForEvent(userId: string, eventId: string): Promise<RegistrationResult> {
-  const payload = { user_id: userId, event_id: eventId };
+export async function registerForEvent(
+  userId: string,
+  eventId: string,
+  options?: RegistrationOptions,
+): Promise<RegistrationResult> {
+  const isSponsorEvent = options?.sponsor === true;
+  const payload = isSponsorEvent
+    ? { user_id: userId, sponsor_event_id: eventId }
+    : { user_id: userId, event_id: eventId };
+  const tableName = isSponsorEvent ? 'sponsor_event_registrations' : 'event_registrations';
+  const conflictTarget = isSponsorEvent ? 'sponsor_event_id,user_id' : 'event_id,user_id';
 
   try {
-    const { error } = await supabase.from('event_registrations').upsert(payload, { onConflict: 'event_id,user_id' });
+    const { error } = await supabase.from(tableName).upsert(payload, { onConflict: conflictTarget });
 
     if (error) throw error;
 

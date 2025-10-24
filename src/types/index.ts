@@ -100,6 +100,100 @@ export interface Challenge {
   creator?: Profile;
 }
 
+export type SponsorOpportunityType = 'challenge' | 'event' | 'call' | 'news';
+
+export type SponsorEditableOpportunityType = Extract<SponsorOpportunityType, 'challenge' | 'event' | 'call'>;
+
+export interface SponsorProfileSummary {
+  id: string;
+  username: string;
+  display_name: string | null;
+  sponsor_branding?: SponsorBranding | null;
+}
+
+export interface SponsorChallengeOpportunity {
+  id: string;
+  sponsor_id: string;
+  title: string;
+  description: string;
+  prize: string | null;
+  value: string | null;
+  location: string | null;
+  cover_image_url: string | null;
+  tags: string[];
+  start_date: string | null;
+  end_date: string | null;
+  participants_count: number;
+  participants_label: string;
+  action_label: string;
+  created_at: string;
+  updated_at: string;
+  sponsor?: SponsorProfileSummary | null;
+}
+
+export interface SponsorEventOpportunity {
+  id: string;
+  sponsor_id: string;
+  title: string;
+  description: string;
+  event_date: string | null;
+  event_time: string | null;
+  location: string | null;
+  event_type: string | null;
+  attendees: number;
+  cover_image_url: string | null;
+  tags: string[];
+  action_label: string;
+  created_at: string;
+  updated_at: string;
+  sponsor?: SponsorProfileSummary | null;
+}
+
+export interface SponsorCallOpportunity {
+  id: string;
+  sponsor_id: string;
+  title: string;
+  summary: string;
+  description: string;
+  location: string | null;
+  deadline: string | null;
+  reward: string | null;
+  highlight: string | null;
+  cover_image_url: string | null;
+  tags: string[];
+  participants_label: string;
+  participants_count: number;
+  action_label: string;
+  created_at: string;
+  updated_at: string;
+  sponsor?: SponsorProfileSummary | null;
+}
+
+export interface SponsorNewsItem {
+  id: string;
+  sponsor_id: string;
+  title: string;
+  summary: string;
+  body: string;
+  location: string | null;
+  published_at: string | null;
+  highlight: string | null;
+  cover_image_url: string | null;
+  tags: string[];
+  action_label: string;
+  participants_label: string;
+  participants_count: number;
+  created_at: string;
+  updated_at: string;
+  sponsor?: SponsorProfileSummary | null;
+}
+
+export type SponsorOpportunityRecord =
+  | { type: 'challenge'; record: SponsorChallengeOpportunity }
+  | { type: 'event'; record: SponsorEventOpportunity }
+  | { type: 'call'; record: SponsorCallOpportunity }
+  | { type: 'news'; record: SponsorNewsItem };
+
 export interface CommunityEvent {
   id: string;
   title: string;

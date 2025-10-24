@@ -9,25 +9,45 @@ import {
   Filter,
   Gift,
   Handshake,
+  Loader2,
   MapPin,
+  PenSquare,
+  Plus,
   Search,
   Sparkles,
   Star,
   Tag,
   ThumbsUp,
+  Trash2,
   UploadCloud,
   Users,
   Video,
   X,
 } from 'lucide-react';
-import type { Challenge, CommunityEvent, Profile } from '../../types';
-import { eventsCatalog } from '../../data/eventsCatalog';
+import type {
+  Profile,
+  SponsorCallOpportunity,
+  SponsorChallengeOpportunity,
+  SponsorEditableOpportunityType,
+  SponsorEventOpportunity,
+  SponsorNewsItem,
+} from '../../types';
 import {
   getStoredChallengeRegistrations,
   getStoredEventRegistrations,
   registerForChallenge,
   registerForEvent,
 } from '../../lib/engagement';
+import {
+  deleteSponsorCall,
+  deleteSponsorChallenge,
+  deleteSponsorEvent,
+  fetchSponsorCalls,
+  fetchSponsorChallenges,
+  fetchSponsorEvents,
+  fetchSponsorNews,
+} from '../../lib/sponsorOpportunities';
+import SponsorPostForm from '../sponsors/SponsorPostForm';
 
 interface SponsorsSectionProps {
   profile: Profile | null;
@@ -36,14 +56,6 @@ interface SponsorsSectionProps {
 type PostType = 'challenge' | 'event' | 'call' | 'news';
 
 type FeedbackTone = 'success' | 'info' | 'error';
-
-interface SponsorChallenge extends Challenge {
-  sponsor: string;
-  value: string;
-  location: string;
-  coverImage: string;
-  tags: string[];
-}
 
 interface ParticipationMedia {
   id: string;
@@ -63,6 +75,7 @@ interface SponsorFeedPost {
   excerpt: string;
   description: string;
   sponsor: string;
+  sponsorId: string;
   location: string;
   dateLabel: string;
   dateValue: Date | null;
@@ -72,47 +85,13 @@ interface SponsorFeedPost {
   tags: string[];
   participantsLabel: string;
   participantsCount: number;
-  challenge?: SponsorChallenge;
-  event?: CommunityEvent;
   actionLabel: string;
+  editable: boolean;
+  challenge?: SponsorChallengeOpportunity;
+  event?: SponsorEventOpportunity;
+  call?: SponsorCallOpportunity;
+  news?: SponsorNewsItem;
 }
-
-const monthMap: Record<string, number> = {
-  janvier: 0,
-  février: 1,
-  fevrier: 1,
-  mars: 2,
-  avril: 3,
-  mai: 4,
-  juin: 5,
-  juillet: 6,
-  août: 7,
-  aout: 7,
-  septembre: 8,
-  octobre: 9,
-  novembre: 10,
-  décembre: 11,
-  decembre: 11,
-};
-
-const parseFrenchDate = (value: string): Date | null => {
-  const regex = /(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/i;
-  const match = value.match(regex);
-
-  if (!match) {
-    return null;
-  }
-
-  const day = Number(match[1]);
-  const month = monthMap[match[2].toLowerCase()];
-  const year = Number(match[3]);
-
-  if (Number.isNaN(day) || month === undefined || Number.isNaN(year)) {
-    return null;
-  }
-
-  return new Date(year, month, day);
-};
 
 const formatRelativeDate = (date: Date | null): string | null => {
   if (!date) return null;
@@ -133,196 +112,19 @@ const formatRelativeDate = (date: Date | null): string | null => {
   return absDays === 1 ? 'Il y a 1 jour' : `Il y a ${absDays} jours`;
 };
 
-const sponsorChallenges: SponsorChallenge[] = [
-  {
-    id: 'sponsor-challenge-1',
-    created_by: null,
-    title: 'Signature Line - Switch Hardflip',
-    description:
-      'Filme ton plus beau switch hardflip sur un gap ou un set d’escalier. Les meilleurs clips intégreront la prochaine campagne Globe.',
-    challenge_type: 'community',
-    difficulty: 4,
-    prize: 'Budget vidéo de 800€ + pack complet Globe',
-    start_date: new Date().toISOString(),
-    end_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
-    participants_count: 162,
-    is_active: true,
-    created_at: new Date().toISOString(),
-    sponsor: 'Globe',
-    value: 'Production & visibilité',
-    location: 'Square Diderot, Paris',
-    coverImage:
-      'https://images.unsplash.com/photo-1504598318550-17eba1008a68?auto=format&fit=crop&w=1200&q=80',
-    tags: ['Street', 'Video part', 'Technique'],
-  },
-  {
-    id: 'sponsor-challenge-2',
-    created_by: null,
-    title: 'Spot Upgrade powered by Vans',
-    description:
-      'Présente ton crew et propose un plan détaillé pour upgrader votre DIY local. Vans finance le chantier gagnant.',
-    challenge_type: 'community',
-    difficulty: 3,
-    prize: '2 500€ de budget matériaux + workshop Vans',
-    start_date: new Date().toISOString(),
-    end_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 21).toISOString(),
-    participants_count: 74,
-    is_active: true,
-    created_at: new Date().toISOString(),
-    sponsor: 'Vans',
-    value: 'Amélioration de spot',
-    location: 'Hangar Darwin, Bordeaux',
-    coverImage:
-      'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1200&q=80',
-    tags: ['DIY', 'Appel à projet', 'Crew'],
-  },
-  {
-    id: 'sponsor-challenge-3',
-    created_by: null,
-    title: 'Creative Lines by Carhartt WIP',
-    description:
-      'Imagine un run créatif de 45 secondes au skatepark et mixe street & transition. Carhartt équipe la crew la plus inventive.',
-    challenge_type: 'community',
-    difficulty: 2,
-    prize: 'Carte cadeau Carhartt WIP 600€ + shooting photo',
-    start_date: new Date().toISOString(),
-    end_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 10).toISOString(),
-    participants_count: 98,
-    is_active: true,
-    created_at: new Date().toISOString(),
-    sponsor: 'Carhartt WIP',
-    value: 'Visibilité crew',
-    location: 'La Friche, Marseille',
-    coverImage:
-      'https://images.unsplash.com/photo-1501820488136-72669149e0d4?auto=format&fit=crop&w=1200&q=80',
-    tags: ['Creativité', 'Park', 'Run'],
-  },
-];
+const FALLBACK_COVER =
+  'https://images.unsplash.com/photo-1519861399405-52a9b56bd58c?auto=format&fit=crop&w=1200&q=80';
 
-const additionalStories: Array<{
-  id: string;
-  type: PostType;
-  title: string;
-  excerpt: string;
-  description: string;
-  sponsor: string;
-  location: string;
-  dateLabel: string;
-  dateValue: Date;
-  reward?: string;
-  highlight?: string;
-  coverImage: string;
-  tags: string[];
-  participantsLabel: string;
-  participantsCount: number;
-  actionLabel: string;
-}> = [
-  {
-    id: 'sponsor-story-1',
-    type: 'call',
-    title: 'Fond de soutien #BuildYourSpot',
-    excerpt:
-      'Les sponsors financent trois crews pour rénover des spots DIY. Dépose ton dossier avec plan de financement, moodboard et planning.',
-    description:
-      'Présente ton spot, l’impact pour la scène locale et ton plan d’activation média. Les projets retenus bénéficieront d’un accompagnement pro et d’un suivi sur le long terme.',
-    sponsor: 'Foundation Skate Fund',
-    location: 'Plateforme Shredloc',
-    dateLabel: 'Clôture le 30 avril 2025',
-    dateValue: new Date(new Date().setDate(new Date().getDate() + 25)),
-    reward: 'Jusqu’à 4 000€ de budget + mentorat',
-    highlight: 'Accompagnement complet des sponsors',
-    coverImage:
-      'https://images.unsplash.com/photo-1541712034-cd3c93b71d07?auto=format&fit=crop&w=1200&q=80',
-    tags: ['Appel à projet', 'DIY', 'Financement'],
-    participantsLabel: 'Dossiers reçus',
-    participantsCount: 32,
-    actionLabel: 'Déposer un projet',
-  },
-  {
-    id: 'sponsor-story-2',
-    type: 'news',
-    title: 'Team adidas Skateboarding - scouting tour',
-    excerpt:
-      'La team adidas lance un repérage national. Partage ton portfolio et inscris-toi à la session proche de chez toi.',
-    description:
-      'Sessions privées dans 4 villes avec coaching, analyse de style et sessions media. Les riders retenus rejoindront un stage intensif à Berlin.',
-    sponsor: 'adidas Skateboarding',
-    location: 'Tournée nationale',
-    dateLabel: 'Roadshow mai - juin 2025',
-    dateValue: new Date(new Date().setDate(new Date().getDate() + 45)),
-    reward: 'Stage pro à Berlin',
-    highlight: 'Sélection finale par la team internationale',
-    coverImage:
-      'https://images.unsplash.com/photo-1504274066651-8d31a536b11a?auto=format&fit=crop&w=1200&q=80',
-    tags: ['Scouting', 'Coaching', 'Portfolio'],
-    participantsLabel: 'Candidatures',
-    participantsCount: 218,
-    actionLabel: 'Découvrir la tournée',
-  },
-];
+const getSponsorDisplayName = (
+  sponsor: SponsorChallengeOpportunity['sponsor'] | SponsorEventOpportunity['sponsor'] | null | undefined,
+): string => {
+  if (!sponsor) {
+    return 'Sponsor partenaire';
+  }
 
-const initialParticipations: Record<string, ParticipationMedia[]> = {
-  'sponsor-challenge-1': [
-    {
-      id: 'media-globe-1',
-      author: 'Lina M.',
-      avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Lina',
-      caption: 'Switch hardflip over 5 marches',
-      mediaType: 'video',
-      thumbnail:
-        'https://images.unsplash.com/photo-1533038590840-1cde6e668a91?auto=format&fit=crop&w=900&q=80',
-      votes: 142,
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    },
-    {
-      id: 'media-globe-2',
-      author: 'Crew 93 District',
-      avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=93',
-      caption: 'Line double angle',
-      mediaType: 'video',
-      thumbnail:
-        'https://images.unsplash.com/photo-1526402462956-0e0cc4c0de95?auto=format&fit=crop&w=900&q=80',
-      votes: 98,
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
-    },
-  ],
-  'sponsor-challenge-2': [
-    {
-      id: 'media-vans-1',
-      author: 'DIY Bellecour',
-      avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=DIY',
-      caption: 'Plan 3D + budget collaboratif',
-      mediaType: 'photo',
-      thumbnail:
-        'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=900&q=80',
-      votes: 64,
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 6).toISOString(),
-    },
-  ],
-  'sponsor-challenge-3': [
-    {
-      id: 'media-carhartt-1',
-      author: 'Mira S.',
-      avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Mira',
-      caption: 'Run hybride street / bowl',
-      mediaType: 'video',
-      thumbnail:
-        'https://images.unsplash.com/photo-1465808022351-76d943549a98?auto=format&fit=crop&w=900&q=80',
-      votes: 120,
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    },
-    {
-      id: 'media-carhartt-2',
-      author: 'Crew Marseille Nord',
-      avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=CMN',
-      caption: 'Line sunset',
-      mediaType: 'photo',
-      thumbnail:
-        'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=900&q=80',
-      votes: 84,
-      submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-    },
-  ],
+  return (
+    sponsor.sponsor_branding?.brand_name ?? sponsor.display_name ?? sponsor.username ?? 'Sponsor partenaire'
+  );
 };
 
 export default function SponsorsSection({ profile }: SponsorsSectionProps) {
@@ -339,13 +141,27 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'participations' | 'participer'>('details');
   const [participationSort, setParticipationSort] = useState<'votes' | 'recent'>('votes');
-  const [participations, setParticipations] = useState<Record<string, ParticipationMedia[]>>(initialParticipations);
+  const [participations, setParticipations] = useState<Record<string, ParticipationMedia[]>>({});
+  const [challenges, setChallenges] = useState<SponsorChallengeOpportunity[]>([]);
+  const [events, setEvents] = useState<SponsorEventOpportunity[]>([]);
+  const [calls, setCalls] = useState<SponsorCallOpportunity[]>([]);
+  const [news, setNews] = useState<SponsorNewsItem[]>([]);
+  const [loadingOpportunities, setLoadingOpportunities] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formState, setFormState] = useState<
+    | { mode: 'create'; type: SponsorEditableOpportunityType }
+    | { mode: 'edit'; type: 'challenge'; record: SponsorChallengeOpportunity }
+    | { mode: 'edit'; type: 'event'; record: SponsorEventOpportunity }
+    | { mode: 'edit'; type: 'call'; record: SponsorCallOpportunity }
+    | null
+  >(null);
   const [votedMedias, setVotedMedias] = useState<Set<string>>(new Set());
   const [modalFeedback, setModalFeedback] = useState<{ message: string; tone: FeedbackTone } | null>(null);
   const [submissionTitle, setSubmissionTitle] = useState('');
   const [submissionDescription, setSubmissionDescription] = useState('');
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
   const [submissionPreview, setSubmissionPreview] = useState<string | null>(null);
+  const isSponsor = profile?.role === 'sponsor';
 
   useEffect(() => {
     setJoinedChallenges(Array.from(getStoredChallengeRegistrations()));
@@ -360,68 +176,236 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
     };
   }, [submissionPreview]);
 
+  const loadOpportunities = useCallback(async () => {
+    setLoadingOpportunities(true);
+    setLoadError(null);
+
+    try {
+      const [challengeData, eventData, callData, newsData] = await Promise.all([
+        fetchSponsorChallenges(),
+        fetchSponsorEvents(),
+        fetchSponsorCalls(),
+        fetchSponsorNews(),
+      ]);
+
+      setChallenges(challengeData);
+      setEvents(eventData);
+      setCalls(callData);
+      setNews(newsData);
+    } catch (cause) {
+      console.error('Unable to load sponsor opportunities', cause);
+      setLoadError('Impossible de charger les opportunités sponsor pour le moment.');
+    } finally {
+      setLoadingOpportunities(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOpportunities();
+  }, [loadOpportunities]);
+
   const joinedChallengeSet = useMemo(() => new Set(joinedChallenges), [joinedChallenges]);
   const registeredEventSet = useMemo(() => new Set(registeredEvents), [registeredEvents]);
 
-  const sponsorEvents = useMemo(
-    () => eventsCatalog.filter((event) => event.is_sponsor_event),
-    []
+  const handleOpportunitySaved = useCallback(
+    (
+      type: SponsorEditableOpportunityType,
+      record: SponsorChallengeOpportunity | SponsorEventOpportunity | SponsorCallOpportunity,
+    ) => {
+      if (type === 'challenge') {
+        const challengeRecord = record as SponsorChallengeOpportunity;
+        setChallenges((current) => {
+          const exists = current.some((item) => item.id === challengeRecord.id);
+          return exists
+            ? current.map((item) => (item.id === challengeRecord.id ? challengeRecord : item))
+            : [challengeRecord, ...current];
+        });
+      } else if (type === 'event') {
+        const eventRecord = record as SponsorEventOpportunity;
+        setEvents((current) => {
+          const exists = current.some((item) => item.id === eventRecord.id);
+          return exists
+            ? current.map((item) => (item.id === eventRecord.id ? eventRecord : item))
+            : [eventRecord, ...current];
+        });
+      } else {
+        const callRecord = record as SponsorCallOpportunity;
+        setCalls((current) => {
+          const exists = current.some((item) => item.id === callRecord.id);
+          return exists
+            ? current.map((item) => (item.id === callRecord.id ? callRecord : item))
+            : [callRecord, ...current];
+        });
+      }
+
+      setLoadError(null);
+      setFormState(null);
+    },
+    [],
+  );
+
+  const handleOpportunityDeleted = useCallback(
+    async (type: SponsorEditableOpportunityType, id: string) => {
+      try {
+        if (type === 'challenge') {
+          await deleteSponsorChallenge(id);
+          setChallenges((current) => current.filter((item) => item.id !== id));
+        } else if (type === 'event') {
+          await deleteSponsorEvent(id);
+          setEvents((current) => current.filter((item) => item.id !== id));
+        } else {
+          await deleteSponsorCall(id);
+          setCalls((current) => current.filter((item) => item.id !== id));
+        }
+
+        setLoadError(null);
+        setFormState(null);
+      } catch (cause) {
+        console.error('Unable to delete sponsor opportunity', cause);
+        setLoadError('Impossible de supprimer cette opportunité. Réessaie plus tard.');
+        throw cause;
+      }
+    },
+    [],
   );
 
   const posts = useMemo(() => {
-    const challengePosts: SponsorFeedPost[] = sponsorChallenges.map((challenge) => ({
-      id: challenge.id,
-      type: 'challenge',
-      title: challenge.title,
-      excerpt: challenge.description,
-      description: challenge.description,
-      sponsor: challenge.sponsor,
-      location: challenge.location,
-      dateLabel: `Clôture ${new Date(challenge.end_date).toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: 'long',
-      })}`,
-      dateValue: new Date(challenge.end_date),
-      reward: challenge.prize,
-      highlight: challenge.value,
-      coverImage: challenge.coverImage,
-      tags: challenge.tags,
-      participantsLabel: 'Crews inscrites',
-      participantsCount: challenge.participants_count + (joinedChallengeSet.has(challenge.id) ? 1 : 0),
-      challenge,
-      actionLabel: joinedChallengeSet.has(challenge.id) ? 'Déjà inscrit' : 'Voir le défi',
-    }));
+    const challengePosts: SponsorFeedPost[] = challenges.map((challenge) => {
+      const endDate = challenge.end_date ? new Date(challenge.end_date) : null;
+      const challengeTags = Array.isArray(challenge.tags) ? challenge.tags : [];
+      return {
+        id: challenge.id,
+        type: 'challenge',
+        title: challenge.title,
+        excerpt: challenge.description,
+        description: challenge.description,
+        sponsor: getSponsorDisplayName(challenge.sponsor),
+        sponsorId: challenge.sponsor_id,
+        location: challenge.location ?? 'Lieu à définir',
+        dateLabel: challenge.end_date
+          ? `Clôture ${new Date(challenge.end_date).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: 'long',
+            })}`
+          : 'Défi en cours',
+        dateValue: endDate,
+        reward: challenge.prize ?? undefined,
+        highlight: challenge.value ?? undefined,
+        coverImage: challenge.cover_image_url ?? FALLBACK_COVER,
+        tags: challengeTags,
+        participantsLabel: challenge.participants_label || 'Crews inscrites',
+        participantsCount: challenge.participants_count + (joinedChallengeSet.has(challenge.id) ? 1 : 0),
+        actionLabel: joinedChallengeSet.has(challenge.id)
+          ? 'Déjà inscrit'
+          : challenge.action_label || 'Voir le défi',
+        editable: true,
+        challenge,
+      };
+    });
 
-    const eventPosts: SponsorFeedPost[] = sponsorEvents.map((event) => {
-      const parsedDate = parseFrenchDate(event.date);
+    const eventPosts: SponsorFeedPost[] = events.map((event) => {
+      const eventDate = event.event_date ? new Date(event.event_date) : null;
+      const dateLabel = event.event_date
+        ? `${new Date(event.event_date).toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'long',
+          })}${event.event_time ? ` · ${event.event_time}` : ''}`
+        : 'Date à confirmer';
+      const eventTags = Array.isArray(event.tags) ? event.tags : [];
+
       return {
         id: event.id,
         type: 'event',
         title: event.title,
         excerpt: event.description,
         description: event.description,
-        sponsor: event.sponsor_name ?? 'Événement partenaire',
-        location: event.location,
-        dateLabel: `${event.date} · ${event.time}`,
-        dateValue: parsedDate,
+        sponsor: getSponsorDisplayName(event.sponsor),
+        sponsorId: event.sponsor_id,
+        location: event.location ?? 'Lieu à définir',
+        dateLabel,
+        dateValue: eventDate,
         reward: undefined,
-        highlight: event.type,
-        coverImage:
-          'https://images.unsplash.com/photo-1519861399405-52a9b56bd58c?auto=format&fit=crop&w=1200&q=80',
-        tags: [event.type, 'Sponsor', 'Networking'],
+        highlight: event.event_type ?? undefined,
+        coverImage: event.cover_image_url ?? FALLBACK_COVER,
+        tags: [...eventTags, 'Sponsor', 'Networking'].filter(Boolean) as string[],
         participantsLabel: 'Participants',
         participantsCount: event.attendees + (registeredEventSet.has(event.id) ? 1 : 0),
+        actionLabel: registeredEventSet.has(event.id)
+          ? 'Place réservée'
+          : event.action_label || 'Réserver',
+        editable: true,
         event,
-        actionLabel: registeredEventSet.has(event.id) ? 'Place réservée' : 'Réserver',
       };
     });
 
-    return [...challengePosts, ...eventPosts, ...additionalStories].sort((a, b) => {
+    const callPosts: SponsorFeedPost[] = calls.map((call) => {
+      const deadline = call.deadline ? new Date(call.deadline) : null;
+      const callTags = Array.isArray(call.tags) ? call.tags : [];
+      return {
+        id: call.id,
+        type: 'call',
+        title: call.title,
+        excerpt: call.summary,
+        description: call.description,
+        sponsor: getSponsorDisplayName(call.sponsor),
+        sponsorId: call.sponsor_id,
+        location: call.location ?? 'En ligne',
+        dateLabel: call.deadline
+          ? `Clôture ${new Date(call.deadline).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: 'long',
+            })}`
+          : 'Dossier en continu',
+        dateValue: deadline,
+        reward: call.reward ?? undefined,
+        highlight: call.highlight ?? undefined,
+        coverImage: call.cover_image_url ?? FALLBACK_COVER,
+        tags: callTags,
+        participantsLabel: call.participants_label || 'Candidatures',
+        participantsCount: call.participants_count ?? 0,
+        actionLabel: call.action_label,
+        editable: true,
+        call,
+      };
+    });
+
+    const newsPosts: SponsorFeedPost[] = news.map((item) => {
+      const published = item.published_at ? new Date(item.published_at) : null;
+      const newsTags = Array.isArray(item.tags) ? item.tags : [];
+      return {
+        id: item.id,
+        type: 'news',
+        title: item.title,
+        excerpt: item.summary,
+        description: item.body,
+        sponsor: getSponsorDisplayName(item.sponsor),
+        sponsorId: item.sponsor_id,
+        location: item.location ?? 'Annonce',
+        dateLabel: item.published_at
+          ? `Publié le ${new Date(item.published_at).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: 'long',
+            })}`
+          : 'Annonce sponsor',
+        dateValue: published,
+        reward: undefined,
+        highlight: item.highlight ?? undefined,
+        coverImage: item.cover_image_url ?? FALLBACK_COVER,
+        tags: newsTags,
+        participantsLabel: item.participants_label || 'Lecteurs',
+        participantsCount: item.participants_count ?? 0,
+        actionLabel: item.action_label,
+        editable: false,
+        news: item,
+      };
+    });
+
+    return [...challengePosts, ...eventPosts, ...callPosts, ...newsPosts].sort((a, b) => {
       const aTime = a.dateValue ? a.dateValue.getTime() : 0;
       const bTime = b.dateValue ? b.dateValue.getTime() : 0;
       return aTime - bTime;
     });
-  }, [joinedChallengeSet, registeredEventSet, sponsorEvents]);
+  }, [calls, challenges, events, joinedChallengeSet, news, registeredEventSet]);
 
   const locationOptions = useMemo(() => {
     const unique = new Set<string>();
@@ -489,7 +473,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
   }, [selectedPostParticipations, participationSort]);
 
   const handleJoinChallenge = useCallback(
-    async (challenge: SponsorChallenge) => {
+    async (challenge: SponsorChallengeOpportunity) => {
       if (!profile?.id) {
         setFeedback((prev) => ({
           ...prev,
@@ -521,11 +505,18 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
       }
 
       setJoiningChallengeId(challenge.id);
-      const result = await registerForChallenge(profile.id, challenge.id);
+      const result = await registerForChallenge(profile.id, challenge.id, { sponsor: true });
       setJoiningChallengeId(null);
 
       if (result.success) {
         setJoinedChallenges((prev) => [...prev, challenge.id]);
+        setChallenges((prev) =>
+          prev.map((item) =>
+            item.id === challenge.id
+              ? { ...item, participants_count: item.participants_count + 1 }
+              : item,
+          ),
+        );
       }
 
       setFeedback((prev) => ({
@@ -545,11 +536,11 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
   );
 
   const handleJoinEvent = useCallback(
-    async (eventId: string) => {
+    async (event: SponsorEventOpportunity) => {
       if (!profile?.id) {
         setFeedback((prev) => ({
           ...prev,
-          [eventId]: {
+          [event.id]: {
             message: 'Connecte-toi pour t’inscrire.',
             tone: 'info',
           },
@@ -561,10 +552,10 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         return;
       }
 
-      if (registeredEventSet.has(eventId)) {
+      if (registeredEventSet.has(event.id)) {
         setFeedback((prev) => ({
           ...prev,
-          [eventId]: {
+          [event.id]: {
             message: 'Déjà inscrit !',
             tone: 'info',
           },
@@ -576,17 +567,22 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         return;
       }
 
-      setJoiningEventId(eventId);
-      const result = await registerForEvent(profile.id, eventId);
+      setJoiningEventId(event.id);
+      const result = await registerForEvent(profile.id, event.id, { sponsor: true });
       setJoiningEventId(null);
 
       if (result.success) {
-        setRegisteredEvents((prev) => [...prev, eventId]);
+        setRegisteredEvents((prev) => [...prev, event.id]);
+        setEvents((prev) =>
+          prev.map((item) =>
+            item.id === event.id ? { ...item, attendees: item.attendees + 1 } : item,
+          ),
+        );
       }
 
       setFeedback((prev) => ({
         ...prev,
-        [eventId]: {
+        [event.id]: {
           message: result.message,
           tone: result.success ? 'success' : 'info',
         },
@@ -736,6 +732,20 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
             Explore les défis, événements et appels à projets proposés par nos partenaires. Filtre selon ta localisation, tes objectifs et participe directement depuis le fil d’actualité.
           </p>
         </div>
+        {isSponsor && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setFormState({ mode: 'create', type: 'challenge' })}
+              className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-400"
+            >
+              <Plus size={16} /> Publier une opportunité
+            </button>
+            <span className="text-xs text-gray-400">
+              Crée un défi, un événement ou un appel à projet sponsorisé.
+            </span>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-dark-900/60 border border-dark-700 rounded-2xl p-4 flex items-start gap-3">
             <Gift className="text-orange-400" size={22} />
@@ -776,8 +786,12 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-orange-300">
-            <Filter size={18} />
-            <span>{filteredPosts.length} opportunités disponibles</span>
+            {loadingOpportunities ? <Loader2 size={18} className="animate-spin" /> : <Filter size={18} />}
+            <span>
+              {loadingOpportunities
+                ? 'Chargement des opportunités...'
+                : `${filteredPosts.length} opportunités disponibles`}
+            </span>
           </div>
         </div>
 
@@ -846,6 +860,12 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         </div>
       </section>
 
+      {loadError && (
+        <div className="bg-rose-500/10 border border-rose-500/40 rounded-2xl p-4 text-sm text-rose-200">
+          {loadError}
+        </div>
+      )}
+
       <section className="space-y-6">
         {filteredPosts.map((post) => {
           const relativeDate = formatRelativeDate(post.dateValue);
@@ -866,6 +886,46 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
                   className="absolute inset-0 h-full w-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/40 to-transparent" />
+                {isSponsor && post.editable && profile?.id === post.sponsorId && (
+                  <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (post.type === 'challenge' && post.challenge) {
+                          setFormState({ mode: 'edit', type: 'challenge', record: post.challenge });
+                        } else if (post.type === 'event' && post.event) {
+                          setFormState({ mode: 'edit', type: 'event', record: post.event });
+                        } else if (post.type === 'call' && post.call) {
+                          setFormState({ mode: 'edit', type: 'call', record: post.call });
+                        }
+                      }}
+                      className="inline-flex items-center justify-center rounded-full bg-black/50 p-2 text-gray-200 hover:bg-black/70"
+                      aria-label="Modifier l'opportunité"
+                    >
+                      <PenSquare size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        if (!confirm('Supprimer cette opportunité sponsor ?')) {
+                          return;
+                        }
+
+                        try {
+                          await handleOpportunityDeleted(post.type as SponsorEditableOpportunityType, post.id);
+                        } catch {
+                          /* already handled */
+                        }
+                      }}
+                      className="inline-flex items-center justify-center rounded-full bg-black/50 p-2 text-gray-200 hover:bg-black/70"
+                      aria-label="Supprimer l'opportunité"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
                 <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1">
                     <span className="text-xs uppercase tracking-wide text-orange-300">
@@ -956,16 +1016,45 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
           );
         })}
 
-        {filteredPosts.length === 0 && (
-          <div className="bg-dark-900/60 border border-dark-700 rounded-3xl p-12 text-center space-y-3">
-            <Filter size={32} className="mx-auto text-gray-600" />
-            <h3 className="text-lg font-semibold text-white">Aucun résultat pour ces filtres</h3>
-            <p className="text-sm text-gray-400">
-              Ajuste ta recherche ou réinitialise les filtres pour découvrir d’autres programmes sponsors.
-            </p>
-          </div>
-        )}
+      {filteredPosts.length === 0 && (
+        <div className="bg-dark-900/60 border border-dark-700 rounded-3xl p-12 text-center space-y-3">
+          <Filter size={32} className="mx-auto text-gray-600" />
+          <h3 className="text-lg font-semibold text-white">Aucun résultat pour ces filtres</h3>
+          <p className="text-sm text-gray-400">
+            Ajuste ta recherche ou réinitialise les filtres pour découvrir d’autres programmes sponsors.
+          </p>
+        </div>
+      )}
       </section>
+
+      {formState && profile?.id && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setFormState(null)} />
+          <div className="relative w-full max-w-3xl rounded-3xl border border-dark-700 bg-dark-900 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setFormState(null)}
+              className="absolute top-4 right-4 z-10 rounded-full bg-dark-800/80 p-2 text-gray-300 hover:bg-dark-700"
+            >
+              <X size={18} />
+            </button>
+            <div className="p-6 sm:p-8">
+              <SponsorPostForm
+                sponsorId={profile.id}
+                mode={formState.mode}
+                initial={
+                  formState.mode === 'edit'
+                    ? { type: formState.type, data: formState.record }
+                    : undefined
+                }
+                onCancel={() => setFormState(null)}
+                onSaved={handleOpportunitySaved}
+                onDeleted={handleOpportunityDeleted}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedPost && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10">
@@ -1058,7 +1147,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
                 {selectedPost.type === 'event' && selectedPost.event && (
                   <button
                     type="button"
-                    onClick={() => handleJoinEvent(selectedPost.event!.id)}
+                    onClick={() => handleJoinEvent(selectedPost.event!)}
                     disabled={registeredEventSet.has(selectedPost.id) || joiningEventId === selectedPost.id}
                     className={`px-5 py-3 rounded-full text-sm font-semibold transition-colors border ${
                       registeredEventSet.has(selectedPost.id)
@@ -1299,7 +1388,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
                           type="button"
                           onClick={() => {
                             if (selectedPost.type === 'event' && selectedPost.event) {
-                              handleJoinEvent(selectedPost.event.id);
+                              handleJoinEvent(selectedPost.event);
                             } else if (selectedPost.type === 'call') {
                               setModalFeedback({
                                 message: 'Espace de dépôt bientôt disponible, contacte partnerships@shredloc.com.',

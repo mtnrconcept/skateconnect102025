@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { isNative, capturePhoto, pickPhoto } from './capacitor';
 
-export type StorageBucket = 'avatars' | 'covers' | 'posts' | 'spots' | 'challenges' | 'messages';
+export type StorageBucket = 'avatars' | 'covers' | 'posts' | 'spots' | 'challenges' | 'messages' | 'sponsors';
 
 export interface UploadResult {
   url: string;

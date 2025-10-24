@@ -408,6 +408,7 @@ function App() {
             <Footer onSectionChange={handleNavigateToContent} />
           </div>
         </div>
+        </div>
       </SponsorProvider>
     );
   }
