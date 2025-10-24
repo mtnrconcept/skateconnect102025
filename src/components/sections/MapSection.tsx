@@ -10,7 +10,7 @@ import type { Spot } from '../../types';
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
 const INITIAL_CARD_COUNT = 6;
-const LOAD_MORE_COUNT = 6;
+const CARD_TRANSITION_DURATION = 300;
 
 interface MapSectionProps {
   focusSpotId?: string | null;
@@ -22,6 +22,8 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const lastFocusedSpotRef = useRef<string | null>(null);
+  const leavingTimeoutRef = useRef<number | null>(null);
+  const enteringTimeoutRef = useRef<number | null>(null);
 
   const [spots, setSpots] = useState<Spot[]>([]);
   const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
@@ -29,7 +31,8 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_CARD_COUNT);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [transitionPhase, setTransitionPhase] = useState<'idle' | 'leaving' | 'entering'>('idle');
 
   useEffect(() => {
     setLoading(true);
@@ -37,18 +40,65 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   }, [filter]);
 
   useEffect(() => {
-    setVisibleCount(INITIAL_CARD_COUNT);
+    if (leavingTimeoutRef.current) {
+      window.clearTimeout(leavingTimeoutRef.current);
+      leavingTimeoutRef.current = null;
+    }
+    if (enteringTimeoutRef.current) {
+      window.clearTimeout(enteringTimeoutRef.current);
+      enteringTimeoutRef.current = null;
+    }
+
+    setCurrentPage(0);
+    setTransitionPhase('idle');
   }, [filter]);
 
   useEffect(() => {
-    setVisibleCount((current) => {
-      if (spots.length === 0) {
-        return INITIAL_CARD_COUNT;
+    setCurrentPage((page) => {
+      const totalPages = Math.max(1, Math.ceil(spots.length / INITIAL_CARD_COUNT));
+      return Math.min(page, totalPages - 1);
+    });
+    if (leavingTimeoutRef.current) {
+      window.clearTimeout(leavingTimeoutRef.current);
+      leavingTimeoutRef.current = null;
+    }
+    if (enteringTimeoutRef.current) {
+      window.clearTimeout(enteringTimeoutRef.current);
+      enteringTimeoutRef.current = null;
+    }
+    setTransitionPhase('idle');
+  }, [spots.length]);
+
+  useEffect(() => {
+    if (transitionPhase === 'entering') {
+      if (enteringTimeoutRef.current) {
+        window.clearTimeout(enteringTimeoutRef.current);
       }
 
-      return Math.min(current, spots.length);
-    });
-  }, [spots]);
+      enteringTimeoutRef.current = window.setTimeout(() => {
+        setTransitionPhase('idle');
+        enteringTimeoutRef.current = null;
+      }, CARD_TRANSITION_DURATION);
+
+      return () => {
+        if (enteringTimeoutRef.current) {
+          window.clearTimeout(enteringTimeoutRef.current);
+          enteringTimeoutRef.current = null;
+        }
+      };
+    }
+  }, [transitionPhase]);
+
+  useEffect(() => {
+    return () => {
+      if (leavingTimeoutRef.current) {
+        window.clearTimeout(leavingTimeoutRef.current);
+      }
+      if (enteringTimeoutRef.current) {
+        window.clearTimeout(enteringTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -475,11 +525,29 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     { id: 'diy', label: 'DIY' },
   ];
 
-  const visibleSpots = spots.slice(0, visibleCount);
-  const hasMoreSpots = visibleCount < spots.length;
+  const totalPages = Math.ceil(spots.length / INITIAL_CARD_COUNT);
+  const visibleSpots = spots.slice(
+    currentPage * INITIAL_CARD_COUNT,
+    currentPage * INITIAL_CARD_COUNT + INITIAL_CARD_COUNT
+  );
+  const hasMoreSpots = currentPage < totalPages - 1;
 
   const handleLoadMore = () => {
-    setVisibleCount((count) => Math.min(count + LOAD_MORE_COUNT, spots.length));
+    if (!hasMoreSpots || transitionPhase !== 'idle') {
+      return;
+    }
+
+    if (leavingTimeoutRef.current) {
+      window.clearTimeout(leavingTimeoutRef.current);
+    }
+
+    setTransitionPhase('leaving');
+
+    leavingTimeoutRef.current = window.setTimeout(() => {
+      setCurrentPage((page) => Math.min(page + 1, Math.max(totalPages - 1, 0)));
+      setTransitionPhase('entering');
+      leavingTimeoutRef.current = null;
+    }, CARD_TRANSITION_DURATION);
   };
 
   return (
@@ -532,7 +600,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div className="grid h-full grid-cols-1 lg:grid-cols-[1.5fr,1fr]">
+        <div className="grid h-full grid-cols-1 lg:grid-cols-[minmax(0,1fr),minmax(0,1.35fr)]">
           <div className="relative h-[360px] overflow-hidden border-b border-dark-800 lg:h-full lg:border-b-0 lg:border-r lg:border-dark-800">
             <div ref={mapContainer} className="absolute inset-0" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
@@ -576,17 +644,20 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                 <div className="flex h-full flex-col">
                   <div className="flex-1 overflow-y-auto px-6 py-6">
                     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                      {visibleSpots.map((spot, index) => {
+                      {visibleSpots.map((spot) => {
                         const coverPhotoUrl = spotCoverPhotos[spot.id];
                         const difficulty = Math.max(0, Math.min(5, spot.difficulty ?? 0));
-                        const isNewlyVisible = index >= Math.max(0, visibleCount - LOAD_MORE_COUNT);
 
                         return (
                           <button
                             key={spot.id}
                             onClick={() => flyToSpot(spot)}
                             className={`group overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20 ${
-                              isNewlyVisible ? 'animate-slide-up' : ''
+                              transitionPhase === 'leaving'
+                                ? 'animate-card-leave'
+                                : transitionPhase === 'entering'
+                                  ? 'animate-card-enter'
+                                  : 'animate-slide-up'
                             }`}
                           >
                             <div className="relative h-36 w-full overflow-hidden">
@@ -649,7 +720,8 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                     <div className="border-t border-dark-800/60 bg-dark-900/80 px-6 py-4">
                       <button
                         onClick={handleLoadMore}
-                        className="w-full rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl"
+                        disabled={transitionPhase !== 'idle'}
+                        className="w-full rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         Afficher plus
                       </button>
