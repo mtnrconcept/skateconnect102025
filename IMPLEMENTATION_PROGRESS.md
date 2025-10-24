@@ -38,7 +38,13 @@
 - [x] Triggers pour compteur de commentaires
 - [x] Notifications automatiques pour commentaires
 
-### 2.2 Édition de Profil Complète ✅
+### 2.2 Section Événements (Agenda) ✅
+- [x] Bouton "Ajouter à mon agenda" avec export ICS automatique
+- [x] Partage natif via Web Share API quand disponible
+- [x] Feedback utilisateur unifié pour inscription et ajout calendrier
+- [x] Documentation et tests sur le format ICS généré
+
+### 2.3 Édition de Profil Complète ✅
 - [x] Modal d'édition de profil complète
 - [x] Upload avatar avec crop carré (1:1)
 - [x] Upload cover photo avec crop panoramique (3:1)
@@ -46,7 +52,7 @@
 - [x] Compression automatique des images
 - [x] EditProfileModal component
 
-### 2.3 Système de Messages Privés ✅
+### 2.4 Système de Messages Privés ✅
 - [x] Tables conversations et messages créées
 - [x] Interface de messagerie (liste + chat)
 - [x] Envoi de texte et emojis
@@ -54,7 +60,7 @@
 - [x] MessagesSection component
 - [x] Triggers pour compteur de messages
 
-### 2.4 Média pour Spots ✅
+### 2.5 Média pour Spots ✅
 - [x] Upload de photos/vidéos depuis SpotDetailModal
 - [x] Galerie de médias dans SpotDetailModal
 - [x] Carousel fonctionnel avec contrôles
