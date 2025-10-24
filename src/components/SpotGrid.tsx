@@ -1,4 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, TransitionEventHandler } from 'react';
 import { MapPin, Star } from 'lucide-react';
 import type { Spot } from '../types';
 
@@ -35,18 +36,27 @@ export default function SpotGrid({
 
   /** Index de batch courant et batch à venir (pour l’anim) */
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
-  const [nextBatchIndex, setNextBatchIndex] = useState<number | null>(null);
-
-  /** Flag d’anim pour verrouiller le bouton pendant la transition */
   const [isAnimating, setIsAnimating] = useState(false);
 
-  /** Hauteur figée du wrapper pendant l’anim pour éviter tout “jump” */
-  const [gridHeight, setGridHeight] = useState<number>(0);
+  interface AnimationState {
+    nextIndex: number;
+    currentSpots: (Spot | null)[];
+    nextSpots: (Spot | null)[];
+  }
+
+  const [pendingAnimation, setPendingAnimation] = useState<AnimationState | null>(null);
+  const pendingAnimationRef = useRef<AnimationState | null>(null);
+
+  /** Slider metrics */
+  const sliderRef = useRef<HTMLDivElement | null>(null);
+  const sliderInnerRef = useRef<HTMLDivElement | null>(null);
+  const [sliderHeight, setSliderHeight] = useState<number | null>(null);
+  const [sliderTransform, setSliderTransform] = useState(0);
+  const [sliderTransitionEnabled, setSliderTransitionEnabled] = useState(false);
 
   /** Ids/refs */
   const rawId = useId();
   const gridId = `spot-grid-${rawId.replace(/:/g, '')}`;
-  const currentGridRef = useRef<HTMLDivElement | null>(null);
 
   /** Total de batches */
   const totalBatches = useMemo(() => {
@@ -75,11 +85,6 @@ export default function SpotGrid({
     [getBatchSpots, currentBatchIndex]
   );
 
-  const upcomingSpots = useMemo<(Spot | null)[]>(
-    () => (nextBatchIndex !== null ? getBatchSpots(nextBatchIndex) : []),
-    [getBatchSpots, nextBatchIndex]
-  );
-
   /** Toggle */
   const hasMultipleBatches = totalBatches > 1;
   const shouldShowToggle = hasMultipleBatches;
@@ -88,72 +93,127 @@ export default function SpotGrid({
   const handleToggle = () => {
     if (!hasMultipleBatches || isAnimating) return;
     const nextIndex = totalBatches === 0 ? 0 : (currentBatchIndex + 1) % totalBatches;
-    setNextBatchIndex(nextIndex);
+    const nextSpots = getBatchSpots(nextIndex);
+    setPendingAnimation({
+      nextIndex,
+      currentSpots: visibleSpots,
+      nextSpots,
+    });
     setIsAnimating(true);
   };
 
   /** Reset propre quand les données changent */
   useEffect(() => {
     setCurrentBatchIndex(0);
-    setNextBatchIndex(null);
+    setPendingAnimation(null);
     setIsAnimating(false);
+    setSliderTransform(0);
+    setSliderTransitionEnabled(false);
   }, [spots, batchSize]);
 
-  /** Mesure de la hauteur courante (fige le wrapper pendant l’anim) */
-  useLayoutEffect(() => {
-    const currentGrid = currentGridRef.current;
-    if (!currentGrid) {
-      setGridHeight(0);
-      return;
-    }
-
-    const updateHeight = () => {
-      const { height } = currentGrid.getBoundingClientRect();
-      setGridHeight(height);
-    };
-
-    updateHeight();
-
-    if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(updateHeight);
-      observer.observe(currentGrid);
-      return () => observer.disconnect();
-    }
-  }, [visibleSpots]);
-
-  /** Re-sync hauteur au resize fenêtre (les cartes sont carrées => hauteur dépend de la largeur) */
   useEffect(() => {
+    pendingAnimationRef.current = pendingAnimation;
+  }, [pendingAnimation]);
+
+  /** Mesure de la page visible */
+  const measureCurrentPage = useCallback(() => {
+    if (pendingAnimation) return;
+    const page = sliderInnerRef.current?.querySelector<HTMLElement>('[data-page]');
+    if (!page) return;
+    const { height } = page.getBoundingClientRect();
+    setSliderHeight(height);
+  }, [pendingAnimation]);
+
+  useLayoutEffect(() => {
+    measureCurrentPage();
+  }, [measureCurrentPage, visibleSpots]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     const handleResize = () => {
-      if (!currentGridRef.current) return;
-      const { height } = currentGridRef.current.getBoundingClientRect();
-      setGridHeight(height);
+      measureCurrentPage();
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [measureCurrentPage]);
 
-  /** Commit au vrai événement CSS (pas de setTimeout -> aucune double anim, jamais d’out-of-sync) */
-  const handleTransitionEnd: React.TransitionEventHandler<HTMLDivElement> = (e) => {
-    if (e.propertyName !== 'transform') return;
-    if (!isAnimating || nextBatchIndex === null) return;
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (!sliderRef.current) return;
 
-    // Commit : on bascule le batch courant
-    setCurrentBatchIndex(nextBatchIndex);
-    setNextBatchIndex(null);
+    const observer = new ResizeObserver(() => {
+      measureCurrentPage();
+    });
+
+    observer.observe(sliderRef.current);
+
+    return () => observer.disconnect();
+  }, [measureCurrentPage]);
+
+  /** Lance l’animation slide-up */
+  useLayoutEffect(() => {
+    if (!pendingAnimation) return;
+
+    const inner = sliderInnerRef.current;
+    if (!inner) return;
+
+    const pages = inner.querySelectorAll<HTMLElement>('[data-page]');
+    const currentPage = pages[0];
+    const nextPage = pages[1];
+
+    if (!currentPage || !nextPage) return;
+
+    const currentHeight = currentPage.getBoundingClientRect().height;
+    const nextHeight = nextPage.getBoundingClientRect().height;
+
+    setSliderTransitionEnabled(false);
+    setSliderTransform(0);
+    setSliderHeight(currentHeight);
+
+    requestAnimationFrame(() => {
+      setSliderHeight(nextHeight);
+      requestAnimationFrame(() => {
+        setSliderTransitionEnabled(true);
+        setSliderTransform(-currentHeight);
+      });
+    });
+  }, [pendingAnimation]);
+
+  /** Commit lorsque la transition est terminée */
+  const handleSliderTransitionEnd: TransitionEventHandler<HTMLDivElement> = (event) => {
+    if (event.propertyName !== 'transform') return;
+    const payload = pendingAnimationRef.current;
+    if (!payload) return;
+
+    setSliderTransitionEnabled(false);
+    setSliderTransform(0);
+    setPendingAnimation(null);
+    setCurrentBatchIndex(payload.nextIndex);
     setIsAnimating(false);
   };
 
-  /** Grilles (3×3 fixes) + classes d’anim */
-  const baseGridClasses =
-    'grid grid-cols-3 gap-4 will-change-transform transition-transform transition-opacity duration-500 ease-in-out';
+  useEffect(() => {
+    if (pendingAnimation) return;
+    const id = requestAnimationFrame(() => {
+      setSliderTransitionEnabled(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [pendingAnimation, currentBatchIndex]);
 
-  const currentGridClasses = `${baseGridClasses} ${
-    isAnimating ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
-  }`;
+  const pageClasses = 'grid grid-cols-3 gap-4';
 
-  const upcomingGridClasses = `${baseGridClasses} absolute inset-0 ${
-    isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
-  } pointer-events-none`;
+  const sliderStyle = sliderHeight !== null ? { height: `${sliderHeight}px` } : undefined;
+
+  const sliderInnerStyle: CSSProperties = {
+    transform: `translateY(${sliderTransform}px)`,
+    transition: sliderTransitionEnabled ? 'transform .55s cubic-bezier(.22,.61,.36,1)' : 'none',
+  };
+
+  const renderPage = (items: (Spot | null)[], key: string) => (
+    <div key={key} data-page className={pageClasses}>
+      {items.map((spot, index) => renderSpotCard(spot, key, index))}
+    </div>
+  );
 
   /** Rendu carte (spot ou placeholder) */
   const renderSpotCard = (spot: Spot | null, keyPrefix: string, index: number) => {
@@ -253,25 +313,28 @@ export default function SpotGrid({
   return (
     <div className="flex h-full flex-col">
       <div className="relative flex-1 overflow-hidden px-6 pt-6 pb-28 lg:pb-48">
-        {/* Wrapper avec hauteur figée pendant l’anim + commit au transitionend */}
-        <div
-          id={gridId}
-          className="relative"
-          role="list"
-          style={gridHeight ? { height: gridHeight } : undefined}
-          onTransitionEnd={handleTransitionEnd}
-        >
-          {/* Grille courante */}
-          <div ref={currentGridRef} className={currentGridClasses} data-grid-stage="current">
-            {visibleSpots.map((spot, index) => renderSpotCard(spot, 'current', index))}
-          </div>
-
-          {/* Grille à venir (overlay) */}
-          {nextBatchIndex !== null && upcomingSpots.length > 0 && (
-            <div className={upcomingGridClasses} data-grid-stage="upcoming" aria-hidden="true" style={{ top: 0 }}>
-              {upcomingSpots.map((spot, index) => renderSpotCard(spot, 'upcoming', index))}
+        <div id={gridId} className="relative h-full" role="list">
+          <div
+            ref={sliderRef}
+            className="relative w-full overflow-hidden transition-[height] duration-300 ease-in-out"
+            style={sliderStyle}
+          >
+            <div
+              ref={sliderInnerRef}
+              className="relative will-change-transform"
+              style={sliderInnerStyle}
+              onTransitionEnd={handleSliderTransitionEnd}
+            >
+              {pendingAnimation ? (
+                <div className="grid auto-rows-auto" data-stack>
+                  {renderPage(pendingAnimation.currentSpots, `current-${currentBatchIndex}`)}
+                  {renderPage(pendingAnimation.nextSpots, `upcoming-${pendingAnimation.nextIndex}`)}
+                </div>
+              ) : (
+                renderPage(visibleSpots, `static-${currentBatchIndex}`)
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* CTA sticky (mobile) + CTA flottant (desktop) */}
