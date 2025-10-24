@@ -633,7 +633,7 @@ export default function MapSection({
               ) : (
                 <SpotGrid
                   spots={spots}
-                  initialCount={6}
+                  initialCount={3}
                   onSpotClick={flyToSpot}
                   coverPhotos={spotCoverPhotos}
                 />
