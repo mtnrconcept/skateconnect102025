@@ -4,14 +4,15 @@ import type { Spot } from '../types';
 
 interface SpotGridProps {
   spots: Spot[];
-  initialCount?: number;
+  initialCount?: number;              // ignoré si < 9 : on force des batches de 9 pour 3×3
   onSpotClick?: (spot: Spot) => void;
   coverPhotos?: Record<string, string>;
 }
 
-const DEFAULT_INITIAL_COUNT = 6;
-const ANIMATION_DURATION = 500;
+/** Spéc: 3 × 3 => 9 cartes par “page” */
+const PAGE_SIZE = 9;
 
+/** Labels propres pour le badge type de spot */
 const getSpotTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
     street: 'Street',
@@ -20,114 +21,86 @@ const getSpotTypeLabel = (type: string) => {
     diy: 'DIY',
     transition: 'Transition',
   };
-
   return labels[type] || type;
 };
 
 export default function SpotGrid({
   spots,
-  initialCount = DEFAULT_INITIAL_COUNT,
+  initialCount = PAGE_SIZE,
   onSpotClick,
   coverPhotos,
 }: SpotGridProps) {
-  const batchSize = Math.max(initialCount, DEFAULT_INITIAL_COUNT);
+  /** Toujours >= 9 pour garantir 3×3 */
+  const batchSize = Math.max(initialCount ?? PAGE_SIZE, PAGE_SIZE);
+
+  /** Index de batch courant et batch à venir (pour l’anim) */
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
   const [nextBatchIndex, setNextBatchIndex] = useState<number | null>(null);
+
+  /** Flag d’anim pour verrouiller le bouton pendant la transition */
   const [isAnimating, setIsAnimating] = useState(false);
+
+  /** Hauteur figée du wrapper pendant l’anim pour éviter tout “jump” */
   const [gridHeight, setGridHeight] = useState<number>(0);
+
+  /** Ids/refs */
   const rawId = useId();
   const gridId = `spot-grid-${rawId.replace(/:/g, '')}`;
   const currentGridRef = useRef<HTMLDivElement | null>(null);
-  const animationTimeoutRef = useRef<number | null>(null);
 
+  /** Total de batches */
   const totalBatches = useMemo(() => {
-    if (batchSize === 0) {
-      return 0;
-    }
+    if (batchSize === 0) return 0;
     return Math.max(1, Math.ceil(spots.length / batchSize));
   }, [spots.length, batchSize]);
 
+  /** Helper pour découper un batch complet (rempli avec placeholders null si < batchSize) */
   const getBatchSpots = useMemo(() => {
     return (batch: number) => {
-      if (batchSize <= 0) {
-        return [] as (Spot | null)[];
-      }
-
+      if (batchSize <= 0) return [] as (Spot | null)[];
       const start = batch * batchSize;
       const slice = spots.slice(start, start + batchSize);
 
-      if (slice.length === batchSize || spots.length === 0) {
-        return slice;
-      }
+      if (slice.length === batchSize || spots.length === 0) return slice;
 
       const filled: (Spot | null)[] = [...slice];
-      while (filled.length < batchSize) {
-        filled.push(null);
-      }
-
+      while (filled.length < batchSize) filled.push(null);
       return filled;
     };
   }, [spots, batchSize]);
 
-  const visibleSpots = useMemo<(Spot | null)[]>(() => getBatchSpots(currentBatchIndex), [getBatchSpots, currentBatchIndex]);
+  /** Collections visibles / à venir */
+  const visibleSpots = useMemo<(Spot | null)[]>(
+    () => getBatchSpots(currentBatchIndex),
+    [getBatchSpots, currentBatchIndex]
+  );
 
   const upcomingSpots = useMemo<(Spot | null)[]>(
     () => (nextBatchIndex !== null ? getBatchSpots(nextBatchIndex) : []),
-    [getBatchSpots, nextBatchIndex],
+    [getBatchSpots, nextBatchIndex]
   );
 
+  /** Toggle */
   const hasMultipleBatches = totalBatches > 1;
-
   const shouldShowToggle = hasMultipleBatches;
+  const toggleLabel = 'Afficher plus';
 
   const handleToggle = () => {
-    if (!hasMultipleBatches || isAnimating) {
-      return;
-    }
-
+    if (!hasMultipleBatches || isAnimating) return;
     const nextIndex = totalBatches === 0 ? 0 : (currentBatchIndex + 1) % totalBatches;
     setNextBatchIndex(nextIndex);
     setIsAnimating(true);
-
-    if (animationTimeoutRef.current !== null) {
-      window.clearTimeout(animationTimeoutRef.current);
-    }
-
-    animationTimeoutRef.current = window.setTimeout(() => {
-      setCurrentBatchIndex(nextIndex);
-      setIsAnimating(false);
-      setNextBatchIndex(null);
-      animationTimeoutRef.current = null;
-    }, ANIMATION_DURATION);
   };
 
-  const toggleLabel = 'Afficher plus';
-
+  /** Reset propre quand les données changent */
   useEffect(() => {
-    if (animationTimeoutRef.current !== null) {
-      window.clearTimeout(animationTimeoutRef.current);
-      animationTimeoutRef.current = null;
-    }
     setCurrentBatchIndex(0);
     setNextBatchIndex(null);
     setIsAnimating(false);
   }, [spots, batchSize]);
 
-  useEffect(
-    () => () => {
-      if (animationTimeoutRef.current !== null) {
-        window.clearTimeout(animationTimeoutRef.current);
-        animationTimeoutRef.current = null;
-      }
-    },
-    [],
-  );
-
+  /** Mesure de la hauteur courante (fige le wrapper pendant l’anim) */
   useLayoutEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     const currentGrid = currentGridRef.current;
     if (!currentGrid) {
       setGridHeight(0);
@@ -142,44 +115,47 @@ export default function SpotGrid({
     updateHeight();
 
     if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(() => {
-        updateHeight();
-      });
-
+      const observer = new ResizeObserver(updateHeight);
       observer.observe(currentGrid);
-
-      return () => {
-        observer.disconnect();
-      };
+      return () => observer.disconnect();
     }
-
-    return undefined;
   }, [visibleSpots]);
 
+  /** Re-sync hauteur au resize fenêtre (les cartes sont carrées => hauteur dépend de la largeur) */
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     const handleResize = () => {
-      if (!currentGridRef.current) {
-        return;
-      }
+      if (!currentGridRef.current) return;
       const { height } = currentGridRef.current.getBoundingClientRect();
       setGridHeight(height);
     };
-
     window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const baseGridClasses =
-    'grid gap-4 sm:grid-cols-2 xl:grid-cols-3 transition-transform transition-opacity duration-700 ease-in-out';
-  const currentGridClasses = `${baseGridClasses} ${isAnimating ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`;
-  const upcomingGridClasses = `${baseGridClasses} absolute inset-0 ${isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'} pointer-events-none`;
+  /** Commit au vrai événement CSS (pas de setTimeout -> aucune double anim, jamais d’out-of-sync) */
+  const handleTransitionEnd: React.TransitionEventHandler<HTMLDivElement> = (e) => {
+    if (e.propertyName !== 'transform') return;
+    if (!isAnimating || nextBatchIndex === null) return;
 
+    // Commit : on bascule le batch courant
+    setCurrentBatchIndex(nextBatchIndex);
+    setNextBatchIndex(null);
+    setIsAnimating(false);
+  };
+
+  /** Grilles (3×3 fixes) + classes d’anim */
+  const baseGridClasses =
+    'grid grid-cols-3 gap-4 will-change-transform transition-transform transition-opacity duration-500 ease-in-out';
+
+  const currentGridClasses = `${baseGridClasses} ${
+    isAnimating ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+  }`;
+
+  const upcomingGridClasses = `${baseGridClasses} absolute inset-0 ${
+    isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
+  } pointer-events-none`;
+
+  /** Rendu carte (spot ou placeholder) */
   const renderSpotCard = (spot: Spot | null, keyPrefix: string, index: number) => {
     const key = `${keyPrefix}-${spot ? spot.id : 'placeholder'}-${index}`;
 
@@ -204,7 +180,7 @@ export default function SpotGrid({
       );
     }
 
-    const extendedSpot = spot as Spot & { rating?: number; mediaUrl?: string; media_url?: string };
+    const extendedSpot = spot as Spot & { rating?: number; mediaUrl?: string; media_url?: string; difficulty?: number };
     const coverPhotoUrl = coverPhotos?.[spot.id];
     const mediaUrl = coverPhotoUrl ?? extendedSpot.mediaUrl ?? extendedSpot.media_url;
     const rating = Math.max(0, Math.min(5, extendedSpot.rating ?? extendedSpot.difficulty ?? 0));
@@ -220,7 +196,7 @@ export default function SpotGrid({
           <img
             src={mediaUrl}
             alt={spot.name}
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-105"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-105"
           />
         ) : (
           <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900 text-xs uppercase tracking-widest text-gray-500">
@@ -228,11 +204,11 @@ export default function SpotGrid({
           </div>
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-900/90 via-dark-900/20 to-transparent transition-opacity duration-700 ease-in-out group-hover:opacity-100" />
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-900/90 via-dark-900/20 to-transparent transition-opacity duration-500 ease-in-out group-hover:opacity-100" />
 
         <div className="absolute left-4 top-4 flex items-center gap-2">
           <span className="rounded-full bg-orange-500/90 px-3 py-1 text-xs font-semibold uppercase text-white">
-            {getSpotTypeLabel(spot.spot_type)}
+            {getSpotTypeLabel((spot as any).spot_type)}
           </span>
         </div>
 
@@ -250,9 +226,9 @@ export default function SpotGrid({
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
-              {spot.creator?.username && (
+              {(spot as any).creator?.username && (
                 <span className="rounded-full border border-dark-600 bg-dark-900/70 px-3 py-1 text-xs text-gray-300">
-                  @{spot.creator?.username}
+                  @{(spot as any).creator?.username}
                 </span>
               )}
             </div>
@@ -277,40 +253,50 @@ export default function SpotGrid({
   return (
     <div className="flex h-full flex-col">
       <div className="relative flex-1 overflow-hidden px-6 pt-6 pb-28 lg:pb-48">
+        {/* Wrapper avec hauteur figée pendant l’anim + commit au transitionend */}
         <div
           id={gridId}
           className="relative"
           role="list"
           style={gridHeight ? { height: gridHeight } : undefined}
+          onTransitionEnd={handleTransitionEnd}
         >
+          {/* Grille courante */}
           <div ref={currentGridRef} className={currentGridClasses} data-grid-stage="current">
             {visibleSpots.map((spot, index) => renderSpotCard(spot, 'current', index))}
           </div>
 
+          {/* Grille à venir (overlay) */}
           {nextBatchIndex !== null && upcomingSpots.length > 0 && (
-            <div className={upcomingGridClasses} data-grid-stage="upcoming" aria-hidden="true">
+            <div className={upcomingGridClasses} data-grid-stage="upcoming" aria-hidden="true" style={{ top: 0 }}>
               {upcomingSpots.map((spot, index) => renderSpotCard(spot, 'upcoming', index))}
             </div>
           )}
         </div>
 
+        {/* CTA sticky (mobile) + CTA flottant (desktop) */}
         {shouldShowToggle && (
           <>
             <div className="sticky bottom-0 -mx-6 mt-6 bg-gradient-to-t from-dark-900 via-dark-900/95 to-dark-900/20 px-6 pb-4 pt-6 lg:hidden">
               <button
                 type="button"
                 onClick={handleToggle}
-                className="w-full rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl"
+                disabled={isAnimating}
+                className="w-full rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60 disabled:hover:translate-y-0"
                 aria-controls={gridId}
+                aria-expanded={isAnimating ? true : false}
               >
                 {toggleLabel}
               </button>
             </div>
+
             <button
               type="button"
               onClick={handleToggle}
-              className="hidden lg:fixed lg:bottom-[7.5rem] lg:right-16 lg:z-40 lg:inline-flex lg:min-w-[240px] lg:items-center lg:justify-center rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.35em] text-white shadow-lg shadow-orange-900/40 transition-transform hover:-translate-y-1 hover:shadow-xl"
+              disabled={isAnimating}
+              className="hidden lg:fixed lg:bottom-[7.5rem] lg:right-16 lg:z-40 lg:inline-flex lg:min-w-[240px] lg:items-center lg:justify-center rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.35em] text-white shadow-lg shadow-orange-900/40 transition-transform hover:-translate-y-1 hover:shadow-xl disabled:opacity-60 disabled:hover:translate-y-0"
               aria-controls={gridId}
+              aria-expanded={isAnimating ? true : false}
             >
               {toggleLabel}
             </button>
