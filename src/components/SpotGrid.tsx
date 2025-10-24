@@ -175,7 +175,8 @@ export default function SpotGrid({
     };
   }, []);
 
-  const baseGridClasses = 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3 transition-transform transition-opacity duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]';
+  const baseGridClasses =
+    'grid gap-4 sm:grid-cols-2 xl:grid-cols-3 transition-transform transition-opacity duration-700 ease-in-out';
   const currentGridClasses = `${baseGridClasses} ${isAnimating ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`;
   const upcomingGridClasses = `${baseGridClasses} absolute inset-0 ${isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'} pointer-events-none`;
 
@@ -186,21 +187,18 @@ export default function SpotGrid({
       return (
         <div
           key={key}
-          className="flex flex-col overflow-hidden rounded-2xl border border-dashed border-dark-700/60 bg-dark-800/40 text-left shadow-lg shadow-black/10"
+          className="relative aspect-square w-full overflow-hidden rounded-2xl border border-dashed border-dark-700/60 bg-dark-800/40 text-left shadow-lg shadow-black/10"
           role="listitem"
           aria-hidden="true"
         >
-          <div className="relative w-full overflow-hidden aspect-square">
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900/80 text-gray-500">
-              <span className="rounded-full border border-dark-600/70 bg-dark-900/70 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
-                Spot à venir
-              </span>
-              <span className="text-[11px] uppercase tracking-[0.4em] text-gray-500/80">SkateConnect</span>
-            </div>
-          </div>
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 sm:p-5 text-center text-sm text-gray-400">
-            <p className="max-w-[14rem] text-xs uppercase tracking-[0.3em] text-gray-500">Bientôt disponible</p>
-            <p className="text-[11px] text-gray-500/80">Reste à l’affût pour découvrir ce spot</p>
+          <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900/80 text-gray-500">
+            <span className="rounded-full border border-dark-600/70 bg-dark-900/70 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Spot à venir
+            </span>
+            <span className="text-[11px] uppercase tracking-[0.4em] text-gray-500/80">SkateConnect</span>
+            <p className="max-w-[12rem] text-center text-[11px] text-gray-500/70">
+              Bientôt disponible — reste à l’affût pour découvrir ce spot.
+            </p>
           </div>
         </div>
       );
@@ -215,55 +213,61 @@ export default function SpotGrid({
       <button
         key={key}
         onClick={() => onSpotClick?.(spot)}
-        className="group overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
+        className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
         role="listitem"
       >
-        <div className="relative w-full overflow-hidden aspect-square">
-          {mediaUrl ? (
-            <img
-              src={mediaUrl}
-              alt={spot.name}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900 text-xs uppercase tracking-widest text-gray-500">
-              Aucun média
-            </div>
-          )}
-          <div className="absolute left-4 top-4 flex items-center gap-2">
-            <span className="rounded-full bg-orange-500/90 px-3 py-1 text-xs font-semibold uppercase text-white">
-              {getSpotTypeLabel(spot.spot_type)}
-            </span>
+        {mediaUrl ? (
+          <img
+            src={mediaUrl}
+            alt={spot.name}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-105"
+          />
+        ) : (
+          <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900 text-xs uppercase tracking-widest text-gray-500">
+            Aucun média
           </div>
-          <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-dark-900/80 px-3 py-1 text-xs font-semibold text-amber-300">
-            {Array.from({ length: 5 }).map((_, starIndex) => (
-              <Star
-                key={starIndex}
-                size={14}
-                className={starIndex < rating ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
-              />
-            ))}
-          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-900/90 via-dark-900/20 to-transparent transition-opacity duration-700 ease-in-out group-hover:opacity-100" />
+
+        <div className="absolute left-4 top-4 flex items-center gap-2">
+          <span className="rounded-full bg-orange-500/90 px-3 py-1 text-xs font-semibold uppercase text-white">
+            {getSpotTypeLabel(spot.spot_type)}
+          </span>
         </div>
 
-        <div className="flex flex-col gap-3 p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
-            {spot.creator?.username && (
-              <span className="rounded-full border border-dark-600 bg-dark-900/70 px-3 py-1 text-xs text-gray-400">
-                @{spot.creator?.username}
-              </span>
-            )}
-          </div>
-          {spot.description && <p className="line-clamp-2 text-sm text-gray-300">{spot.description}</p>}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
-            <div className="flex items-center gap-2 text-gray-300">
-              <MapPin size={14} className="text-orange-400" />
-              <span>{spot.address || 'Adresse non spécifiée'}</span>
+        <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-dark-900/80 px-3 py-1 text-xs font-semibold text-amber-300">
+          {Array.from({ length: 5 }).map((_, starIndex) => (
+            <Star
+              key={starIndex}
+              size={14}
+              className={starIndex < rating ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
+            />
+          ))}
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
+              {spot.creator?.username && (
+                <span className="rounded-full border border-dark-600 bg-dark-900/70 px-3 py-1 text-xs text-gray-300">
+                  @{spot.creator?.username}
+                </span>
+              )}
             </div>
-            <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-200">
-              Voir sur la carte
-            </span>
+            {spot.description && <p className="line-clamp-2 text-sm text-gray-200">{spot.description}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-200">
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-orange-400" />
+                <span className="max-w-[12rem] truncate sm:max-w-none">
+                  {spot.address || 'Adresse non spécifiée'}
+                </span>
+              </div>
+              <span className="rounded-full border border-orange-500/40 bg-orange-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-100">
+                Voir sur la carte
+              </span>
+            </div>
           </div>
         </div>
       </button>
