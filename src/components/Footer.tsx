@@ -14,8 +14,8 @@ export default function Footer({ onSectionChange }: FooterProps) {
   };
 
   return (
-    <footer className="bg-dark-800 border-t border-dark-700 py-6 px-4 text-sm text-gray-400">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+    <footer className="bg-dark-800/95 border-t border-dark-700/80 py-5 px-4 text-sm text-gray-400 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] lg:fixed lg:bottom-0 lg:left-0 lg:right-0 lg:z-40">
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 sm:flex-row lg:px-4">
         <p className="text-center sm:text-left">© {new Date().getFullYear()} Shredloc. Tous droits réservés.</p>
         <div className="flex items-center gap-4">
           <button

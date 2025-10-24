@@ -265,7 +265,7 @@ function App() {
     content = <Auth onAuthSuccess={handleAuthSuccess} />;
   } else {
     content = (
-      <div className="min-h-screen bg-dark-900">
+      <div className="min-h-screen bg-dark-900 flex flex-col">
         <Header
           profile={profile}
           currentSection={currentSection}
@@ -277,7 +277,7 @@ function App() {
           <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
         </div>
 
-        <main className={`pt-16 pb-16 md:pb-10 lg:pb-8 ${dimmedClass}`}>
+        <main className={`flex-1 pt-16 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
           {currentSection === 'map' && (
             <MapSection
               focusSpotId={mapFocusSpotId}
@@ -310,7 +310,7 @@ function App() {
         </main>
 
         <div className={dimmedClass}>{profile && <AchievementNotification profile={profile} />}</div>
-        <div className={dimmedClass}>
+        <div className={`${dimmedClass} lg:mt-auto`}>
           <Footer onSectionChange={handleNavigateToContent} />
         </div>
       </div>
