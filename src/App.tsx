@@ -383,47 +383,6 @@ function App() {
           <div className={`${dimmedClass} lg:mt-auto`}>
             <Footer onSectionChange={handleNavigateToContent} />
           </div>
-        <main className={`flex-1 pt-16 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
-          {currentSection === 'map' && (
-            <MapSection
-              focusSpotId={mapFocusSpotId}
-              onSpotFocusHandled={() => setMapFocusSpotId(null)}
-            />
-          )}
-          {currentSection === 'feed' && <FeedSection currentUser={profile} />}
-          {currentSection === 'events' && <EventsSection profile={profile} />}
-          {currentSection === 'challenges' && (
-            <ChallengesSection
-              profile={profile}
-              focusConfig={challengeFocus}
-              onFocusHandled={() => setChallengeFocus(null)}
-            />
-          )}
-          {currentSection === 'sponsors' && <SponsorsSection profile={profile} />}
-          {currentSection === 'pricing' && <PricingSection />}
-          {currentSection === 'profile' && (
-            <ProfileSection profile={profile} onProfileUpdate={setProfile} />
-          )}
-          {currentSection === 'badges' && <BadgesSection profile={profile} />}
-          {currentSection === 'rewards' && <RewardsSection profile={profile} />}
-          {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
-          {currentSection === 'messages' && (
-            <MessagesSection
-              profile={profile}
-              externalMessages={queuedDirectMessages}
-              onExternalMessagesHandled={handleQueuedMessagesProcessed}
-            />
-          )}
-          {currentSection === 'settings' && (
-            <SettingsSection profile={profile} onNavigate={handleNavigateToContent} />
-          )}
-          {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={handleNavigateToContent} />}
-          {currentSection === 'terms' && <TermsSection onNavigate={handleNavigateToContent} />}
-        </main>
-
-        <div className={dimmedClass}>{profile && <AchievementNotification profile={profile} />}</div>
-        <div className={`${dimmedClass} lg:mt-auto`}>
-          <Footer onSectionChange={handleNavigateToContent} />
         </div>
       </SponsorProvider>
     );
