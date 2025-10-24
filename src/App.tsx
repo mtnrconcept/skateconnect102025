@@ -425,7 +425,7 @@ function App() {
         </div>
     );
   } else if (!session) {
-    content = <Auth onAuthSuccess={handleAuthSuccess} />;
+    content = <Auth onAuthSuccess={handleAuthSuccess} />
   } else {
     content = (
       <SponsorProvider profile={activeProfile}>
