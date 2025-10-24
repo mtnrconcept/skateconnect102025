@@ -5,13 +5,13 @@ import type { Spot } from '../types';
 
 interface SpotGridProps {
   spots: Spot[];
-  initialCount?: number;              // ignoré si < 9 : on force des batches de 9 pour 3×3
+  initialCount?: number;              // ignoré si < 3 : on force des batches de 3 pour 3 cartes visibles
   onSpotClick?: (spot: Spot) => void;
   coverPhotos?: Record<string, string>;
 }
 
-/** Spéc: 3 × 2 => 6 cartes par “page” */
-const PAGE_SIZE = 6;
+/** Spéc: 1 × 3 => 3 cartes par “page” */
+const PAGE_SIZE = 3;
 
 /** Labels propres pour le badge type de spot */
 const getSpotTypeLabel = (type: string) => {
@@ -31,7 +31,7 @@ export default function SpotGrid({
   onSpotClick,
   coverPhotos,
 }: SpotGridProps) {
-  /** Toujours >= 9 pour garantir 3×3 */
+  /** Toujours >= 3 pour garantir 3 cartes visibles */
   const batchSize = Math.max(initialCount ?? PAGE_SIZE, PAGE_SIZE);
 
   /** Index de batch courant et batch à venir (pour l’anim) */
@@ -200,7 +200,7 @@ export default function SpotGrid({
     return () => cancelAnimationFrame(id);
   }, [pendingAnimation, currentBatchIndex]);
 
-  const pageClasses = 'grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3';
+  const pageClasses = 'grid grid-cols-1 gap-4 sm:grid-cols-3';
 
   const sliderStyle = sliderHeight !== null ? { height: `${sliderHeight}px` } : undefined;
 
