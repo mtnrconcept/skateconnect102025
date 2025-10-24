@@ -296,6 +296,34 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     });
   };
 
+  const dispatchFakeDirectMessageEvent = useCallback(
+    (profileId: string, message: FakeMessage) => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      const profileDetails = fakeProfilesById[profileId];
+      window.dispatchEvent(
+        new CustomEvent('shredloc:direct-message', {
+          detail: {
+            profileId,
+            profile: profileDetails
+              ? {
+                  id: profileDetails.id,
+                  display_name: profileDetails.display_name,
+                  username: profileDetails.username,
+                  avatar_url: profileDetails.avatar_url,
+                  location: profileDetails.location,
+                }
+              : { id: profileId },
+            message,
+          },
+        }),
+      );
+    },
+    [],
+  );
+
   const handleSendFakeMessage = (profileId: string, message: string) => {
     if (!currentUser) {
       alert('Connectez-vous pour envoyer un message.');
@@ -315,6 +343,8 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       return { ...previous, [profileId]: next };
     });
 
+    dispatchFakeDirectMessageEvent(profileId, userMessage);
+
     const replies = fakeReplyTemplates[profileId] ?? defaultFakeReplies;
     const replyContent = replies[Math.floor(Math.random() * replies.length)];
 
@@ -332,6 +362,8 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           const existing = previous[profileId] ?? [];
           return { ...previous, [profileId]: [...existing, replyMessage] };
         });
+
+        dispatchFakeDirectMessageEvent(profileId, replyMessage);
       }, 900 + Math.random() * 1200);
 
       replyTimeoutsRef.current.push(timeoutId);

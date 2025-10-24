@@ -55,6 +55,25 @@ interface MessagesSectionProps {
 type HeaderAction = 'call' | 'video' | 'info' | 'more' | 'sparkles';
 type ComposerAction = 'emoji' | 'image' | 'mic' | 'file';
 
+interface FakeDirectMessageProfile {
+  id: string;
+  display_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+  location?: string | null;
+}
+
+interface FakeDirectMessagePayload {
+  profileId: string;
+  profile?: FakeDirectMessageProfile;
+  message: {
+    id: string;
+    sender: 'fake' | 'user';
+    content: string;
+    timestamp: string;
+  };
+}
+
 const composerActionCopy: Record<ComposerAction, { title: string; description: string; templates?: string[] }> = {
   emoji: {
     title: 'Ajouter une émotion',
@@ -577,6 +596,120 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
       window.clearTimeout(timeout);
     };
   }, [toast]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleExternalDirectMessage = (event: Event) => {
+      const customEvent = event as CustomEvent<FakeDirectMessagePayload>;
+      const detail = customEvent.detail;
+      if (!detail || !detail.profileId || !detail.message) {
+        return;
+      }
+
+      const { profileId, profile: profileDetail, message } = detail;
+      const sender: ConversationSender = message.sender === 'fake' ? 'other' : 'me';
+      const parsedDate = new Date(message.timestamp);
+      const timestamp = Number.isNaN(parsedDate.getTime()) ? 'À l’instant' : formatTime(parsedDate);
+
+      let shouldSelectConversation = false;
+
+      setConversations((previous) => {
+        const existingConversation = previous.find((conversation) => conversation.id === profileId);
+
+        if (existingConversation) {
+          if (existingConversation.messages.some((item) => item.id === message.id)) {
+            return previous;
+          }
+
+          if (sender === 'me' && selectedId !== profileId) {
+            shouldSelectConversation = true;
+          }
+
+          const updatedConversation: ConversationPreview = {
+            ...existingConversation,
+            participant: {
+              ...existingConversation.participant,
+              isOnline: true,
+              lastActive: sender === 'me' ? 'En ligne' : existingConversation.participant.lastActive,
+            },
+            lastMessagePreview: message.content,
+            lastMessageTime: 'À l’instant',
+            unreadCount:
+              sender === 'other' && selectedId !== profileId
+                ? existingConversation.unreadCount + 1
+                : existingConversation.unreadCount,
+            messages: [
+              ...existingConversation.messages,
+              {
+                id: message.id,
+                sender,
+                content: message.content,
+                timestamp,
+                status: sender === 'me' ? 'sent' : undefined,
+              },
+            ],
+          };
+
+          return previous.map((conversation) =>
+            conversation.id === profileId ? updatedConversation : conversation,
+          );
+        }
+
+        const displayName = profileDetail?.display_name || profileDetail?.username || 'Membre Shredloc';
+        const avatar = profileDetail?.avatar_url || '/logo2.png';
+        const location = profileDetail?.location || 'Spot à définir';
+
+        const newConversation: ConversationPreview = {
+          id: profileId,
+          participant: {
+            id: profileId,
+            name: displayName,
+            avatar,
+            isOnline: true,
+            location,
+            lastActive: sender === 'me' ? 'En ligne' : 'Actif récemment',
+          },
+          lastMessagePreview: message.content,
+          lastMessageTime: 'À l’instant',
+          unreadCount: sender === 'other' ? 1 : 0,
+          messages: [
+            {
+              id: message.id,
+              sender,
+              content: message.content,
+              timestamp,
+              status: sender === 'me' ? 'sent' : undefined,
+            },
+          ],
+        };
+
+        shouldSelectConversation = sender === 'me';
+        return [newConversation, ...previous];
+      });
+
+      if (shouldSelectConversation) {
+        setSelectedId(profileId);
+        if (isMobileView) {
+          setMobileConversationOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener(
+      'shredloc:direct-message',
+      handleExternalDirectMessage as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'shredloc:direct-message',
+        handleExternalDirectMessage as EventListener,
+      );
+    };
+  }, [formatTime, isMobileView, selectedId]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedId(conversationId);
