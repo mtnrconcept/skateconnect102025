@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
 import Header from './components/Header';
@@ -31,6 +31,7 @@ import {
   type SubscriptionPlan,
 } from './lib/subscription';
 import type { Profile, Section, ContentNavigationOptions } from './types';
+import type { FakeDirectMessagePayload } from './types/messages';
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -44,6 +45,7 @@ function App() {
   } | null>(null);
   const [challengeFocus, setChallengeFocus] = useState<ContentNavigationOptions | null>(null);
   const [mapFocusSpotId, setMapFocusSpotId] = useState<string | null>(null);
+  const [queuedDirectMessages, setQueuedDirectMessages] = useState<FakeDirectMessagePayload[]>([]);
   const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlan>(() => {
     if (typeof window === 'undefined') {
       return DEFAULT_SUBSCRIPTION_PLAN;
@@ -116,6 +118,42 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleExternalDirectMessage = (event: Event) => {
+      const customEvent = event as CustomEvent<FakeDirectMessagePayload>;
+      const payload = customEvent.detail;
+
+      if (!payload?.message?.id) {
+        return;
+      }
+
+      setQueuedDirectMessages((previous) => {
+        if (previous.some((item) => item.message.id === payload.message.id)) {
+          return previous;
+        }
+        return [...previous, payload];
+      });
+
+      setCurrentSection((current) => (current === 'messages' ? current : 'messages'));
+    };
+
+    window.addEventListener(
+      'shredloc:direct-message',
+      handleExternalDirectMessage as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'shredloc:direct-message',
+        handleExternalDirectMessage as EventListener,
+      );
+    };
+  }, []);
+
   const loadProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -146,6 +184,16 @@ function App() {
     setSubscriptionPlan(plan);
     setRestrictionNotice(null);
   };
+
+  const handleQueuedMessagesProcessed = useCallback((messageIds: string[]) => {
+    if (!messageIds.length) {
+      return;
+    }
+
+    setQueuedDirectMessages((previous) =>
+      previous.filter((payload) => !messageIds.includes(payload.message.id)),
+    );
+  }, []);
 
   const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions): boolean => {
     if (!canAccessSection(subscriptionPlan, section)) {
@@ -301,7 +349,13 @@ function App() {
           {currentSection === 'badges' && <BadgesSection profile={profile} />}
           {currentSection === 'rewards' && <RewardsSection profile={profile} />}
           {currentSection === 'leaderboard' && <LeaderboardSection profile={profile} />}
-          {currentSection === 'messages' && <MessagesSection profile={profile} />}
+          {currentSection === 'messages' && (
+            <MessagesSection
+              profile={profile}
+              externalMessages={queuedDirectMessages}
+              onExternalMessagesHandled={handleQueuedMessagesProcessed}
+            />
+          )}
           {currentSection === 'settings' && (
             <SettingsSection profile={profile} onNavigate={handleNavigateToContent} />
           )}
