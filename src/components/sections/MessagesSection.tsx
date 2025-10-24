@@ -15,6 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import type { Profile } from '../../types';
+import type { FakeDirectMessagePayload } from '../../types/messages';
 
 interface Participant {
   id: string;
@@ -50,29 +51,12 @@ interface ConversationPreview {
 
 interface MessagesSectionProps {
   profile: Profile | null;
+  externalMessages?: FakeDirectMessagePayload[];
+  onExternalMessagesHandled?: (messageIds: string[]) => void;
 }
 
 type HeaderAction = 'call' | 'video' | 'info' | 'more' | 'sparkles';
 type ComposerAction = 'emoji' | 'image' | 'mic' | 'file';
-
-interface FakeDirectMessageProfile {
-  id: string;
-  display_name?: string | null;
-  username?: string | null;
-  avatar_url?: string | null;
-  location?: string | null;
-}
-
-interface FakeDirectMessagePayload {
-  profileId: string;
-  profile?: FakeDirectMessageProfile;
-  message: {
-    id: string;
-    sender: 'fake' | 'user';
-    content: string;
-    timestamp: string;
-  };
-}
 
 const composerActionCopy: Record<ComposerAction, { title: string; description: string; templates?: string[] }> = {
   emoji: {
@@ -287,7 +271,11 @@ const initialConversations: ConversationPreview[] = [
   },
 ];
 
-export default function MessagesSection({ profile }: MessagesSectionProps) {
+export default function MessagesSection({
+  profile,
+  externalMessages = [],
+  onExternalMessagesHandled,
+}: MessagesSectionProps) {
   const [conversations, setConversations] = useState(initialConversations);
   const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? '');
   const [searchTerm, setSearchTerm] = useState('');
@@ -303,6 +291,7 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
   const [isSparkComposerOpen, setSparkComposerOpen] = useState(false);
   const [sparkNotes, setSparkNotes] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const processedExternalMessageIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -390,6 +379,112 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
         timeStyle: 'short',
       }),
     [],
+  );
+
+  const processExternalDirectMessage = useCallback(
+    (payload: FakeDirectMessagePayload) => {
+      const { profileId, profile: profileDetail, message } = payload;
+
+      if (!message?.id || processedExternalMessageIds.current.has(message.id)) {
+        return;
+      }
+
+      const sender: ConversationSender = message.sender === 'fake' ? 'other' : 'me';
+      const parsedDate = new Date(message.timestamp);
+      const timestamp = Number.isNaN(parsedDate.getTime())
+        ? 'À l’instant'
+        : formatTime(parsedDate);
+
+      let shouldSelectConversation = false;
+
+      setConversations((previous) => {
+        const existingConversation = previous.find((conversation) => conversation.id === profileId);
+
+        if (existingConversation) {
+          if (existingConversation.messages.some((item) => item.id === message.id)) {
+            return previous;
+          }
+
+          if (sender === 'me' && selectedId !== profileId) {
+            shouldSelectConversation = true;
+          }
+
+          const updatedConversation: ConversationPreview = {
+            ...existingConversation,
+            participant: {
+              ...existingConversation.participant,
+              isOnline: true,
+              lastActive:
+                sender === 'me'
+                  ? 'En ligne'
+                  : existingConversation.participant.lastActive,
+            },
+            lastMessagePreview: message.content,
+            lastMessageTime: 'À l’instant',
+            unreadCount:
+              sender === 'other' && selectedId !== profileId
+                ? existingConversation.unreadCount + 1
+                : existingConversation.unreadCount,
+            messages: [
+              ...existingConversation.messages,
+              {
+                id: message.id,
+                sender,
+                content: message.content,
+                timestamp,
+                status: sender === 'me' ? 'sent' : undefined,
+              },
+            ],
+          };
+
+          return previous.map((conversation) =>
+            conversation.id === profileId ? updatedConversation : conversation,
+          );
+        }
+
+        const displayName =
+          profileDetail?.display_name || profileDetail?.username || 'Membre Shredloc';
+        const avatar = profileDetail?.avatar_url || '/logo2.png';
+        const location = profileDetail?.location || 'Spot à définir';
+
+        const newConversation: ConversationPreview = {
+          id: profileId,
+          participant: {
+            id: profileId,
+            name: displayName,
+            avatar,
+            isOnline: true,
+            location,
+            lastActive: sender === 'me' ? 'En ligne' : 'Actif récemment',
+          },
+          lastMessagePreview: message.content,
+          lastMessageTime: 'À l’instant',
+          unreadCount: sender === 'other' ? 1 : 0,
+          messages: [
+            {
+              id: message.id,
+              sender,
+              content: message.content,
+              timestamp,
+              status: sender === 'me' ? 'sent' : undefined,
+            },
+          ],
+        };
+
+        shouldSelectConversation = sender === 'me';
+        return [newConversation, ...previous];
+      });
+
+      processedExternalMessageIds.current.add(message.id);
+
+      if (shouldSelectConversation) {
+        setSelectedId(profileId);
+        if (isMobileView) {
+          setMobileConversationOpen(true);
+        }
+      }
+    },
+    [formatTime, isMobileView, selectedId],
   );
 
   const showToast = useCallback((message: string) => {
@@ -598,118 +693,25 @@ export default function MessagesSection({ profile }: MessagesSectionProps) {
   }, [toast]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (!externalMessages.length) {
       return;
     }
 
-    const handleExternalDirectMessage = (event: Event) => {
-      const customEvent = event as CustomEvent<FakeDirectMessagePayload>;
-      const detail = customEvent.detail;
-      if (!detail || !detail.profileId || !detail.message) {
+    const processedIds: string[] = [];
+
+    externalMessages.forEach((payload) => {
+      if (!payload?.message?.id) {
         return;
       }
 
-      const { profileId, profile: profileDetail, message } = detail;
-      const sender: ConversationSender = message.sender === 'fake' ? 'other' : 'me';
-      const parsedDate = new Date(message.timestamp);
-      const timestamp = Number.isNaN(parsedDate.getTime()) ? 'À l’instant' : formatTime(parsedDate);
+      processExternalDirectMessage(payload);
+      processedIds.push(payload.message.id);
+    });
 
-      let shouldSelectConversation = false;
-
-      setConversations((previous) => {
-        const existingConversation = previous.find((conversation) => conversation.id === profileId);
-
-        if (existingConversation) {
-          if (existingConversation.messages.some((item) => item.id === message.id)) {
-            return previous;
-          }
-
-          if (sender === 'me' && selectedId !== profileId) {
-            shouldSelectConversation = true;
-          }
-
-          const updatedConversation: ConversationPreview = {
-            ...existingConversation,
-            participant: {
-              ...existingConversation.participant,
-              isOnline: true,
-              lastActive: sender === 'me' ? 'En ligne' : existingConversation.participant.lastActive,
-            },
-            lastMessagePreview: message.content,
-            lastMessageTime: 'À l’instant',
-            unreadCount:
-              sender === 'other' && selectedId !== profileId
-                ? existingConversation.unreadCount + 1
-                : existingConversation.unreadCount,
-            messages: [
-              ...existingConversation.messages,
-              {
-                id: message.id,
-                sender,
-                content: message.content,
-                timestamp,
-                status: sender === 'me' ? 'sent' : undefined,
-              },
-            ],
-          };
-
-          return previous.map((conversation) =>
-            conversation.id === profileId ? updatedConversation : conversation,
-          );
-        }
-
-        const displayName = profileDetail?.display_name || profileDetail?.username || 'Membre Shredloc';
-        const avatar = profileDetail?.avatar_url || '/logo2.png';
-        const location = profileDetail?.location || 'Spot à définir';
-
-        const newConversation: ConversationPreview = {
-          id: profileId,
-          participant: {
-            id: profileId,
-            name: displayName,
-            avatar,
-            isOnline: true,
-            location,
-            lastActive: sender === 'me' ? 'En ligne' : 'Actif récemment',
-          },
-          lastMessagePreview: message.content,
-          lastMessageTime: 'À l’instant',
-          unreadCount: sender === 'other' ? 1 : 0,
-          messages: [
-            {
-              id: message.id,
-              sender,
-              content: message.content,
-              timestamp,
-              status: sender === 'me' ? 'sent' : undefined,
-            },
-          ],
-        };
-
-        shouldSelectConversation = sender === 'me';
-        return [newConversation, ...previous];
-      });
-
-      if (shouldSelectConversation) {
-        setSelectedId(profileId);
-        if (isMobileView) {
-          setMobileConversationOpen(true);
-        }
-      }
-    };
-
-    window.addEventListener(
-      'shredloc:direct-message',
-      handleExternalDirectMessage as EventListener,
-    );
-
-    return () => {
-      window.removeEventListener(
-        'shredloc:direct-message',
-        handleExternalDirectMessage as EventListener,
-      );
-    };
-  }, [formatTime, isMobileView, selectedId]);
+    if (processedIds.length > 0) {
+      onExternalMessagesHandled?.(processedIds);
+    }
+  }, [externalMessages, onExternalMessagesHandled, processExternalDirectMessage]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedId(conversationId);
