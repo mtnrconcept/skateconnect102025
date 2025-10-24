@@ -425,6 +425,7 @@ function App() {
         <div className={`${dimmedClass} lg:mt-auto`}>
           <Footer onSectionChange={handleNavigateToContent} />
         </div>
+        </div>
       </SponsorProvider>
     );
   }
