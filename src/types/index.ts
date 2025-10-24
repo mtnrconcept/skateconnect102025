@@ -478,6 +478,7 @@ export type Section =
   | 'feed'
   | 'events'
   | 'challenges'
+  | 'search'
   | 'sponsors'
   | 'pricing'
   | 'profile'

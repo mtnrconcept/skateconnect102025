@@ -21,6 +21,7 @@ import { createFallbackChallenges, createFallbackDailyChallenges } from '../data
 import { settingsCategories, quickSettingsLinks } from '../data/settingsCatalog';
 import type { Profile, Section, ContentNavigationOptions } from '../types';
 import type { LucideIcon } from 'lucide-react';
+import type { GlobalSearchResult } from '../types/search';
 
 const normalizeSearchValue = (value: string) =>
   value
@@ -36,18 +37,10 @@ interface HeaderProps {
   onSectionChange?: (section: Section) => boolean | void;
   onNavigateToContent?: (section: Section, options?: ContentNavigationOptions) => boolean | void;
   onSearchFocusChange?: (isActive: boolean) => void;
+  onSearchSubmit?: (query: string, results: GlobalSearchResult[]) => void;
 }
 
-interface SearchResult {
-  key: string;
-  label: string;
-  category: string;
-  description?: string;
-  section?: Section;
-  icon?: LucideIcon;
-  options?: ContentNavigationOptions;
-  onSelect?: () => void;
-}
+type HeaderSearchResult = GlobalSearchResult & { onSelect?: () => void };
 
 export default function Header({
   profile,
@@ -55,20 +48,21 @@ export default function Header({
   onSectionChange,
   onNavigateToContent,
   onSearchFocusChange,
+  onSearchSubmit,
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchIndex, setSearchIndex] = useState<SearchResult[]>([]);
+  const [searchIndex, setSearchIndex] = useState<HeaderSearchResult[]>([]);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const isSearchActive = isInputFocused || showSearchResults;
 
-  const sortResults = (results: SearchResult[]) =>
+  const sortResults = (results: HeaderSearchResult[]) =>
     [...results].sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
 
-  const mergeResults = (existing: SearchResult[], additions: SearchResult[]) => {
+  const mergeResults = (existing: HeaderSearchResult[], additions: HeaderSearchResult[]) => {
     const existingKeys = new Set(existing.map((item) => item.key));
     const uniqueAdditions = additions.filter((item) => !existingKeys.has(item.key));
     return sortResults([...existing, ...uniqueAdditions]);
@@ -118,7 +112,7 @@ export default function Header({
   };
 
   useEffect(() => {
-    const navigationResults: SearchResult[] = searchableNavigationItems.map((item) => ({
+    const navigationResults: HeaderSearchResult[] = searchableNavigationItems.map((item) => ({
       key: `nav-${item.id}`,
       label: item.label,
       category: item.category,
@@ -127,7 +121,7 @@ export default function Header({
       icon: item.icon,
     }));
 
-    const eventResults: SearchResult[] = eventsCatalog.map((event) => ({
+    const eventResults: HeaderSearchResult[] = eventsCatalog.map((event) => ({
       key: `event-${event.id}`,
       label: event.title,
       category: 'Événements',
@@ -137,7 +131,7 @@ export default function Header({
       options: { scrollToId: `event-${event.id}` },
     }));
 
-    const fallbackChallengeResults: SearchResult[] = createFallbackChallenges().map((challenge) => ({
+    const fallbackChallengeResults: HeaderSearchResult[] = createFallbackChallenges().map((challenge) => ({
       key: `fallback-challenge-${challenge.id}`,
       label: challenge.title,
       category: 'Défis',
@@ -150,7 +144,7 @@ export default function Header({
       },
     }));
 
-    const fallbackDailyResults: SearchResult[] = createFallbackDailyChallenges().map((challenge) => ({
+    const fallbackDailyResults: HeaderSearchResult[] = createFallbackDailyChallenges().map((challenge) => ({
       key: `fallback-daily-${challenge.id}`,
       label: challenge.title,
       category: 'Défis quotidiens',
@@ -163,7 +157,7 @@ export default function Header({
       },
     }));
 
-    const settingsResults: SearchResult[] = settingsCategories.flatMap((category) =>
+    const settingsResults: HeaderSearchResult[] = settingsCategories.flatMap((category) =>
       category.items.map((item) => ({
         key: `setting-${item.id}`,
         label: item.title,
@@ -175,7 +169,7 @@ export default function Header({
       })),
     );
 
-    const quickLinkResults: SearchResult[] = quickSettingsLinks.map((link) => ({
+    const quickLinkResults: HeaderSearchResult[] = quickSettingsLinks.map((link) => ({
       key: `quick-${link.id}`,
       label: link.title,
       category: 'Documentation',
@@ -196,7 +190,7 @@ export default function Header({
     setSearchIndex(initialResults);
 
     const loadDynamicResults = async () => {
-      const dynamicResults: SearchResult[] = [];
+      const dynamicResults: HeaderSearchResult[] = [];
 
       try {
         const { data: spots } = await supabase
@@ -309,10 +303,10 @@ export default function Header({
     loadDynamicResults();
   }, []);
 
-  const filteredResults = useMemo(() => {
+  const matchingResults = useMemo(() => {
     const term = searchTerm.trim();
     if (!term) {
-      return searchIndex.slice(0, 20);
+      return searchIndex;
     }
 
     const normalizedTokens = term
@@ -321,16 +315,16 @@ export default function Header({
       .map((token) => normalizeSearchValue(token));
 
     if (normalizedTokens.length === 0) {
-      return searchIndex.slice(0, 20);
+      return searchIndex;
     }
 
-    return searchIndex
-      .filter((item) => {
-        const haystack = normalizeSearchValue(`${item.label} ${item.description ?? ''} ${item.category}`);
-        return normalizedTokens.every((token) => haystack.includes(token));
-      })
-      .slice(0, 20);
+    return searchIndex.filter((item) => {
+      const haystack = normalizeSearchValue(`${item.label} ${item.description ?? ''} ${item.category}`);
+      return normalizedTokens.every((token) => haystack.includes(token));
+    });
   }, [searchIndex, searchTerm]);
+
+  const displayedResults = useMemo(() => matchingResults.slice(0, 20), [matchingResults]);
 
   useEffect(() => {
     if (searchTerm.trim().length > 0) {
@@ -408,7 +402,7 @@ export default function Header({
     closeSearch();
   };
 
-  const handleResultSelect = (result: SearchResult) => {
+  const handleResultSelect = (result: HeaderSearchResult) => {
     if (result.onSelect) {
       result.onSelect();
       setSearchTerm('');
@@ -423,10 +417,15 @@ export default function Header({
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const firstResult = filteredResults[0];
-    if (firstResult) {
-      handleResultSelect(firstResult);
+    const trimmedQuery = searchTerm.trim();
+    if (trimmedQuery.length === 0) {
+      closeSearch();
+      return;
     }
+
+    const sanitizedResults = matchingResults.map(({ onSelect: _onSelect, ...rest }) => rest);
+    onSearchSubmit?.(trimmedQuery, sanitizedResults);
+    closeSearch();
   };
 
 
@@ -485,8 +484,9 @@ export default function Header({
                     type="search"
                     value={searchTerm}
                     onChange={(event) => {
-                      setSearchTerm(event.target.value);
-                      setShowSearchResults(true);
+                      const value = event.target.value;
+                      setSearchTerm(value);
+                      setShowSearchResults(value.trim().length > 0);
                     }}
                     onFocus={() => {
                       setShowSearchResults(true);
@@ -502,12 +502,12 @@ export default function Header({
                       isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
                     }`}
                   />
-                  {showSearchResults && filteredResults.length > 0 && (
+                  {showSearchResults && matchingResults.length > 0 && (
                     <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
                       <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
-                        {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
+                        {matchingResults.length} résultat{matchingResults.length > 1 ? 's' : ''}
                       </div>
-                      {filteredResults.map((result) => {
+                      {displayedResults.map((result) => {
                         const IconResult = result.icon ?? Search;
                         return (
                           <button
@@ -530,7 +530,7 @@ export default function Header({
                       })}
                     </div>
                   )}
-                  {showSearchResults && filteredResults.length === 0 && (
+                  {showSearchResults && matchingResults.length === 0 && (
                     <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
                       Aucun résultat pour « {searchTerm} »
                     </div>
