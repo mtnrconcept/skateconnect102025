@@ -1,16 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, MapPin, Star, Users, Upload, Heart, MessageCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, MapPin, Star, Users, Upload, Heart, MessageCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import LazyImage from './LazyImage';
 import SpotMediaGallery from './SpotMediaGallery';
 import MediaDetailModal from './MediaDetailModal';
 import SpotCommentSection from './SpotCommentSection';
-import type { Spot, SpotMedia } from '../types';
+import SpotRatingForm from './SpotRatingForm';
+import { buildSummaryFromSpot, SpotRatingSummary } from '../lib/ratings';
+import { getUserDisplayName } from '../lib/userUtils';
+import type { Spot, SpotMedia, SpotRating } from '../types';
 
 interface SpotDetailModalProps {
   spot: Spot;
   onClose: () => void;
 }
+
+const RATINGS_PAGE_SIZE = 5;
 
 export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps) {
   const [media, setMedia] = useState<SpotMedia[]>([]);
@@ -23,12 +28,22 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [spotData, setSpotData] = useState<Spot>(spot);
   const [userLiked, setUserLiked] = useState(false);
+  const [ratingSummary, setRatingSummary] = useState<SpotRatingSummary>(buildSummaryFromSpot(spot));
+  const [ratings, setRatings] = useState<SpotRating[]>([]);
+  const [ratingsPage, setRatingsPage] = useState(1);
+  const [ratingsTotal, setRatingsTotal] = useState(0);
+  const [ratingsLoading, setRatingsLoading] = useState(false);
 
   useEffect(() => {
+    setRatingSummary(buildSummaryFromSpot(spot));
+    setRatings([]);
+    setRatingsTotal(0);
+    setRatingsPage(1);
     loadSpotMedia();
     loadCurrentUser();
     loadSpotData();
-  }, [spot.id]);
+    loadSpotRatings(1, true);
+  }, [spot.id, loadSpotRatings]);
 
   const loadCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -49,9 +64,88 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
       if (error) throw error;
       if (data) {
         setSpotData(data);
+        setRatingSummary(buildSummaryFromSpot(data));
       }
     } catch (error) {
       console.error('Error loading spot data:', error);
+    }
+  };
+
+  const loadSpotRatings = useCallback(
+    async (page: number = 1, replace: boolean = false) => {
+      setRatingsLoading(true);
+
+      try {
+        const from = (page - 1) * RATINGS_PAGE_SIZE;
+        const to = from + RATINGS_PAGE_SIZE - 1;
+
+        const { data, error, count } = await supabase
+          .from('spot_ratings')
+          .select('id, rating, comment, created_at, updated_at, user:profiles(id, username, display_name, avatar_url)', {
+            count: 'exact',
+          })
+          .eq('spot_id', spot.id)
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+
+        const normalized = (data || []).map((item) => ({
+          ...item,
+          comment: item.comment ?? null,
+        })) as SpotRating[];
+
+        setRatings((previous) => {
+          if (replace) {
+            return normalized;
+          }
+
+          const existingIds = new Set(previous.map((rating) => rating.id));
+          const merged = normalized.filter((rating) => !existingIds.has(rating.id));
+          return [...previous, ...merged];
+        });
+
+        setRatingsTotal((previous) => {
+          if (typeof count === 'number') {
+            return count;
+          }
+
+          return replace ? normalized.length : previous + normalized.length;
+        });
+      } catch (error) {
+        console.error('Error loading spot ratings:', error);
+      } finally {
+        setRatingsLoading(false);
+      }
+    },
+    [spot.id]
+  );
+
+  const handleRatingSaved = async () => {
+    await loadSpotData();
+    await loadSpotRatings(1, true);
+    setRatingsPage(1);
+  };
+
+  const handleLoadMoreRatings = () => {
+    setRatingsPage((previous) => {
+      const nextPage = previous + 1;
+      loadSpotRatings(nextPage, false);
+      return nextPage;
+    });
+  };
+
+  const formatReviewDate = (value: string) => {
+    try {
+      const date = new Date(value);
+      return date.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch (error) {
+      console.error('Error formatting review date:', error);
+      return value;
     }
   };
 
@@ -291,6 +385,116 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
               <div className="flex items-center gap-2 text-slate-600">
                 <MessageCircle size={22} />
                 <span className="text-base font-semibold">{spotData.comments_count || 0} commentaires</span>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-800 mb-3">Notes & avis</h3>
+                  <div className="flex items-center gap-3">
+                    <span className="text-4xl font-bold text-slate-800">
+                      {ratingSummary.count > 0 ? ratingSummary.average.toFixed(1) : '—'}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 5 }).map((_, index) => {
+                          const starValue = index + 1;
+                          const isFull = ratingSummary.average >= starValue - 0.25;
+                          const isHalf = !isFull && ratingSummary.average >= starValue - 0.75;
+                          return (
+                            <Star
+                              key={starValue}
+                              size={18}
+                              className={
+                                isFull
+                                  ? 'fill-yellow-400 text-yellow-400'
+                                  : isHalf
+                                    ? 'text-yellow-300'
+                                    : 'text-slate-300'
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                      <p className="text-sm text-slate-500">{ratingSummary.count} avis</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {[5, 4, 3, 2, 1].map((value) => {
+                      const count = ratingSummary.distribution[value as 1 | 2 | 3 | 4 | 5] ?? 0;
+                      const percentage = ratingSummary.count > 0 ? (count / ratingSummary.count) * 100 : 0;
+
+                      return (
+                        <div key={value} className="flex items-center gap-3">
+                          <div className="flex items-center min-w-[3rem] text-sm text-slate-600">
+                            <span>{value}</span>
+                            <Star size={14} className="ml-1 text-yellow-400 fill-yellow-400" />
+                          </div>
+                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-yellow-400 transition-all"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <div className="w-10 text-right text-sm text-slate-600">{count}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <SpotRatingForm
+                  spotId={spot.id}
+                  currentUser={currentUser}
+                  onRatingSaved={handleRatingSaved}
+                />
+              </div>
+              <div className="mt-6 space-y-4">
+                <h4 className="text-base font-semibold text-slate-700">Avis récents</h4>
+                {ratings.length === 0 && !ratingsLoading && (
+                  <p className="text-sm text-slate-500">
+                    Aucun avis pour le moment. Soyez le premier à partager votre ressenti !
+                  </p>
+                )}
+                {ratings.map((rating) => (
+                  <div key={rating.id} className="bg-slate-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">
+                          {getUserDisplayName(rating.user ?? null, 'Skater anonyme')}
+                        </p>
+                        <div className="flex items-center gap-1 mt-1">
+                          {Array.from({ length: 5 }).map((_, index) => (
+                            <Star
+                              key={index}
+                              size={16}
+                              className={index < rating.rating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <span className="text-xs text-slate-400">{formatReviewDate(rating.created_at)}</span>
+                    </div>
+                    {rating.comment && (
+                      <p className="mt-2 text-sm text-slate-600 leading-relaxed">{rating.comment}</p>
+                    )}
+                  </div>
+                ))}
+                {ratingsLoading && (
+                  <div className="flex justify-center py-3">
+                    <Loader2 size={18} className="animate-spin text-slate-400" />
+                  </div>
+                )}
+                {ratings.length < ratingsTotal && !ratingsLoading && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={handleLoadMoreRatings}
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                      Voir plus d'avis
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
