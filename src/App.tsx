@@ -281,16 +281,6 @@ function App() {
     [profileMode],
   );
 
-  const handleProfileModeChange = useCallback(
-    (mode: ProfileExperienceMode) => {
-      setProfileMode(mode);
-      if (mode === 'sponsor') {
-        handleNavigateToContent('sponsors');
-      }
-    },
-    [handleNavigateToContent],
-  );
-
   const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions): boolean => {
     if (section === 'map' && !isMapAvailable) {
       setRestrictionNotice(null);
@@ -326,6 +316,16 @@ function App() {
 
     return true;
   };
+
+  const handleProfileModeChange = useCallback(
+    (mode: ProfileExperienceMode) => {
+      setProfileMode(mode);
+      if (mode === 'sponsor') {
+        handleNavigateToContent('sponsors');
+      }
+    },
+    [handleNavigateToContent],
+  );
 
   useEffect(() => {
     if (!pendingNavigation) {
