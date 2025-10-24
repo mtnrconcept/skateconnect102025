@@ -1,16 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Filter, Plus, Navigation, Star } from 'lucide-react';
+import { MapPin, Filter, Plus, Navigation } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase';
 import SpotDetailModal from '../SpotDetailModal';
 import AddSpotModal from '../AddSpotModal';
 import type { Spot } from '../../types';
+import SpotGrid from '../SpotGrid';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
-
-const INITIAL_CARD_COUNT = 18;
-const CARD_TRANSITION_DURATION = 300;
 
 interface MapSectionProps {
   focusSpotId?: string | null;
@@ -22,9 +20,6 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const lastFocusedSpotRef = useRef<string | null>(null);
-  const leavingTimeoutRef = useRef<number | null>(null);
-  const enteringTimeoutRef = useRef<number | null>(null);
-  const cardsContainerRef = useRef<HTMLDivElement>(null);
 
   const [spots, setSpots] = useState<Spot[]>([]);
   const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
@@ -32,77 +27,11 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [transitionPhase, setTransitionPhase] = useState<'idle' | 'leaving' | 'entering'>('idle');
-  const [isLoadMoreButtonVisible, setIsLoadMoreButtonVisible] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     loadSpots();
   }, [filter]);
-
-  useEffect(() => {
-    if (leavingTimeoutRef.current) {
-      window.clearTimeout(leavingTimeoutRef.current);
-      leavingTimeoutRef.current = null;
-    }
-    if (enteringTimeoutRef.current) {
-      window.clearTimeout(enteringTimeoutRef.current);
-      enteringTimeoutRef.current = null;
-    }
-
-    setCurrentPage(0);
-    setTransitionPhase('idle');
-  }, [filter]);
-
-  useEffect(() => {
-    setCurrentPage((page) => {
-      const totalPages = Math.max(1, Math.ceil(spots.length / INITIAL_CARD_COUNT));
-      return Math.min(page, totalPages - 1);
-    });
-    if (leavingTimeoutRef.current) {
-      window.clearTimeout(leavingTimeoutRef.current);
-      leavingTimeoutRef.current = null;
-    }
-    if (enteringTimeoutRef.current) {
-      window.clearTimeout(enteringTimeoutRef.current);
-      enteringTimeoutRef.current = null;
-    }
-    setTransitionPhase('idle');
-  }, [spots.length]);
-
-  useEffect(() => {
-    if (transitionPhase === 'entering') {
-      cardsContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-
-      if (enteringTimeoutRef.current) {
-        window.clearTimeout(enteringTimeoutRef.current);
-      }
-
-      enteringTimeoutRef.current = window.setTimeout(() => {
-        setTransitionPhase('idle');
-        enteringTimeoutRef.current = null;
-      }, CARD_TRANSITION_DURATION);
-
-      return () => {
-        if (enteringTimeoutRef.current) {
-          window.clearTimeout(enteringTimeoutRef.current);
-          enteringTimeoutRef.current = null;
-        }
-      };
-    }
-  }, [transitionPhase]);
-
-  useEffect(() => {
-    return () => {
-      if (leavingTimeoutRef.current) {
-        window.clearTimeout(leavingTimeoutRef.current);
-      }
-      if (enteringTimeoutRef.current) {
-        window.clearTimeout(enteringTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -448,17 +377,6 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     return '#ff8c00';
   };
 
-  const getSpotTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      street: 'Street',
-      skatepark: 'Skatepark',
-      bowl: 'Bowl',
-      diy: 'DIY',
-      transition: 'Transition',
-    };
-    return labels[type] || type;
-  };
-
   const flyToSpot = (spot: Spot) => {
     if (map.current) {
       map.current.flyTo({
@@ -528,63 +446,6 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     { id: 'bowl', label: 'Bowls' },
     { id: 'diy', label: 'DIY' },
   ];
-
-  const totalPages = Math.ceil(spots.length / INITIAL_CARD_COUNT);
-  const visibleSpots = spots.slice(
-    currentPage * INITIAL_CARD_COUNT,
-    currentPage * INITIAL_CARD_COUNT + INITIAL_CARD_COUNT
-  );
-  const hasMoreSpots = currentPage < totalPages - 1;
-  const eighteenthSpotId = visibleSpots[INITIAL_CARD_COUNT - 1]?.id;
-
-  const handleLoadMore = () => {
-    if (!hasMoreSpots || transitionPhase !== 'idle') {
-      return;
-    }
-
-    if (leavingTimeoutRef.current) {
-      window.clearTimeout(leavingTimeoutRef.current);
-    }
-
-    setTransitionPhase('leaving');
-
-    leavingTimeoutRef.current = window.setTimeout(() => {
-      setCurrentPage((page) => Math.min(page + 1, Math.max(totalPages - 1, 0)));
-      setTransitionPhase('entering');
-      leavingTimeoutRef.current = null;
-    }, CARD_TRANSITION_DURATION);
-  };
-
-  useEffect(() => {
-    if (!hasMoreSpots || !eighteenthSpotId) {
-      setIsLoadMoreButtonVisible(false);
-      return;
-    }
-
-    const container = cardsContainerRef.current;
-    const target = container?.querySelector<HTMLButtonElement>('[data-eighteenth-card="true"]');
-
-    if (!container || !target) {
-      setIsLoadMoreButtonVisible(false);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsLoadMoreButtonVisible(entry.isIntersecting);
-      },
-      {
-        root: container,
-        threshold: 0.9,
-      }
-    );
-
-    observer.observe(target);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [hasMoreSpots, eighteenthSpotId, visibleSpots.length]);
 
   return (
     <div className="relative flex flex-col overflow-hidden rounded-3xl border border-dark-700 bg-dark-900/70 shadow-2xl shadow-orange-900/10 min-h-[640px] lg:h-[calc(100vh-8rem)] lg:max-h-[calc(100vh-8rem)]">
@@ -694,101 +555,12 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
                   <p className="text-sm text-gray-500">Ajoute le premier spot dans cette catégorie.</p>
                 </div>
               ) : (
-                <div className="flex h-full flex-col">
-                  <div ref={cardsContainerRef} className="flex-1 overflow-y-auto px-6 pt-6 pb-12 lg:pb-16">
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                      {visibleSpots.map((spot) => {
-                        const coverPhotoUrl = spotCoverPhotos[spot.id];
-                        const difficulty = Math.max(0, Math.min(5, spot.difficulty ?? 0));
-
-                        return (
-                          <button
-                            key={spot.id}
-                            onClick={() => flyToSpot(spot)}
-                            className={`group overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20 ${
-                              transitionPhase === 'leaving'
-                                ? 'animate-card-leave'
-                                : transitionPhase === 'entering'
-                                  ? 'animate-card-enter'
-                                  : 'animate-slide-up'
-                            }`}
-                            data-eighteenth-card={spot.id === eighteenthSpotId ? 'true' : undefined}
-                          >
-                            <div className="relative h-32 w-full overflow-hidden xl:h-36">
-                              {coverPhotoUrl ? (
-                                <img
-                                  src={coverPhotoUrl}
-                                  alt={spot.name}
-                                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900 text-xs uppercase tracking-widest text-gray-500">
-                                  Aucun média
-                                </div>
-                              )}
-                              <div className="absolute left-4 top-4 flex items-center gap-2">
-                                <span className="rounded-full bg-orange-500/90 px-3 py-1 text-xs font-semibold uppercase text-white">
-                                  {getSpotTypeLabel(spot.spot_type)}
-                                </span>
-                              </div>
-                              <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-dark-900/80 px-3 py-1 text-xs font-semibold text-amber-300">
-                                {Array.from({ length: 5 }).map((_, starIndex) => (
-                                  <Star
-                                    key={starIndex}
-                                    size={14}
-                                    className={starIndex < difficulty ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col gap-3 p-4 sm:p-5">
-                              <div className="flex items-start justify-between gap-3">
-                                <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
-                                {spot.creator?.username && (
-                                  <span className="rounded-full border border-dark-600 bg-dark-900/70 px-3 py-1 text-xs text-gray-400">
-                                    @{spot.creator.username}
-                                  </span>
-                                )}
-                              </div>
-                              {spot.description && (
-                                <p className="line-clamp-2 text-sm text-gray-300">{spot.description}</p>
-                              )}
-                              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
-                                <div className="flex items-center gap-2 text-gray-300">
-                                  <MapPin size={14} className="text-orange-400" />
-                                  <span>{spot.address || 'Adresse non spécifiée'}</span>
-                                </div>
-                                <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-200">
-                                  Voir sur la carte
-                                </span>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {hasMoreSpots && (
-                    <div
-                      className={`-mx-6 mt-6 overflow-hidden border-t border-dark-800/60 bg-dark-900/80 px-6 transition-all duration-300 ${
-                        isLoadMoreButtonVisible
-                          ? 'max-h-32 py-4 opacity-100'
-                          : 'max-h-0 py-0 opacity-0 pointer-events-none'
-                      }`}
-                      aria-hidden={!isLoadMoreButtonVisible}
-                    >
-                      <button
-                        onClick={handleLoadMore}
-                        disabled={transitionPhase !== 'idle'}
-                        className="w-full rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        Afficher plus
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <SpotGrid
+                  spots={spots}
+                  initialCount={6}
+                  onSpotClick={flyToSpot}
+                  coverPhotos={spotCoverPhotos}
+                />
               )}
             </div>
           </div>
