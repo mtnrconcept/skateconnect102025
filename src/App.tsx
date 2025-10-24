@@ -35,6 +35,9 @@ import {
 import type { Profile, Section, ContentNavigationOptions } from './types';
 import type { FakeDirectMessagePayload } from './types/messages';
 
+const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+const isMapAvailable = typeof mapboxToken === 'string' && mapboxToken.trim().length > 0;
+
 function App() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -212,6 +215,14 @@ function App() {
   }, []);
 
   const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions): boolean => {
+    if (section === 'map' && !isMapAvailable) {
+      setRestrictionNotice(null);
+      setCurrentSection(section);
+      setPendingNavigation(null);
+      setMapFocusSpotId(null);
+      return true;
+    }
+
     if (!canAccessSection(subscriptionPlan, section)) {
       setPendingNavigation(null);
       const requiredPlan = findNextEligiblePlan(subscriptionPlan, section);
@@ -256,10 +267,18 @@ function App() {
       return;
     }
 
-    if (pendingNavigation.section === 'map' && options?.spotId) {
-      setMapFocusSpotId(options.spotId);
-      setPendingNavigation(null);
-      return;
+    if (pendingNavigation.section === 'map') {
+      if (!isMapAvailable) {
+        setPendingNavigation(null);
+        setMapFocusSpotId(null);
+        return;
+      }
+
+      if (options?.spotId) {
+        setMapFocusSpotId(options.spotId);
+        setPendingNavigation(null);
+        return;
+      }
     }
 
     if (options?.scrollToId) {
@@ -276,16 +295,20 @@ function App() {
     }
 
     setPendingNavigation(null);
-  }, [pendingNavigation, currentSection]);
+  }, [pendingNavigation, currentSection, isMapAvailable]);
 
   useEffect(() => {
+    if (!isMapAvailable) {
+      setMapFocusSpotId(null);
+    }
+
     if (currentSection !== 'challenges') {
       setChallengeFocus(null);
     }
     if (currentSection !== 'map') {
       setMapFocusSpotId(null);
     }
-  }, [currentSection]);
+  }, [currentSection, isMapAvailable]);
 
   useEffect(() => {
     if (canAccessSection(subscriptionPlan, currentSection)) {
@@ -347,6 +370,7 @@ function App() {
               <MapSection
                 focusSpotId={mapFocusSpotId}
                 onSpotFocusHandled={() => setMapFocusSpotId(null)}
+                isMapAvailable={isMapAvailable}
               />
             )}
             {currentSection === 'feed' && <FeedSection currentUser={profile} />}

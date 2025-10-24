@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Filter, Plus, Navigation } from 'lucide-react';
+import { MapPin, Filter, Plus, Navigation, AlertTriangle } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase';
@@ -13,9 +13,14 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 interface MapSectionProps {
   focusSpotId?: string | null;
   onSpotFocusHandled?: () => void;
+  isMapAvailable?: boolean;
 }
 
-export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSectionProps) {
+export default function MapSection({
+  focusSpotId,
+  onSpotFocusHandled,
+  isMapAvailable = true,
+}: MapSectionProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -50,6 +55,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   }, []);
 
   useEffect(() => {
+    if (!isMapAvailable) return;
     if (!mapContainer.current || map.current) return;
 
     const mapInstance = new mapboxgl.Map({
@@ -87,9 +93,10 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       mapInstance.remove();
       map.current = null;
     };
-  }, []);
+  }, [isMapAvailable]);
 
   useEffect(() => {
+    if (!isMapAvailable) return;
     if (!map.current || !isDesktop) return;
 
     const frame = window.requestAnimationFrame(() => {
@@ -97,12 +104,13 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [isDesktop]);
+  }, [isDesktop, isMapAvailable]);
 
   useEffect(() => {
+    if (!isMapAvailable) return;
     if (!map.current || loading) return;
     updateMarkers();
-  }, [spots, loading, spotCoverPhotos]);
+  }, [spots, loading, spotCoverPhotos, isMapAvailable]);
 
   const loadSpots = async () => {
     try {
@@ -156,6 +164,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   };
 
   const updateMarkers = () => {
+    if (!isMapAvailable) return;
     if (!map.current) return;
 
     markersRef.current.forEach(marker => marker.remove());
@@ -404,6 +413,10 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   };
 
   const flyToSpot = (spot: Spot) => {
+    if (!isMapAvailable) {
+      return;
+    }
+
     if (map.current) {
       map.current.flyTo({
         center: [spot.longitude, spot.latitude],
@@ -415,6 +428,13 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   };
 
   useEffect(() => {
+    if (!isMapAvailable) {
+      if (focusSpotId) {
+        onSpotFocusHandled?.();
+      }
+      return;
+    }
+
     if (!focusSpotId || spots.length === 0) {
       return;
     }
@@ -430,7 +450,7 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
       lastFocusedSpotRef.current = focusSpotId;
       onSpotFocusHandled?.();
     }
-  }, [focusSpotId, spots, onSpotFocusHandled]);
+  }, [focusSpotId, spots, onSpotFocusHandled, isMapAvailable]);
 
   useEffect(() => {
     if (!focusSpotId) {
@@ -439,6 +459,10 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
   }, [focusSpotId]);
 
   const getUserLocation = () => {
+    if (!isMapAvailable) {
+      return;
+    }
+
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -530,45 +554,66 @@ export default function MapSection({ focusSpotId, onSpotFocusHandled }: MapSecti
           style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
         >
           <div className="relative h-[360px] overflow-hidden border-b border-dark-800 lg:h-full lg:border-b-0 lg:border-r lg:border-dark-800">
-            <div ref={mapContainer} className="absolute inset-0" />
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark-900/70 to-transparent" />
+            {isMapAvailable ? (
+              <>
+                <div ref={mapContainer} className="absolute inset-0" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark-900/70 to-transparent" />
 
-            <div className="absolute inset-x-0 top-6 hidden justify-center px-6 lg:flex">
-              <div className="flex w-full max-w-2xl items-center gap-3 rounded-2xl border border-dark-700/70 bg-dark-900/90 p-4 shadow-xl shadow-black/30 backdrop-blur">
-                <div className="relative flex-1">
-                  <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Rechercher un spot ou une ville"
-                    className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-                  />
+                <div className="absolute inset-x-0 top-6 hidden justify-center px-6 lg:flex">
+                  <div className="flex w-full max-w-2xl items-center gap-3 rounded-2xl border border-dark-700/70 bg-dark-900/90 p-4 shadow-xl shadow-black/30 backdrop-blur">
+                    <div className="relative flex-1">
+                      <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                      <input
+                        type="text"
+                        placeholder="Rechercher un spot ou une ville"
+                        className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+                      />
+                    </div>
+                    <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70">
+                      <Filter size={18} className="text-orange-400" />
+                      Affiner les filtres
+                    </button>
+                  </div>
                 </div>
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70">
-                  <Filter size={18} className="text-orange-400" />
-                  Affiner les filtres
+
+                <div className="absolute left-4 top-4 flex flex-col gap-3">
+                  <button
+                    onClick={getUserLocation}
+                    className="inline-flex items-center gap-2 rounded-xl border border-dark-700 bg-dark-900/80 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-black/50 transition-colors hover:border-orange-500/50 hover:bg-dark-800/90"
+                    title="Centrer sur ma position"
+                  >
+                    <Navigation size={18} className="text-orange-400" />
+                    <span>Ma position</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-orange-900/30 transition-transform hover:-translate-y-1 hover:bg-orange-400"
+                >
+                  <Plus size={18} />
+                  Ajouter un spot
+                </button>
+              </>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-dark-900/85 px-6 text-center text-gray-300">
+                <AlertTriangle size={36} className="text-orange-400" />
+                <div>
+                  <p className="text-lg font-semibold text-white">Carte indisponible</p>
+                  <p className="mt-2 text-sm text-gray-400">
+                    Configure le jeton <code className="rounded bg-dark-800 px-1 py-0.5 text-xs">VITE_MAPBOX_TOKEN</code> pour activer la carte interactive.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-white shadow-xl shadow-orange-900/30 transition-transform hover:-translate-y-0.5 hover:bg-orange-400"
+                >
+                  <Plus size={18} />
+                  Ajouter un spot
                 </button>
               </div>
-            </div>
-
-            <div className="absolute left-4 top-4 flex flex-col gap-3">
-              <button
-                onClick={getUserLocation}
-                className="inline-flex items-center gap-2 rounded-xl border border-dark-700 bg-dark-900/80 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-black/50 transition-colors hover:border-orange-500/50 hover:bg-dark-800/90"
-                title="Centrer sur ma position"
-              >
-                <Navigation size={18} className="text-orange-400" />
-                <span>Ma position</span>
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-orange-900/30 transition-transform hover:-translate-y-1 hover:bg-orange-400"
-            >
-              <Plus size={18} />
-              Ajouter un spot
-            </button>
+            )}
           </div>
 
           <div className="relative bg-dark-900/80 lg:border-l lg:border-dark-800">
