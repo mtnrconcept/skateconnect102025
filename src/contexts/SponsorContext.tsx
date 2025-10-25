@@ -15,6 +15,8 @@ import type {
   SponsorPermissions,
   SponsorShopItem,
   SponsorSpotlight,
+  SponsorSpotlightPerformance,
+  SpotlightPerformanceInsights,
 } from '../types';
 import {
   fetchCommunityAnalyticsHistory,
@@ -63,6 +65,64 @@ function warnSchemaMissing(context: string, err: unknown) {
 }
 
 export type SponsorDashboardView = 'overview' | 'spotlights' | 'shop' | 'api-keys';
+
+function roundTo(value: number, precision = 2): number {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+function computePercentageChange(current: number, previous: number): number | null {
+  if (previous === 0) {
+    if (current === 0) {
+      return 0;
+    }
+    return null;
+  }
+  return roundTo(((current - previous) / Math.abs(previous)) * 100);
+}
+
+function buildSpotlightPerformanceInsights(
+  performance: SponsorSpotlightPerformance | null,
+): SpotlightPerformanceInsights | null {
+  if (!performance) {
+    return null;
+  }
+
+  const impressionsTrend = computePercentageChange(
+    performance.last7Days.impressions,
+    performance.previous7Days.impressions,
+  );
+  const clicksTrend = computePercentageChange(
+    performance.last7Days.clicks,
+    performance.previous7Days.clicks,
+  );
+
+  const currentCtr =
+    performance.last7Days.impressions > 0
+      ? (performance.last7Days.clicks / performance.last7Days.impressions) * 100
+      : 0;
+  const previousCtr =
+    performance.previous7Days.impressions > 0
+      ? (performance.previous7Days.clicks / performance.previous7Days.impressions) * 100
+      : 0;
+  const ctrTrend = computePercentageChange(currentCtr, previousCtr);
+
+  return {
+    trend: {
+      impressions: impressionsTrend,
+      clicks: clicksTrend,
+      ctr: ctrTrend,
+    },
+    sparkline: performance.daily,
+  } satisfies SpotlightPerformanceInsights;
+}
+
+function attachSpotlightInsights(spotlight: SponsorSpotlight): SponsorSpotlight {
+  return {
+    ...spotlight,
+    performanceInsights: buildSpotlightPerformanceInsights(spotlight.performance),
+  };
+}
 
 interface SponsorContextValue {
   isSponsor: boolean;
@@ -187,7 +247,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     }
     try {
       const data = await fetchSponsorSpotlights(sponsorId);
-      setSpotlights(data);
+      setSpotlights(data.map(attachSpotlightInsights));
     } catch (cause) {
       if (isSchemaMissing(cause)) {
         warnSchemaMissing('refreshSpotlights', cause);
@@ -259,7 +319,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     async (spotlightId: string, status: SponsorSpotlight['status']) => {
       if (!sponsorId || !permissions.canManageSpotlights) return;
       try {
-        const updated = await updateSponsorSpotlight(spotlightId, { status });
+        const updated = attachSpotlightInsights(await updateSponsorSpotlight(spotlightId, { status }));
         setSpotlights((current) =>
           current.map((spotlight) => (spotlight.id === spotlightId ? updated : spotlight)),
         );
