@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "build:test": "tsc --project tsconfig.tests.json",
-    "test": "npm run build:test && node --test dist-tests/tests",
+    "test": "VITE_SUPABASE_URL=http://localhost VITE_SUPABASE_ANON_KEY=anon npm run build:test && VITE_SUPABASE_URL=http://localhost VITE_SUPABASE_ANON_KEY=anon node --test dist-tests/tests",
     "cap:init": "npx cap init",
     "cap:add:ios": "npx cap add ios",
     "cap:add:android": "npx cap add android",

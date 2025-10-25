@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Plus, MessageCircle, Heart, MapPin, Video, Calendar } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import type { XPTransaction, Profile } from '../types';
 
 interface XPHistoryProps {

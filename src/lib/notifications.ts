@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 import { requestNotificationPermissions, addPushNotificationListeners } from './capacitor';
 
 export interface Notification {

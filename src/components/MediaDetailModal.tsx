@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Heart, Share2, Eye, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import LazyImage from './LazyImage';
 import SpotMediaCommentSection from './SpotMediaCommentSection';
 import type { SpotMedia } from '../types';

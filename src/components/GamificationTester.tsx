@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Play, CheckCircle, XCircle, Loader } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import type { Profile } from '../types';
 
 interface GamificationTesterProps {

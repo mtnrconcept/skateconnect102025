@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from './lib/supabase';
+import { supabase } from './lib/supabase.js';
 import Auth from './components/Auth';
 import Header from './components/Header';
 import Footer from './components/Footer';

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Heart, MessageCircle, MapPin, Send, Video, X, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { uploadFile } from '../../lib/storage';
 import { filterOutProfileMediaPosts } from '../../lib/postUtils';

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ShoppingBag, Package, Gift, Ticket, Check, X } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase.js';
 import type { Reward, UserReward, Profile, UserXP } from '../../types';
 
 interface RewardsSectionProps {

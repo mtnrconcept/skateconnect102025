@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Target, CheckCircle, Clock, Zap, Gift } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import type { Profile } from '../types';
 import { createFallbackDailyChallenges } from '../data/challengesCatalog';
 

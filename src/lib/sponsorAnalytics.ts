@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 import type { CommunityAnalyticsSnapshot } from '../types';
 
 export async function fetchLatestCommunityAnalytics(

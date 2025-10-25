@@ -1,4 +1,6 @@
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
+
+type SupabaseClient = typeof supabase;
 
 interface RegistrationResult {
   success: boolean;
@@ -45,7 +47,8 @@ interface RegistrationOptions {
   sponsor?: boolean;
 }
 
-export async function registerForChallenge(
+export async function registerForChallengeWithClient(
+  client: SupabaseClient,
   userId: string,
   challengeId: string,
   options?: RegistrationOptions,
@@ -58,7 +61,7 @@ export async function registerForChallenge(
   const conflictTarget = isSponsorChallenge ? 'sponsor_challenge_id,user_id' : 'challenge_id,user_id';
 
   try {
-    const { error } = await supabase.from(tableName).upsert(payload, { onConflict: conflictTarget });
+    const { error } = await client.from(tableName).upsert(payload, { onConflict: conflictTarget });
 
     if (error) throw error;
 
@@ -84,7 +87,16 @@ export async function registerForChallenge(
   }
 }
 
-export async function registerForEvent(
+export async function registerForChallenge(
+  userId: string,
+  challengeId: string,
+  options?: RegistrationOptions,
+): Promise<RegistrationResult> {
+  return registerForChallengeWithClient(supabase, userId, challengeId, options);
+}
+
+export async function registerForEventWithClient(
+  client: SupabaseClient,
   userId: string,
   eventId: string,
   options?: RegistrationOptions,
@@ -97,7 +109,7 @@ export async function registerForEvent(
   const conflictTarget = isSponsorEvent ? 'sponsor_event_id,user_id' : 'event_id,user_id';
 
   try {
-    const { error } = await supabase.from(tableName).upsert(payload, { onConflict: conflictTarget });
+    const { error } = await client.from(tableName).upsert(payload, { onConflict: conflictTarget });
 
     if (error) throw error;
 
@@ -121,4 +133,12 @@ export async function registerForEvent(
       message: "Participation sauvegardée hors-ligne. Nous la synchroniserons dès que possible.",
     };
   }
+}
+
+export async function registerForEvent(
+  userId: string,
+  eventId: string,
+  options?: RegistrationOptions,
+): Promise<RegistrationResult> {
+  return registerForEventWithClient(supabase, userId, eventId, options);
 }

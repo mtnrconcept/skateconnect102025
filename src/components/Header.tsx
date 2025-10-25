@@ -11,7 +11,7 @@ import {
   MapPin,
   User as UserIcon,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import NotificationsPanel from './NotificationsPanel';
