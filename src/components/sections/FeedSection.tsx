@@ -11,6 +11,8 @@ import {
   CalendarDays,
   Flag,
   Award,
+  Users,
+  Clock,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
@@ -82,6 +84,62 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   const topAthletes = useMemo(() => fakeLeaderboardEntries.slice(0, 3), []);
 
   const formatNumber = (value: number) => new Intl.NumberFormat('fr-FR').format(value);
+
+  const formatChallengeDeadline = (endDate?: string | null) => {
+    if (!endDate) return null;
+    const parsed = new Date(endDate);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    const now = new Date();
+    const diffMs = parsed.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+      return "Se termine aujourd'hui";
+    }
+    if (diffDays === 1) {
+      return 'Se termine demain';
+    }
+    if (diffDays < 14) {
+      return `Se termine dans ${diffDays} jours`;
+    }
+    return `Se termine le ${parsed.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+    })}`;
+  };
+
+  const formatLastUpdate = (date?: string | null) => {
+    if (!date) return null;
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    const diffMs = Date.now() - parsed.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffMinutes < 1) {
+      return 'Mise à jour à l’instant';
+    }
+    if (diffMinutes < 60) {
+      return `Mise à jour il y a ${diffMinutes} min`;
+    }
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `Mise à jour il y a ${diffHours} h`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) {
+      return 'Mise à jour il y a 1 jour';
+    }
+    if (diffDays < 7) {
+      return `Mise à jour il y a ${diffDays} jours`;
+    }
+    return `Mis à jour le ${parsed.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+    })}`;
+  };
 
   useEffect(() => {
     loadPosts();
@@ -957,9 +1015,21 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                     )}
                   </div>
                   <p className="mt-1 text-xs text-gray-400">{event.date}</p>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                    <MapPin size={14} className="text-orange-400" />
-                    <span>{event.location}</span>
+                  <div className="mt-2 flex flex-col gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={14} className="text-orange-400" />
+                      <span>{event.location}</span>
+                    </div>
+                    {event.time && (
+                      <div className="flex items-center gap-2">
+                        <Clock size={14} className="text-orange-400" />
+                        <span>{event.time}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className="text-orange-400" />
+                      <span>{formatNumber(event.attendees)} participants</span>
+                    </div>
                   </div>
                 </li>
               ))}
@@ -971,51 +1041,65 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
               <h3 className="text-sm font-semibold uppercase tracking-wide">Défis sponsors</h3>
             </div>
             <ul className="mt-4 space-y-4">
-              {sponsorChallenges.map((challenge) => (
-                <li key={challenge.id} className="rounded-md border border-dark-700 bg-dark-900/40 p-3">
-                  <p className="text-sm font-semibold text-white">{challenge.title}</p>
-                  <p className="mt-1 text-xs text-gray-400">{challenge.description}</p>
-                  <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                    <span>Participants : {formatNumber(challenge.participants_count ?? 0)}</span>
-                    <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-300">
-                      Récompense
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-gray-400">{challenge.prize}</p>
-                </li>
-              ))}
+              {sponsorChallenges.map((challenge) => {
+                const deadlineLabel = formatChallengeDeadline(challenge.end_date);
+                return (
+                  <li key={challenge.id} className="rounded-md border border-dark-700 bg-dark-900/40 p-3">
+                    <p className="text-sm font-semibold text-white">{challenge.title}</p>
+                    <p className="mt-1 text-xs text-gray-400">{challenge.description}</p>
+                    <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                      <span>Participants : {formatNumber(challenge.participants_count ?? 0)}</span>
+                      <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-300">
+                        Récompense
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-400">{challenge.prize}</p>
+                    {deadlineLabel && <p className="mt-2 text-[11px] text-gray-500">{deadlineLabel}</p>}
+                  </li>
+                );
+              })}
             </ul>
           </section>
           <section className="bg-dark-800 rounded-lg border border-dark-700 p-4">
             <div className="flex items-center gap-2 text-gray-300">
               <Award size={18} className="text-orange-400" />
-              <h3 className="text-sm font-semibold uppercase tracking-wide">Meilleurs sportifs</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide">Meilleurs sportifs du moment</h3>
             </div>
             <ul className="mt-4 space-y-4">
-              {topAthletes.map((entry, index) => (
-                <li key={entry.user_id} className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full border border-orange-500/40 text-sm font-semibold text-orange-300">
-                    #{index + 1}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {entry.profile.avatar_url ? (
-                      <img
-                        src={entry.profile.avatar_url}
-                        alt={getUserDisplayName(entry.profile)}
-                        className="h-10 w-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
-                        {getUserInitial(entry.profile)}
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-white">{getUserDisplayName(entry.profile)}</p>
-                      <p className="text-xs text-gray-400">{formatNumber(entry.total_xp)} XP · Niveau {entry.current_level}</p>
+              {topAthletes.map((entry, index) => {
+                const lastUpdate = formatLastUpdate(entry.updated_at);
+                return (
+                  <li key={entry.user_id} className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-orange-500/40 text-sm font-semibold text-orange-300">
+                      #{index + 1}
                     </div>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex items-start gap-3">
+                      {entry.profile.avatar_url ? (
+                        <img
+                          src={entry.profile.avatar_url}
+                          alt={getUserDisplayName(entry.profile)}
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
+                          {getUserInitial(entry.profile)}
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-white">{getUserDisplayName(entry.profile)}</p>
+                        <p className="text-xs text-orange-300">{entry.level_title}</p>
+                        <p className="text-xs text-gray-400">
+                          {formatNumber(entry.total_xp)} XP · Niveau {entry.current_level}
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          Prochain palier dans {formatNumber(entry.xp_to_next_level)} XP
+                        </p>
+                        {lastUpdate && <p className="text-[10px] uppercase tracking-wide text-gray-600">{lastUpdate}</p>}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         </aside>
