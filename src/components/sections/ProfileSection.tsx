@@ -10,6 +10,7 @@ import XPHistory from '../XPHistory';
 import GamificationTester from '../GamificationTester';
 import PostMediaViewer from '../PostMediaViewer';
 import SponsorProfileHero from '../profile/sponsor/SponsorProfileHero';
+import SponsorContactPanel from '../profile/sponsor/SponsorContactPanel';
 import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
@@ -233,255 +234,265 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
     );
   }
 
+  const isSponsorProfile = profileData.role === 'sponsor';
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      {profileData.role === 'sponsor' ? <SponsorProfileHero profile={profileData} /> : null}
+    <>
+      <div className={`mx-auto px-4 py-6 ${isSponsorProfile ? 'max-w-6xl' : 'max-w-4xl'}`}>
+        {isSponsorProfile ? <SponsorProfileHero profile={profileData} /> : null}
 
-      <div className="bg-dark-800 rounded-xl border border-dark-700 mb-6">
-        <div
-          className={`relative h-48 rounded-t-xl overflow-hidden ${
-            profileData.cover_url ? '' : 'bg-gradient-to-br from-dark-700 to-dark-600'
-          }`}
-        >
-          {profileData.cover_url ? (
-            <img
-              src={profileData.cover_url}
-              alt="Cover"
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-          ) : null}
-        </div>
-
-        <div className="px-6 pb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between -mt-16 mb-4 relative z-10">
-            <div className="flex items-end gap-4 mb-4 sm:mb-0">
-              {profileData.avatar_url ? (
+        <div className={isSponsorProfile ? 'grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}>
+        <div className="space-y-6">
+          <div className="bg-dark-800 rounded-xl border border-dark-700">
+            <div
+              className={`relative h-48 rounded-t-xl overflow-hidden ${
+                profileData.cover_url ? '' : 'bg-gradient-to-br from-dark-700 to-dark-600'
+              }`}
+            >
+              {profileData.cover_url ? (
                 <img
-                  src={profileData.avatar_url}
-                  alt={getUserDisplayName(profileData)}
-                  className="w-32 h-32 rounded-full border-4 border-orange-500 object-cover shadow-lg"
+                  src={profileData.cover_url}
+                  alt="Cover"
+                  className="absolute inset-0 w-full h-full object-cover"
                 />
-              ) : (
-                <div className="w-32 h-32 rounded-full border-4 border-orange-500 bg-orange-500 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
-                  {getUserInitial(profileData)}
+              ) : null}
+            </div>
+
+            <div className="px-6 pb-6">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between -mt-16 mb-4 relative z-10">
+                <div className="flex items-end gap-4 mb-4 sm:mb-0">
+                  {profileData.avatar_url ? (
+                    <img
+                      src={profileData.avatar_url}
+                      alt={getUserDisplayName(profileData)}
+                      className="w-32 h-32 rounded-full border-4 border-orange-500 object-cover shadow-lg"
+                    />
+                  ) : (
+                    <div className="w-32 h-32 rounded-full border-4 border-orange-500 bg-orange-500 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
+                      {getUserInitial(profileData)}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={openEditModal}
+                  className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                >
+                  Edit Profile
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                  {getUserDisplayName(profileData)}
+                  <MapPin size={20} className="text-orange-500" />
+                </h1>
+                <p className="text-gray-400">{profileData.location || 'Los Angeles, CA'}</p>
+              </div>
+
+              {profileData.bio && (
+                <p className="text-gray-300 mb-4">{profileData.bio}</p>
+              )}
+
+              {userXP && (
+                <div className="mb-4">
+                  <XPProgressBar userXP={userXP} compact />
                 </div>
               )}
-            </div>
 
-            <button
-              onClick={openEditModal}
-              className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors"
-            >
-              Edit Profile
-            </button>
-          </div>
-
-          <div className="mb-4">
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              {getUserDisplayName(profileData)}
-              <MapPin size={20} className="text-orange-500" />
-            </h1>
-            <p className="text-gray-400">{profileData.location || 'Los Angeles, CA'}</p>
-          </div>
-
-          {profileData.bio && (
-            <p className="text-gray-300 mb-4">{profileData.bio}</p>
-          )}
-
-          {userXP && (
-            <div className="mb-4">
-              <XPProgressBar userXP={userXP} compact />
-            </div>
-          )}
-
-          {userBadges.length > 0 && (
-            <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2">
-              {userBadges.map((userBadge) => (
-                <div
-                  key={userBadge.id}
-                  className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-2xl border-2 border-orange-500"
-                  title={userBadge.badge?.name}
-                >
-                  {userBadge.badge?.icon}
+              {userBadges.length > 0 && (
+                <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2">
+                  {userBadges.map((userBadge) => (
+                    <div
+                      key={userBadge.id}
+                      className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-2xl border-2 border-orange-500"
+                      title={userBadge.badge?.name}
+                    >
+                      {userBadge.badge?.icon}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          <div className="flex gap-3 mb-4">
-            <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
-              Follow
-            </button>
-            <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
-              Message
-            </button>
-            <button
-              onClick={openEditModal}
-              className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold"
-            >
-              Edit Profile
-            </button>
+              <div className="flex gap-3 mb-4">
+                <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
+                  Follow
+                </button>
+                <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
+                  Message
+                </button>
+                <button
+                  onClick={openEditModal}
+                  className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+                >
+                  Edit Profile
+                </button>
+              </div>
+
+              <div className="flex justify-around border-t border-dark-700 pt-4">
+                <div className="text-center">
+                  <div className="text-xl font-bold text-white">{stats.postsCount > 0 ? stats.postsCount : '1.5'}K</div>
+                  <div className="text-sm text-gray-400">Followers</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-bold text-white">{stats.followersCount > 0 ? stats.followersCount : '780'}</div>
+                  <div className="text-sm text-gray-400">Following</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-bold text-white">{stats.followingCount > 0 ? stats.followingCount : '4.2'}M</div>
+                  <div className="text-sm text-gray-400">Following</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-bold text-white">{stats.spotsCount > 0 ? stats.spotsCount : 'Saved'}</div>
+                  <div className="text-sm text-gray-400">Saved</div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-around border-t border-dark-700 pt-4">
-            <div className="text-center">
-              <div className="text-xl font-bold text-white">{stats.postsCount > 0 ? stats.postsCount : '1.5'}K</div>
-              <div className="text-sm text-gray-400">Followers</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-white">{stats.followersCount > 0 ? stats.followersCount : '780'}</div>
-              <div className="text-sm text-gray-400">Following</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-white">{stats.followingCount > 0 ? stats.followingCount : '4.2'}M</div>
-              <div className="text-sm text-gray-400">Following</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-white">{stats.spotsCount > 0 ? stats.spotsCount : 'Saved'}</div>
-              <div className="text-sm text-gray-400">Saved</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
-        <div className="border-b border-dark-700">
-          <div className="flex">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'text-orange-500 border-b-2 border-orange-500'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-2">
-          {loading ? (
-            <div className="text-center py-8 text-gray-400">Chargement...</div>
-          ) : activeTab === 'stats' ? (
-            <StatsDisplay profile={profileData} />
-          ) : activeTab === 'xp' ? (
-            <XPHistory profile={profileData} />
-          ) : activeTab === 'badges' ? (
-            <div className="p-4">
-              <div className="flex flex-wrap gap-3">
-                {userBadges.map((userBadge) => (
-                  <div
-                    key={userBadge.id}
-                    className="bg-dark-900 rounded-lg p-4 border-2 border-orange-500 text-center"
+          <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
+            <div className="border-b border-dark-700">
+              <div className="flex">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                      activeTab === tab.id
+                        ? 'text-orange-500 border-b-2 border-orange-500'
+                        : 'text-gray-400 hover:text-gray-300'
+                    }`}
                   >
-                    <div className="text-4xl mb-2">{userBadge.badge?.icon}</div>
-                    <div className="text-sm font-semibold text-white">{userBadge.badge?.name}</div>
-                  </div>
+                    {tab.label}
+                  </button>
                 ))}
               </div>
-              {userBadges.length === 0 && (
+            </div>
+
+            <div className="p-2">
+              {loading ? (
+                <div className="text-center py-8 text-gray-400">Chargement...</div>
+              ) : activeTab === 'stats' ? (
+                <StatsDisplay profile={profileData} />
+              ) : activeTab === 'xp' ? (
+                <XPHistory profile={profileData} />
+              ) : activeTab === 'badges' ? (
+                <div className="p-4">
+                  <div className="flex flex-wrap gap-3">
+                    {userBadges.map((userBadge) => (
+                      <div
+                        key={userBadge.id}
+                        className="bg-dark-900 rounded-lg p-4 border-2 border-orange-500 text-center"
+                      >
+                        <div className="text-4xl mb-2">{userBadge.badge?.icon}</div>
+                        <div className="text-sm font-semibold text-white">{userBadge.badge?.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {userBadges.length === 0 && (
+                    <div className="text-center py-12 text-gray-400">
+                      <Award size={48} className="mx-auto mb-4 opacity-50" />
+                      <p>Aucun badge débloqué</p>
+                    </div>
+                  )}
+                </div>
+              ) : activeTab === 'test' ? (
+                <div className="p-4">
+                  <GamificationTester profile={profileData} />
+                </div>
+              ) : activeTab === 'posts' ? (
+                mediaPosts.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400">
+                    <p className="text-sm">Aucun média partagé pour le moment.</p>
+                    <p className="text-xs text-gray-500 mt-1">Ajoutez une photo ou une vidéo pour alimenter votre galerie.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1">
+                    {mediaPosts.map((post, index) => {
+                      const firstMedia = post.media_urls?.[0];
+                      const isVideo = firstMedia ? isVideoUrl(firstMedia) : post.post_type === 'video';
+
+                      return (
+                        <button
+                          key={post.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveGalleryIndex(index);
+                            setShowGalleryViewer(true);
+                          }}
+                          className="relative aspect-square bg-dark-700 rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          aria-label="Voir le média du post"
+                        >
+                          {firstMedia ? (
+                            isVideo ? (
+                              <video
+                                src={firstMedia}
+                                className="w-full h-full object-cover"
+                                muted
+                                playsInline
+                                loop
+                              />
+                            ) : (
+                              <img src={firstMedia} alt="Post" className="w-full h-full object-cover" />
+                            )
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center">
+                              <span className="text-4xl opacity-20">🛹</span>
+                            </div>
+                          )}
+                          {isVideo && (
+                            <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full">
+                              Vidéo
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
                 <div className="text-center py-12 text-gray-400">
-                  <Award size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>Aucun badge débloqué</p>
+                  <p>Contenu à venir</p>
                 </div>
               )}
             </div>
-          ) : activeTab === 'test' ? (
-            <div className="p-4">
-              <GamificationTester profile={profileData} />
-            </div>
-          ) : activeTab === 'posts' ? (
-            mediaPosts.length === 0 ? (
-              <div className="py-12 text-center text-gray-400">
-                <p className="text-sm">Aucun média partagé pour le moment.</p>
-                <p className="text-xs text-gray-500 mt-1">Ajoutez une photo ou une vidéo pour alimenter votre galerie.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-1">
-                {mediaPosts.map((post, index) => {
-                  const firstMedia = post.media_urls?.[0];
-                  const isVideo = firstMedia ? isVideoUrl(firstMedia) : post.post_type === 'video';
+          </div>
+        </div>
 
-                  return (
-                    <button
-                      key={post.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveGalleryIndex(index);
-                        setShowGalleryViewer(true);
-                      }}
-                      className="relative aspect-square bg-dark-700 rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      aria-label="Voir le média du post"
-                    >
-                      {firstMedia ? (
-                        isVideo ? (
-                          <video
-                            src={firstMedia}
-                            className="w-full h-full object-cover"
-                            muted
-                            playsInline
-                            loop
-                          />
-                        ) : (
-                          <img src={firstMedia} alt="Post" className="w-full h-full object-cover" />
-                        )
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center">
-                          <span className="text-4xl opacity-20">🛹</span>
-                        </div>
-                      )}
-                      {isVideo && (
-                        <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-full">
-                          Vidéo
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )
-          ) : (
-            <div className="text-center py-12 text-gray-400">
-              <p>Contenu à venir</p>
-            </div>
-          )}
+          {isSponsorProfile ? <SponsorContactPanel profile={profileData} /> : null}
+        </div>
       </div>
-    </div>
 
-    {showGalleryViewer && mediaPosts.length > 0 && profileData && (
-      <PostMediaViewer
-        posts={mediaPosts}
-        initialPostIndex={activeGalleryIndex}
-        initialMediaIndex={0}
-        onClose={() => setShowGalleryViewer(false)}
-        onLike={handlePostLike}
-        currentUser={profileData}
-        onCommentCountChange={handleGalleryCommentCountChange}
-        fallbackUser={profileData}
-      />
-    )}
+      {showGalleryViewer && mediaPosts.length > 0 && profileData && (
+        <PostMediaViewer
+          posts={mediaPosts}
+          initialPostIndex={activeGalleryIndex}
+          initialMediaIndex={0}
+          onClose={() => setShowGalleryViewer(false)}
+          onLike={handlePostLike}
+          currentUser={profileData}
+          onCommentCountChange={handleGalleryCommentCountChange}
+          fallbackUser={profileData}
+        />
+      )}
 
-    {showEditModal && profileData && (
-      <EditProfileModal
-        profile={profileData}
-        onClose={handleModalClose}
-        onSaved={async () => {
-          const updatedProfile = await refreshProfile(profileData.id);
-          if (updatedProfile) {
-            setProfileSnapshot(null);
-            setShowEditModal(false);
-            setLoading(true);
-            await loadProfileData(updatedProfile.id);
-          }
-        }}
-        onAvatarChange={handleAvatarPreview}
-        onCoverChange={handleCoverPreview}
-      />
-    )}
-    </div>
+      {showEditModal && profileData && (
+        <EditProfileModal
+          profile={profileData}
+          onClose={handleModalClose}
+          onSaved={async () => {
+            const updatedProfile = await refreshProfile(profileData.id);
+            if (updatedProfile) {
+              setProfileSnapshot(null);
+              setShowEditModal(false);
+              setLoading(true);
+              await loadProfileData(updatedProfile.id);
+            }
+          }}
+          onAvatarChange={handleAvatarPreview}
+          onCoverChange={handleCoverPreview}
+        />
+      )}
+    </>
   );
 }

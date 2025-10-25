@@ -268,6 +268,7 @@ function App() {
         sponsor_contact: data.sponsor_contact ?? null,
         sponsor_branding: data.sponsor_branding ?? null,
         sponsor_permissions: data.sponsor_permissions ?? null,
+        sponsor_media_kits: data.sponsor_media_kits ?? null,
       };
 
       setProfile(normalizedProfile);
@@ -325,6 +326,7 @@ function App() {
             sponsor_branding: previous.sponsor_branding ?? null,
             sponsor_contact: previous.sponsor_contact ?? null,
             sponsor_permissions: previous.sponsor_permissions ?? null,
+            sponsor_media_kits: previous.sponsor_media_kits ?? null,
           };
         }
 
