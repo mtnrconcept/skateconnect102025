@@ -54,6 +54,24 @@ export default function SpotGrid({
   const [sliderTransform, setSliderTransform] = useState(0);
   const [sliderTransitionEnabled, setSliderTransitionEnabled] = useState(false);
 
+  const getAvailableHeight = useCallback(() => {
+    const parent = sliderRef.current?.parentElement;
+    if (!parent) return null;
+    const available = parent.clientHeight - 10;
+    if (Number.isNaN(available)) return null;
+    return available > 0 ? available : 0;
+  }, []);
+
+  const clampHeight = useCallback(
+    (value: number) => {
+      const available = getAvailableHeight();
+      if (available === null) return value;
+      if (available <= 0) return 0;
+      return Math.min(value, available);
+    },
+    [getAvailableHeight]
+  );
+
   /** Gestion du dépassement de contenu (description) */
   const descriptionRefs = useRef(new Map<string, HTMLParagraphElement>());
   const descriptionObservers = useRef(new Map<string, ResizeObserver>());
@@ -199,8 +217,8 @@ export default function SpotGrid({
     const page = sliderInnerRef.current?.querySelector<HTMLElement>('[data-page]');
     if (!page) return;
     const { height } = page.getBoundingClientRect();
-    setSliderHeight(height);
-  }, [pendingAnimation]);
+    setSliderHeight(clampHeight(height));
+  }, [pendingAnimation, clampHeight]);
 
   useLayoutEffect(() => {
     measureCurrentPage();
@@ -249,8 +267,8 @@ export default function SpotGrid({
 
     if (!currentPage || !nextPage) return;
 
-    const currentHeight = currentPage.getBoundingClientRect().height;
-    const nextHeight = nextPage.getBoundingClientRect().height;
+    const currentHeight = clampHeight(currentPage.getBoundingClientRect().height);
+    const nextHeight = clampHeight(nextPage.getBoundingClientRect().height);
 
     setSliderTransitionEnabled(false);
     setSliderTransform(0);
@@ -263,7 +281,7 @@ export default function SpotGrid({
         setSliderTransform(-currentHeight);
       });
     });
-  }, [pendingAnimation]);
+  }, [pendingAnimation, clampHeight]);
 
   /** Commit lorsque la transition est terminée */
   const handleSliderTransitionEnd: TransitionEventHandler<HTMLDivElement> = (event) => {
@@ -286,9 +304,18 @@ export default function SpotGrid({
     return () => cancelAnimationFrame(id);
   }, [pendingAnimation, currentBatchIndex]);
 
-  const pageClasses = 'grid grid-cols-1 gap-4 sm:grid-cols-3';
+  const pageClasses = 'grid h-full min-h-0 grid-cols-1 gap-4 sm:grid-cols-3';
 
-  const sliderStyle = sliderHeight !== null ? { height: `${sliderHeight}px` } : undefined;
+  const pageStyle: CSSProperties = {
+    height: '100%',
+    gridAutoRows: '1fr',
+  };
+
+  const sliderStyle: CSSProperties = {
+    marginTop: 5,
+    marginBottom: 5,
+    height: sliderHeight !== null ? sliderHeight : undefined,
+  };
 
   const sliderInnerStyle: CSSProperties = {
     transform: `translateY(${sliderTransform}px)`,
@@ -296,7 +323,7 @@ export default function SpotGrid({
   };
 
   const renderPage = (items: (Spot | null)[], key: string) => (
-    <div key={key} data-page className={pageClasses}>
+    <div key={key} data-page className={pageClasses} style={pageStyle}>
       {items.map((spot, index) => renderSpotCard(spot, key, index))}
     </div>
   );
@@ -309,7 +336,7 @@ export default function SpotGrid({
       return (
         <div
           key={key}
-          className="flex h-full min-h-[280px] w-full flex-col overflow-hidden rounded-2xl border border-dashed border-dark-700/60 bg-dark-800/40 text-left shadow-lg shadow-black/10"
+          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-dashed border-dark-700/60 bg-dark-800/40 text-left shadow-lg shadow-black/10"
           role="listitem"
           aria-hidden="true"
         >
@@ -337,7 +364,7 @@ export default function SpotGrid({
         key={key}
         type="button"
         onClick={() => onSpotClick?.(spot)}
-        className="group relative flex h-full min-h-[320px] w-full flex-col overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
+        className="group relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
         role="listitem"
       >
         <div className="relative flex-[1] overflow-hidden">
@@ -372,7 +399,7 @@ export default function SpotGrid({
           </div>
         </div>
 
-        <div className="flex flex-[2] flex-col gap-4 p-5">
+        <div className="flex min-h-0 flex-[2] flex-col gap-4 p-5">
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
             {(spot as any).creator?.username && (
@@ -383,7 +410,7 @@ export default function SpotGrid({
           </div>
 
           {spot.description && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 overflow-hidden">
               <p
                 ref={(node) => registerDescriptionRef(spot.id, node)}
                 data-spot-description
@@ -426,17 +453,17 @@ export default function SpotGrid({
         <div id={gridId} className="relative h-full" role="list">
           <div
             ref={sliderRef}
-            className="relative w-full overflow-hidden transition-[height] duration-300 ease-in-out"
+            className="relative h-full w-full overflow-hidden transition-[height] duration-300 ease-in-out"
             style={sliderStyle}
           >
             <div
               ref={sliderInnerRef}
-              className="relative will-change-transform"
+              className="relative min-h-0 will-change-transform"
               style={sliderInnerStyle}
               onTransitionEnd={handleSliderTransitionEnd}
             >
               {pendingAnimation ? (
-                <div className="grid auto-rows-auto" data-stack>
+                <div className="grid auto-rows-[1fr]" data-stack>
                   {renderPage(pendingAnimation.currentSpots, `current-${currentBatchIndex}`)}
                   {renderPage(pendingAnimation.nextSpots, `upcoming-${pendingAnimation.nextIndex}`)}
                 </div>
