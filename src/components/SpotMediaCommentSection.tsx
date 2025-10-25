@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Send, Trash2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import type { SpotMediaComment, Profile } from '../types';
 

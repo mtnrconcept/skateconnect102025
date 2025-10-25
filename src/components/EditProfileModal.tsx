@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import { getUserInitial } from '../lib/userUtils';
 import MediaUploader from './MediaUploader';
 import type { Profile } from '../types';

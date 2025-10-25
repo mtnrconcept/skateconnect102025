@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, MapPin, Star, Users, Upload, Heart, MessageCircle, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { useState, useEffect, useRef } from 'react';
+import { X, MapPin, Star, Users, Upload, Heart, MessageCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase.js';
 import LazyImage from './LazyImage';
 import SpotMediaGallery from './SpotMediaGallery';
 import MediaDetailModal from './MediaDetailModal';

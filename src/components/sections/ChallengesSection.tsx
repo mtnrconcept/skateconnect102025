@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Trophy, Calendar, Users, Star, Target, CheckCircle2, AlertCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase.js';
 import DailyChallenges from '../DailyChallenges';
 import {
   getStoredChallengeRegistrations,
   registerForChallenge,
 } from '../../lib/engagement';
 import { getFallbackChallenges } from '../../data/challengesCatalog';
-import type { Challenge, ContentNavigationOptions, Profile } from '../../types';
+import ChallengeSubmissionExperience from '../challenges/ChallengeSubmissionExperience';
+import ChallengeSubmissionHistory from '../challenges/ChallengeSubmissionHistory';
+import { fetchSubmissionHistory } from '../../lib/challenges';
+import type { Challenge, ChallengeSubmission, ContentNavigationOptions, Profile } from '../../types';
 
 interface ChallengesSectionProps {
   profile: Profile | null;
@@ -23,6 +26,10 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, { message: string; tone: 'success' | 'info' }>>({});
   const [joinedIds, setJoinedIds] = useState<string[]>([]);
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
+  const [submissionHistory, setSubmissionHistory] = useState<ChallengeSubmission[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const lastFocusedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -32,6 +39,20 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   useEffect(() => {
     setJoinedIds(Array.from(getStoredChallengeRegistrations()));
   }, []);
+
+  useEffect(() => {
+    if (challenges.length === 0) {
+      setSelectedChallengeId(null);
+      return;
+    }
+
+    setSelectedChallengeId((current) => {
+      if (current && challenges.some((challenge) => challenge.id === current)) {
+        return current;
+      }
+      return challenges[0]?.id ?? null;
+    });
+  }, [challenges]);
 
   const loadChallenges = async () => {
     try {
@@ -87,6 +108,10 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
     const attemptScroll = () => {
       const element = document.getElementById(targetId);
       if (element) {
+        if (targetId.startsWith('challenge-')) {
+          const normalizedId = targetId.replace('challenge-', '');
+          setSelectedChallengeId((current) => (current === normalizedId ? current : normalizedId));
+        }
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         lastFocusedIdRef.current = targetId;
         onFocusHandled?.();
@@ -116,6 +141,36 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   }, [focusConfig?.scrollToId, activeTab, challenges, loading, onFocusHandled]);
 
   const joinedChallengeSet = useMemo(() => new Set(joinedIds), [joinedIds]);
+  const selectedChallenge = useMemo(() => {
+    if (!selectedChallengeId) {
+      return null;
+    }
+    return challenges.find((challenge) => challenge.id === selectedChallengeId) ?? null;
+  }, [selectedChallengeId, challenges]);
+  const selectedChallengeJoined = selectedChallenge ? joinedChallengeSet.has(selectedChallenge.id) : false;
+
+  const loadHistory = useCallback(async () => {
+    if (!profile?.id) {
+      setSubmissionHistory([]);
+      return;
+    }
+
+    try {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const data = await fetchSubmissionHistory(profile.id);
+      setSubmissionHistory(data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Impossible de charger ton historique de participations';
+      setHistoryError(message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   const handleJoinChallenge = async (challenge: Challenge) => {
     if (!profile?.id) {
@@ -279,19 +334,25 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
               <p className="text-sm text-gray-400">Revenez plus tard pour de nouveaux challenges!</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {challenges.map((challenge) => {
-                const daysRemaining = getDaysRemaining(challenge.end_date);
-                const isExpiringSoon = daysRemaining <= 2;
-                const hasJoined = joinedChallengeSet.has(challenge.id);
-                const canJoin = challenge.challenge_type === 'community';
-                const currentFeedback = feedback[challenge.id];
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {challenges.map((challenge) => {
+                  const daysRemaining = getDaysRemaining(challenge.end_date);
+                  const isExpiringSoon = daysRemaining <= 2;
+                  const hasJoined = joinedChallengeSet.has(challenge.id);
+                  const canJoin = challenge.challenge_type === 'community';
+                  const currentFeedback = feedback[challenge.id];
 
-                return (
-                  <div
+                  return (
+                    <div
                     key={challenge.id}
                     id={`challenge-${challenge.id}`}
-                    className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden hover:border-dark-600 transition-all cursor-pointer"
+                    onClick={() => setSelectedChallengeId(challenge.id)}
+                    className={`bg-dark-800 rounded-xl border ${
+                      selectedChallengeId === challenge.id
+                        ? 'border-orange-500/60 shadow-lg shadow-orange-500/10'
+                        : 'border-dark-700 hover:border-dark-600'
+                    } overflow-hidden transition-all cursor-pointer`}
                   >
                     <div className={`h-32 bg-gradient-to-br ${getChallengeColor(challenge.challenge_type)} p-4 flex flex-col justify-between`}>
                       <div className="flex items-center justify-between">
@@ -341,7 +402,12 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
                           <span className="text-sm font-medium text-red-500">Expiré</span>
                         )}
                         <button
-                          onClick={() => canJoin && handleJoinChallenge(challenge)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (canJoin) {
+                              void handleJoinChallenge(challenge);
+                            }
+                          }}
                           disabled={!canJoin || hasJoined || joiningId === challenge.id || daysRemaining <= 0}
                           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 ${
                             !canJoin
@@ -379,8 +445,37 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
                       )}
                     </div>
                   </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+
+              {selectedChallenge && (
+                <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
+                  <ChallengeSubmissionExperience
+                    challenge={selectedChallenge}
+                    profile={profile}
+                    hasJoined={selectedChallengeJoined}
+                    onSubmissionCreated={(submission) => {
+                      setSubmissionHistory((prev) => [
+                        submission,
+                        ...prev.filter((item) => item.id !== submission.id),
+                      ]);
+                      void loadHistory();
+                    }}
+                  />
+                  <div className="space-y-4">
+                    {historyError && (
+                      <div className="bg-red-500/10 border border-red-500/40 text-red-300 rounded-xl px-3 py-2 text-sm">
+                        {historyError}
+                      </div>
+                    )}
+                    <ChallengeSubmissionHistory
+                      submissions={submissionHistory}
+                      loading={historyLoading}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

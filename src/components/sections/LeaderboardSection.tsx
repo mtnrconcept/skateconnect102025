@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, TrendingUp, Award, Crown, Medal } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase.js';
 import { fakeLeaderboardEntries } from '../../data/fakeFeed';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import type { Profile, UserXP } from '../../types';

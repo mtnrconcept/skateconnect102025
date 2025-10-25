@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { MapPin, Filter, Plus, Navigation, AlertTriangle } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase.js';
 import SpotDetailModal from '../SpotDetailModal';
 import AddSpotModal from '../AddSpotModal';
 import type { Spot } from '../../types';

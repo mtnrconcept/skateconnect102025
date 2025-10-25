@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MapPin, Users, Award, X, Sparkles, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import { filterOutProfileMediaPosts } from '../lib/postUtils';
 import { getUserDisplayName } from '../lib/userUtils';
 import type { Post, Profile } from '../types';

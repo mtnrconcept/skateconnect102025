@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Heart, Eye, Filter, Image as ImageIcon, Video, Clock, MessageCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import LazyImage from './LazyImage';
 import type { SpotMedia } from '../types';
 

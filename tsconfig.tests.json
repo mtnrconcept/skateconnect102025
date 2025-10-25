@@ -12,7 +12,14 @@
     "declaration": false,
     "sourceMap": false,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
-  "include": ["src/lib/calendar.ts", "src/types/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "src/lib/calendar.ts",
+    "src/lib/engagement.ts",
+    "src/lib/challenges.ts",
+    "src/lib/supabase.ts",
+    "src/types/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

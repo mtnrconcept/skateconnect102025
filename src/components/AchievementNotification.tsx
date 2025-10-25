@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Award, Star, Sparkles } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import type { Badge, Profile } from '../types';
 
 interface AchievementNotificationProps {

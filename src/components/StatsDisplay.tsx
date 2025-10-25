@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Award, MapPin, Video, MessageCircle, Heart, Users, Trophy } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 import type { Profile } from '../types';
 
 interface StatsDisplayProps {

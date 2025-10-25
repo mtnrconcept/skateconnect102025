@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MapPin, Calendar, Award, Users, TrendingUp, Gift } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { filterOutProfileMediaPosts } from '../../lib/postUtils';
 import EditProfileModal from '../EditProfileModal';
