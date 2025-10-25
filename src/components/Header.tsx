@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Search,
@@ -10,6 +10,7 @@ import {
   Trophy,
   MapPin,
   User as UserIcon,
+  Hash,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUnreadCount } from '../lib/notifications';
@@ -21,14 +22,15 @@ import { createFallbackChallenges, createFallbackDailyChallenges } from '../data
 import { settingsCategories, quickSettingsLinks } from '../data/settingsCatalog';
 import type { Profile, Section, ContentNavigationOptions } from '../types';
 import type { LucideIcon } from 'lucide-react';
-
-const normalizeSearchValue = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+import {
+  searchContent,
+  tokenizeSearchQuery,
+  buildHighlightSegments,
+  normalizeSearchValue,
+  type SearchContentType,
+  type SearchResultItem,
+} from '../lib/search';
+import { useRouter } from '../lib/router';
 
 interface HeaderProps {
   profile: Profile | null;
@@ -49,6 +51,13 @@ interface SearchResult {
   onSelect?: () => void;
 }
 
+const dynamicCategoryMap: Record<SearchContentType, { label: string; icon: LucideIcon }> = {
+  riders: { label: 'Riders', icon: UserIcon },
+  spots: { label: 'Spots', icon: MapPin },
+  challenges: { label: 'Défis', icon: Trophy },
+  hashtags: { label: 'Hashtags', icon: Hash },
+};
+
 export default function Header({
   profile,
   currentSection,
@@ -60,19 +69,16 @@ export default function Header({
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchIndex, setSearchIndex] = useState<SearchResult[]>([]);
+  const [dynamicResults, setDynamicResults] = useState<SearchResult[]>([]);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const isSearchActive = isInputFocused || showSearchResults;
+  const { navigate } = useRouter();
+  const trimmedSearchTerm = searchTerm.trim();
+  const hasSearchTerm = trimmedSearchTerm.length > 0;
 
   const sortResults = (results: SearchResult[]) =>
     [...results].sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
-
-  const mergeResults = (existing: SearchResult[], additions: SearchResult[]) => {
-    const existingKeys = new Set(existing.map((item) => item.key));
-    const uniqueAdditions = additions.filter((item) => !existingKeys.has(item.key));
-    return sortResults([...existing, ...uniqueAdditions]);
-  };
 
   useEffect(() => {
     onSearchFocusChange?.(isSearchActive);
@@ -100,24 +106,7 @@ export default function Header({
     window.location.reload();
   };
 
-  const getSpotTypeLabel = (type?: string | null) => {
-    switch (type) {
-      case 'street':
-        return 'Spot street';
-      case 'skatepark':
-        return 'Skatepark';
-      case 'bowl':
-        return 'Bowl';
-      case 'diy':
-        return 'Spot DIY';
-      case 'transition':
-        return 'Spot transition';
-      default:
-        return 'Spot';
-    }
-  };
-
-  useEffect(() => {
+  const staticResults = useMemo<SearchResult[]>(() => {
     const navigationResults: SearchResult[] = searchableNavigationItems.map((item) => ({
       key: `nav-${item.id}`,
       label: item.label,
@@ -184,7 +173,7 @@ export default function Header({
       icon: link.icon as LucideIcon,
     }));
 
-    const initialResults = sortResults([
+    return sortResults([
       ...navigationResults,
       ...eventResults,
       ...fallbackChallengeResults,
@@ -192,188 +181,126 @@ export default function Header({
       ...settingsResults,
       ...quickLinkResults,
     ]);
-
-    setSearchIndex(initialResults);
-
-    const loadDynamicResults = async () => {
-      const dynamicResults: SearchResult[] = [];
-
-      try {
-        const { data: spots } = await supabase
-          .from('spots')
-          .select('id, name, address, spot_type')
-          .limit(50);
-
-        if (spots) {
-          dynamicResults.push(
-            ...spots
-              .filter((spot) => Boolean(spot.id) && Boolean(spot.name))
-              .map((spot) => ({
-                key: `spot-${spot.id}`,
-                label: spot.name!,
-                category: 'Spots',
-                description: spot.address || getSpotTypeLabel(spot.spot_type),
-                section: 'map',
-                icon: MapPin,
-                options: { spotId: spot.id },
-              })),
-          );
-        }
-      } catch (error) {
-        console.error('Error loading spots for search:', error);
-      }
-
-      try {
-        const { data: challengesData } = await supabase
-          .from('challenges')
-          .select('id, title, description, challenge_type')
-          .limit(50);
-
-        if (challengesData) {
-          dynamicResults.push(
-            ...challengesData
-              .filter((challenge) => Boolean(challenge.id) && Boolean(challenge.title))
-              .map((challenge) => ({
-                key: `challenge-${challenge.id}`,
-                label: challenge.title!,
-                category: 'Défis',
-                description: challenge.description ?? undefined,
-                section: 'challenges',
-                icon: Trophy,
-                options: {
-                  scrollToId: `challenge-${challenge.id}`,
-                  challengeTab: 'community',
-                },
-              })),
-          );
-        }
-      } catch (error) {
-        console.error('Error loading challenges for search:', error);
-      }
-
-      try {
-        const { data: dailyData } = await supabase
-          .from('daily_challenges')
-          .select('id, title, description, challenge_type')
-          .limit(50);
-
-        if (dailyData) {
-          dynamicResults.push(
-            ...dailyData
-              .filter((challenge) => Boolean(challenge.id) && Boolean(challenge.title))
-              .map((challenge) => ({
-                key: `daily-${challenge.id}`,
-                label: challenge.title!,
-                category: 'Défis quotidiens',
-                description: challenge.description ?? undefined,
-                section: 'challenges',
-                icon: Trophy,
-                options: {
-                  scrollToId: `daily-challenge-${challenge.id}`,
-                  challengeTab: 'daily',
-                },
-              })),
-          );
-        }
-      } catch (error) {
-        console.error('Error loading daily challenges for search:', error);
-      }
-
-      try {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, username, display_name')
-          .limit(50);
-
-        if (profilesData) {
-          dynamicResults.push(
-            ...profilesData
-              .filter((person) => Boolean(person.id))
-              .map((person) => ({
-                key: `profile-${person.id}`,
-                label: person.display_name || person.username || 'Rider',
-                category: 'Riders',
-                description: person.username ?? undefined,
-                section: 'leaderboard',
-                icon: UserIcon,
-              })),
-          );
-        }
-      } catch (error) {
-        console.error('Error loading riders for search:', error);
-      }
-
-      setSearchIndex((previous) => mergeResults(previous, dynamicResults));
-    };
-
-    loadDynamicResults();
   }, []);
 
-  const filteredResults = useMemo(() => {
-    const term = searchTerm.trim();
-    if (!term) {
-      return searchIndex.slice(0, 20);
+  const mapSearchItemToResult = useCallback((item: SearchResultItem): SearchResult => {
+    const meta = dynamicCategoryMap[item.category];
+    const descriptionParts: string[] = [];
+    if (item.description) {
+      descriptionParts.push(item.description);
+    }
+    if (item.metadata) {
+      descriptionParts.push(item.metadata);
+    }
+    if (item.location) {
+      descriptionParts.push(item.location);
     }
 
-    const normalizedTokens = term
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((token) => normalizeSearchValue(token));
-
-    if (normalizedTokens.length === 0) {
-      return searchIndex.slice(0, 20);
-    }
-
-    return searchIndex
-      .filter((item) => {
-        const haystack = normalizeSearchValue(`${item.label} ${item.description ?? ''} ${item.category}`);
-        return normalizedTokens.every((token) => haystack.includes(token));
-      })
-      .slice(0, 20);
-  }, [searchIndex, searchTerm]);
+    return {
+      key: `dynamic-${item.category}-${item.id}`,
+      label: item.title,
+      category: meta?.label ?? 'Résultats',
+      description: descriptionParts.join(' • ') || undefined,
+      section: item.section,
+      icon: meta?.icon,
+      options: item.options,
+    };
+  }, []);
 
   useEffect(() => {
-    if (searchTerm.trim().length > 0) {
-      setShowSearchResults(true);
+    let isCancelled = false;
+
+    const timeout = window.setTimeout(() => {
+      searchContent({
+        query: trimmedSearchTerm,
+        pageSize: 25,
+        sortBy: trimmedSearchTerm ? 'relevance' : 'alphabetical',
+      })
+        .then((response) => {
+          if (isCancelled) {
+            return;
+          }
+          setDynamicResults(response.items.map(mapSearchItemToResult));
+        })
+        .catch((error) => {
+          console.error('Error loading dynamic search results:', error);
+          if (!isCancelled) {
+            setDynamicResults([]);
+          }
+        });
+    }, 180);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [mapSearchItemToResult, trimmedSearchTerm]);
+
+  const combinedResults = useMemo(() => {
+    const seen = new Set<string>();
+    const items: SearchResult[] = [];
+
+    const append = (source: SearchResult[]) => {
+      source.forEach((item) => {
+        if (seen.has(item.key)) {
+          return;
+        }
+        seen.add(item.key);
+        items.push(item);
+      });
+    };
+
+    if (trimmedSearchTerm) {
+      append(dynamicResults);
+      append(staticResults);
+      return items;
     }
-  }, [searchTerm]);
 
-  const highlightTokens = useMemo(() =>
-    searchTerm
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean),
-  [searchTerm]);
+    append(staticResults);
+    append(dynamicResults);
+    return sortResults(items);
+  }, [dynamicResults, staticResults, trimmedSearchTerm]);
 
-  const highlightTokensLower = useMemo(
-    () => highlightTokens.map((token) => token.toLowerCase()),
+  const highlightTokens = useMemo(() => tokenizeSearchQuery(searchTerm), [searchTerm]);
+  const normalizedHighlightTokens = useMemo(
+    () => highlightTokens.map((token) => normalizeSearchValue(token)),
     [highlightTokens],
   );
 
-  const highlightRegex = useMemo(() => {
-    if (highlightTokens.length === 0) {
-      return null;
-    }
-    const escaped = highlightTokens.map((token) => escapeRegExp(token));
-    return new RegExp(`(${escaped.join('|')})`, 'gi');
-  }, [highlightTokens]);
-
-  const renderHighlightedText = (text: string) => {
-    if (!highlightRegex || highlightTokensLower.length === 0) {
-      return text;
+  const filteredResults = useMemo(() => {
+    if (normalizedHighlightTokens.length === 0) {
+      return combinedResults.slice(0, 20);
     }
 
-    return text.split(highlightRegex).map((part, index) => {
-      const match = highlightTokensLower.includes(part.toLowerCase());
-      return match ? (
-        <span key={`${part}-${index}`} className="text-orange-400">
-          {part}
-        </span>
-      ) : (
-        <span key={`${part}-${index}`}>{part}</span>
+    return combinedResults
+      .filter((item) => {
+        const haystack = normalizeSearchValue(`${item.label} ${item.description ?? ''} ${item.category}`);
+        return normalizedHighlightTokens.every((token) => haystack.includes(token));
+      })
+      .slice(0, 20);
+  }, [combinedResults, normalizedHighlightTokens]);
+
+  useEffect(() => {
+    if (hasSearchTerm) {
+      setShowSearchResults(true);
+    }
+  }, [hasSearchTerm]);
+
+  const renderHighlightedText = useCallback(
+    (text: string) => {
+      const segments = buildHighlightSegments(text, highlightTokens);
+      return segments.map((segment, index) =>
+        segment.isMatch ? (
+          <span key={`${segment.text}-${index}`} className="text-orange-400">
+            {segment.text}
+          </span>
+        ) : (
+          <span key={`${segment.text}-${index}`}>{segment.text}</span>
+        ),
       );
-    });
-  };
+    },
+    [highlightTokens],
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -421,12 +348,23 @@ export default function Header({
     }
   };
 
+  const handleViewMore = useCallback(() => {
+    const trimmed = searchTerm.trim();
+    const params = new URLSearchParams();
+    if (trimmed.length > 0) {
+      params.set('query', trimmed);
+    }
+
+    const searchString = params.toString();
+    const targetPath = searchString.length > 0 ? `/search?${searchString}` : '/search';
+    navigate(targetPath);
+    setSearchTerm('');
+    closeSearch();
+  }, [navigate, searchTerm]);
+
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const firstResult = filteredResults[0];
-    if (firstResult) {
-      handleResultSelect(firstResult);
-    }
+    handleViewMore();
   };
 
 
@@ -528,6 +466,17 @@ export default function Header({
                           </button>
                         );
                       })}
+                      {hasSearchTerm && (
+                        <div className="border-t border-dark-700/80 bg-[#101018] px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={handleViewMore}
+                            className="w-full rounded-xl bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20"
+                          >
+                            Voir plus de résultats
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                   {showSearchResults && filteredResults.length === 0 && (
