@@ -1,6 +1,7 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 
 const TABLE_MISSING_CODES = new Set(['PGRST205', '42P01']);
+const COLUMN_MISSING_CODES = new Set(['42703']);
 
 function extractCode(error: Partial<PostgrestError> | undefined): string | undefined {
   if (!error) {
@@ -55,4 +56,62 @@ export function isTableMissingError(error: unknown): boolean {
   }
 
   return /relation .* does not exist/i.test(message) || /object .* not found in schema cache/i.test(message);
+}
+
+function matchesMissingColumnMessage(message: string, column?: string): boolean {
+  if (!message) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  if (column && !normalized.includes(column.toLowerCase())) {
+    return false;
+  }
+
+  return /column .* does not exist/i.test(message) || /invalid reference to column/i.test(message);
+}
+
+export function isColumnMissingError(error: unknown, column?: string): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as Partial<PostgrestError> & { status?: number; body?: string };
+
+  const code = extractCode(candidate);
+  if (code && COLUMN_MISSING_CODES.has(code)) {
+    if (!column) {
+      return true;
+    }
+
+    const message = extractMessage(candidate);
+    if (message && matchesMissingColumnMessage(message, column)) {
+      return true;
+    }
+
+    if (typeof candidate.details === 'string' && matchesMissingColumnMessage(candidate.details, column)) {
+      return true;
+    }
+
+    if (typeof candidate.hint === 'string' && matchesMissingColumnMessage(candidate.hint, column)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  const message = extractMessage(candidate);
+  if (message && matchesMissingColumnMessage(message, column)) {
+    return true;
+  }
+
+  if (typeof candidate.details === 'string' && matchesMissingColumnMessage(candidate.details, column)) {
+    return true;
+  }
+
+  if (typeof candidate.hint === 'string' && matchesMissingColumnMessage(candidate.hint, column)) {
+    return true;
+  }
+
+  return false;
 }
