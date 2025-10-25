@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { supabase, SUPABASE_STORAGE_CDN_URL, SUPABASE_STORAGE_PUBLIC_URL } from './supabase.js';
 import { isNative, capturePhoto, pickPhoto } from './capacitor';
 
 export type StorageBucket = 'avatars' | 'covers' | 'posts' | 'spots' | 'challenges' | 'messages' | 'sponsors';
@@ -11,6 +11,22 @@ export interface UploadResult {
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+const DEFAULT_CACHE_CONTROL = '86400';
+
+const storagePublicBase = SUPABASE_STORAGE_PUBLIC_URL.replace(/\/$/, '');
+const storageCdnBase = SUPABASE_STORAGE_CDN_URL?.replace(/\/$/, '') ?? null;
+
+const withCdn = (publicUrl: string): string => {
+  if (!storageCdnBase) {
+    return publicUrl;
+  }
+
+  if (publicUrl.startsWith(storagePublicBase)) {
+    return `${storageCdnBase}${publicUrl.slice(storagePublicBase.length)}`;
+  }
+
+  return publicUrl;
+};
 
 export const compressImage = async (file: File, maxWidth: number = 1920): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -103,8 +119,9 @@ export const uploadFile = async (
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(filePath, fileToUpload, {
-        cacheControl: '3600',
+        cacheControl: DEFAULT_CACHE_CONTROL,
         upsert: false,
+        contentType: file.type || undefined,
       });
 
     if (error) throw error;
@@ -114,7 +131,7 @@ export const uploadFile = async (
       .getPublicUrl(data.path);
 
     return {
-      url: urlData.publicUrl,
+      url: withCdn(urlData.publicUrl),
       path: data.path,
     };
   } catch (error) {
@@ -139,7 +156,7 @@ export const uploadBase64 = async (
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(filePath, blob, {
-        cacheControl: '3600',
+        cacheControl: DEFAULT_CACHE_CONTROL,
         upsert: false,
         contentType: `image/${format}`,
       });
@@ -151,7 +168,7 @@ export const uploadBase64 = async (
       .getPublicUrl(data.path);
 
     return {
-      url: urlData.publicUrl,
+      url: withCdn(urlData.publicUrl),
       path: data.path,
     };
   } catch (error) {
@@ -207,5 +224,5 @@ export const pickAndUploadPhoto = async (
 
 export const getFileUrl = (bucket: StorageBucket, path: string): string => {
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl;
+  return withCdn(data.publicUrl);
 };
