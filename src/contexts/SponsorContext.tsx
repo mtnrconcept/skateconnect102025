@@ -32,6 +32,26 @@ import {
   createSponsorApiKey,
 } from '../lib/sponsorApiKeys';
 
+/* ============ Améliorations robustesse ============ */
+
+/** Détecte le cas “table manquante dans le schéma” (PGRST205) sans briser l’UX. */
+function isSchemaMissing(err: unknown): boolean {
+  // Les libs Supabase renvoient souvent { code, message, hint }
+  const e = err as any;
+  const code = e?.code ?? e?.error?.code;
+  const message = (e?.message ?? e?.error?.message ?? '') as string;
+  return code === 'PGRST205' || /Could not find the table/.test(message);
+}
+
+/** Log civilisé pour PGRST205 (avertissement unique, pas d’erreur rouge bruyante). */
+function warnSchemaMissing(context: string, err: unknown) {
+  // On évite console.error pour ne pas stresser le devtool, et on documente le contexte.
+  // Le message reste actionnable.
+  // @ts-expect-error libre ici
+  const hint = err?.hint ? ` hint=${err.hint}` : '';
+  console.warn(`[SponsorContext] ${context}: sponsor schema not available (PGRST205).${hint}`);
+}
+
 export type SponsorDashboardView = 'overview' | 'spotlights' | 'shop' | 'api-keys';
 
 interface SponsorContextValue {
@@ -99,16 +119,23 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     setError(null);
   }, []);
 
+  /* ------------ Loaders avec gestion “schema missing” silencieuse ------------ */
+
   const refreshAnalytics = useCallback(async () => {
     if (!sponsorId || !permissions.canAccessAnalytics) {
       setAnalytics(null);
       return;
     }
-
     try {
       const snapshot = await fetchLatestCommunityAnalytics(sponsorId);
       setAnalytics(snapshot);
     } catch (cause) {
+      if (isSchemaMissing(cause)) {
+        // Schéma sponsor non déployé : on reste silencieux, pas d’erreur UX.
+        warnSchemaMissing('refreshAnalytics', cause);
+        setAnalytics(null);
+        return;
+      }
       console.error('Unable to load community analytics', cause);
       setError('Impossible de charger les analytics sponsor.');
     }
@@ -119,11 +146,15 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       setSpotlights([]);
       return;
     }
-
     try {
       const data = await fetchSponsorSpotlights(sponsorId);
       setSpotlights(data);
     } catch (cause) {
+      if (isSchemaMissing(cause)) {
+        warnSchemaMissing('refreshSpotlights', cause);
+        setSpotlights([]);
+        return;
+      }
       console.error('Unable to load sponsor spotlights', cause);
       setError('Impossible de charger les Spotlight.');
     }
@@ -134,11 +165,15 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       setShopItems([]);
       return;
     }
-
     try {
       const items = await fetchSponsorShopItems(sponsorId);
       setShopItems(items);
     } catch (cause) {
+      if (isSchemaMissing(cause)) {
+        warnSchemaMissing('refreshShop', cause);
+        setShopItems([]);
+        return;
+      }
       console.error('Unable to load sponsor shop', cause);
       setError('Impossible de charger la boutique.');
     }
@@ -149,11 +184,15 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       setApiKeys([]);
       return;
     }
-
     try {
       const keys = await fetchSponsorApiKeys(sponsorId);
       setApiKeys(keys);
     } catch (cause) {
+      if (isSchemaMissing(cause)) {
+        warnSchemaMissing('refreshApiKeys', cause);
+        setApiKeys([]);
+        return;
+      }
       console.error('Unable to load sponsor API keys', cause);
       setError('Impossible de charger les clés API.');
     }
@@ -164,32 +203,33 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       resetState();
       return;
     }
-
     setLoading(true);
     setError(null);
-
     await Promise.allSettled([
       refreshAnalytics(),
       refreshSpotlights(),
       refreshShop(),
       refreshApiKeys(),
     ]);
-
     setLoading(false);
   }, [refreshAnalytics, refreshSpotlights, refreshShop, refreshApiKeys, resetState, sponsorId]);
 
+  /* ------------ Mutations avec traitement fail-soft PGRST205 ------------ */
+
   const updateSpotlightStatus = useCallback(
     async (spotlightId: string, status: SponsorSpotlight['status']) => {
-      if (!sponsorId || !permissions.canManageSpotlights) {
-        return;
-      }
-
+      if (!sponsorId || !permissions.canManageSpotlights) return;
       try {
         const updated = await updateSponsorSpotlight(spotlightId, { status });
         setSpotlights((current) =>
           current.map((spotlight) => (spotlight.id === spotlightId ? updated : spotlight)),
         );
       } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('updateSpotlightStatus', cause);
+          setError("Fonction indisponible tant que le schéma sponsor n'est pas déployé.");
+          return;
+        }
         console.error('Unable to update spotlight status', cause);
         setError("Impossible de mettre à jour le statut d'un Spotlight.");
       }
@@ -199,16 +239,18 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
 
   const updateShopItemAvailability = useCallback(
     async (shopItemId: string, isActive: boolean) => {
-      if (!sponsorId || !permissions.canManageShop) {
-        return;
-      }
-
+      if (!sponsorId || !permissions.canManageShop) return;
       try {
         const updated = await updateSponsorShopItem(shopItemId, { is_active: isActive });
         setShopItems((current) =>
           current.map((item) => (item.id === shopItemId ? updated : item)),
         );
       } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('updateShopItemAvailability', cause);
+          setError('Fonction boutique indisponible (schéma sponsor non déployé).');
+          return;
+        }
         console.error('Unable to update shop item', cause);
         setError("Impossible de mettre à jour un produit de la boutique.");
       }
@@ -218,16 +260,18 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
 
   const revokeApiKeyHandler = useCallback(
     async (apiKeyId: string) => {
-      if (!sponsorId || !permissions.canManageApiKeys) {
-        return;
-      }
-
+      if (!sponsorId || !permissions.canManageApiKeys) return;
       try {
         const updated = await revokeSponsorApiKey(apiKeyId);
         setApiKeys((current) =>
           current.map((key) => (key.id === apiKeyId ? updated : key)),
         );
       } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('revokeApiKey', cause);
+          setError('Gestion des clés indisponible (schéma sponsor non déployé).');
+          return;
+        }
         console.error('Unable to revoke API key', cause);
         setError("Impossible de révoquer la clé API.");
       }
@@ -237,10 +281,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
 
   const createApiKeyHandler = useCallback(
     async (params: Omit<CreateSponsorApiKeyParams, 'sponsorId'>) => {
-      if (!sponsorId || !permissions.canManageApiKeys) {
-        return null;
-      }
-
+      if (!sponsorId || !permissions.canManageApiKeys) return null;
       try {
         const result = await createSponsorApiKey({ ...params, sponsorId });
         if (result) {
@@ -248,6 +289,11 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
         }
         return result;
       } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('createApiKey', cause);
+          setError('Création de clé indisponible (schéma sponsor non déployé).');
+          return null;
+        }
         console.error('Unable to create API key', cause);
         setError('Impossible de créer une nouvelle clé API.');
         return null;
@@ -256,14 +302,18 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     [permissions.canManageApiKeys, sponsorId],
   );
 
+  /* ------------ Cycle de vie ------------ */
+
   useEffect(() => {
     if (!sponsorId) {
       resetState();
       return;
     }
-
-    refreshAll();
+    // Chargement initial
+    void refreshAll();
   }, [refreshAll, resetState, sponsorId]);
+
+  /* ------------ Valeur de contexte ------------ */
 
   const value = useMemo<SponsorContextValue>(() => ({
     isSponsor: Boolean(sponsorId),
