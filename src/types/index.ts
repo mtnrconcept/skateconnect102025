@@ -439,6 +439,41 @@ export interface CommunityAnalyticsSnapshot {
   created_at: string;
 }
 
+export interface SpotlightPerformanceTotals {
+  impressions: number;
+  clicks: number;
+  ctr: number;
+}
+
+export interface SpotlightPerformanceWindow {
+  impressions: number;
+  clicks: number;
+}
+
+export interface SpotlightPerformancePoint {
+  date: string;
+  impressions: number;
+  clicks: number;
+}
+
+export interface SponsorSpotlightPerformance {
+  totals: SpotlightPerformanceTotals;
+  last7Days: SpotlightPerformanceWindow;
+  previous7Days: SpotlightPerformanceWindow;
+  daily: SpotlightPerformancePoint[];
+}
+
+export interface SpotlightPerformanceTrend {
+  impressions: number | null;
+  clicks: number | null;
+  ctr: number | null;
+}
+
+export interface SpotlightPerformanceInsights {
+  trend: SpotlightPerformanceTrend;
+  sparkline: SpotlightPerformancePoint[];
+}
+
 export interface SponsorSpotlight {
   id: string;
   sponsor_id: string;
@@ -450,7 +485,8 @@ export interface SponsorSpotlight {
   status: 'draft' | 'scheduled' | 'active' | 'completed';
   start_date: string | null;
   end_date: string | null;
-  performance: Record<string, number> | null;
+  performance: SponsorSpotlightPerformance | null;
+  performanceInsights?: SpotlightPerformanceInsights | null;
   created_at: string;
   updated_at: string;
 }

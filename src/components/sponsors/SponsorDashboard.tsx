@@ -1,6 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
+  Copy,
+  Download,
+  ArrowDownRight,
+  ArrowUpRight,
   KeyRound,
   Mail,
   Megaphone,
@@ -13,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useSponsorContext } from '../../contexts/SponsorContext';
 import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
+import type { SponsorSpotlight } from '../../types';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
@@ -49,9 +54,90 @@ function renderStatusBadge(status: string) {
   );
 }
 
+function TrendBadge({ value }: { value: number | null }) {
+  if (value === null) {
+    return <span className="text-xs text-slate-400">—</span>;
+  }
+
+  if (value === 0) {
+    return <span className="text-xs text-slate-400">Stable</span>;
+  }
+
+  const isPositive = value > 0;
+  const Icon = isPositive ? ArrowUpRight : ArrowDownRight;
+  const colorClass = isPositive ? 'text-emerald-300' : 'text-rose-300';
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${colorClass}`}>
+      <Icon size={14} />
+      {`${isPositive ? '+' : ''}${Math.abs(value).toFixed(1)} %`}
+    </span>
+  );
+}
+
+interface SparklinePoint {
+  date: string;
+  impressions: number;
+  clicks: number;
+}
+
+function SpotlightSparkline({ points }: { points: SparklinePoint[] }) {
+  if (!points || points.length === 0) {
+    return <div className="text-xs text-slate-500">Collecte en cours</div>;
+  }
+
+  const width = 140;
+  const height = 48;
+  const maxValue = Math.max(...points.map((point) => Math.max(point.impressions, point.clicks)), 1);
+  const step = points.length > 1 ? width / (points.length - 1) : width;
+
+  const buildPath = (accessor: (point: SparklinePoint) => number) =>
+    points
+      .map((point, index) => {
+        const value = accessor(point);
+        const x = index * step;
+        const y = height - (value / maxValue) * height;
+        return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(' ');
+
+  const impressionsPath = buildPath((point) => point.impressions);
+  const clicksPath = buildPath((point) => point.clicks);
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <path d={impressionsPath} fill="none" stroke="rgba(56,189,248,0.85)" strokeWidth={2} />
+      <path d={clicksPath} fill="none" stroke="rgba(249,115,22,0.9)" strokeWidth={2} />
+    </svg>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  trend,
+  helper,
+}: {
+  label: string;
+  value: string;
+  trend: number | null;
+  helper?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-700/70 bg-slate-900/70 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wider text-slate-500">{label}</p>
+        <TrendBadge value={trend} />
+      </div>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+      {helper && <p className="mt-1 text-xs text-slate-500">{helper}</p>}
+    </div>
+  );
+}
+
 export default function SponsorDashboard() {
   const {
-    isSponsor,
+    isSponsor: isSponsorAccount,
     branding,
     contactEmail,
     contactPhone,
@@ -74,6 +160,7 @@ export default function SponsorDashboard() {
   const [apiKeyScopes, setApiKeyScopes] = useState<string[]>(['analytics:read']);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [isCreatingKey, setIsCreatingKey] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const primaryColor = branding?.primary_color ?? '#0ea5e9';
   const secondaryColor = branding?.secondary_color ?? '#1e293b';
@@ -102,17 +189,6 @@ export default function SponsorDashboard() {
     [analytics],
   );
 
-  if (!isSponsor) {
-    return (
-      <div className="max-w-5xl mx-auto px-4 py-16 text-center text-slate-200">
-        <h2 className="text-3xl font-semibold mb-4">Accès sponsor requis</h2>
-        <p className="text-slate-400">
-          Connecte-toi avec un compte sponsor pour accéder au cockpit de pilotage des campagnes.
-        </p>
-      </div>
-    );
-  }
-
   const handleCreateApiKey = async () => {
     if (!apiKeyName.trim()) {
       return;
@@ -129,6 +205,146 @@ export default function SponsorDashboard() {
       setIsCreatingKey(false);
     }
   };
+
+  useEffect(() => {
+    if (!copyFeedback) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setCopyFeedback(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [copyFeedback]);
+
+  const serializeSpotlightForExport = useCallback((spotlight: SponsorSpotlight) => {
+      const performance = spotlight.performance;
+      const insights = spotlight.performanceInsights;
+      const last7Impressions = performance?.last7Days.impressions ?? 0;
+      const last7Clicks = performance?.last7Days.clicks ?? 0;
+      const last7Ctr =
+        performance && performance.last7Days.impressions > 0
+          ? ((performance.last7Days.clicks / performance.last7Days.impressions) * 100).toFixed(2)
+          : '0.00';
+      const totals = performance?.totals ?? { impressions: 0, clicks: 0, ctr: 0 };
+      const trend = insights?.trend;
+
+      return [
+        spotlight.title,
+        statusLabels[spotlight.status] ?? spotlight.status,
+        spotlight.start_date ? new Date(spotlight.start_date).toISOString() : '',
+        spotlight.end_date ? new Date(spotlight.end_date).toISOString() : '',
+        totals.impressions.toString(),
+        totals.clicks.toString(),
+        totals.ctr.toFixed(2),
+        last7Impressions.toString(),
+        last7Clicks.toString(),
+        last7Ctr,
+        trend?.impressions != null ? trend.impressions.toFixed(2) : '',
+        trend?.clicks != null ? trend.clicks.toFixed(2) : '',
+        trend?.ctr != null ? trend.ctr.toFixed(2) : '',
+        spotlight.call_to_action ?? '',
+        spotlight.call_to_action_url ?? '',
+      ];
+    }, []);
+
+  const handleExportSpotlights = useCallback(() => {
+    if (spotlights.length === 0) {
+      setCopyFeedback('Aucune donnée à exporter pour le moment.');
+      return;
+    }
+
+    const headers = [
+      'Titre',
+      'Statut',
+      'Début',
+      'Fin',
+      'Impressions totales',
+      'Clics totaux',
+      'CTR global (%)',
+      'Impressions (7j)',
+      'Clics (7j)',
+      'CTR (7j)',
+      'Tendance impressions (%)',
+      'Tendance clics (%)',
+      'Tendance CTR (%)',
+      'CTA',
+      'URL CTA',
+    ];
+
+    const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+    const rows = spotlights.map(serializeSpotlightForExport);
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => escapeCell(cell ?? '')).join(';'))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'skateconnect-spotlights.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setCopyFeedback('Export CSV généré.');
+  }, [serializeSpotlightForExport, spotlights]);
+
+  const handleCopySpotlights = useCallback(async () => {
+    if (spotlights.length === 0) {
+      setCopyFeedback('Aucune donnée à copier pour le moment.');
+      return;
+    }
+
+    const rows = [
+      ['Spotlight', 'Statut', 'Impressions (7j)', 'Clics (7j)', 'CTR (7j)', 'Tendance impressions', 'Tendance clics', 'Tendance CTR'],
+      ...spotlights.map((spotlight) => {
+        const performance = spotlight.performance;
+        const insights = spotlight.performanceInsights;
+        const last7Impressions = performance?.last7Days.impressions ?? 0;
+        const last7Clicks = performance?.last7Days.clicks ?? 0;
+        const last7Ctr =
+          performance && performance.last7Days.impressions > 0
+            ? ((performance.last7Days.clicks / performance.last7Days.impressions) * 100).toFixed(2)
+            : '0.00';
+        const trend = insights?.trend;
+
+        const formatTrend = (value: number | null | undefined) =>
+          value == null ? '—' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+
+        return [
+          spotlight.title,
+          statusLabels[spotlight.status] ?? spotlight.status,
+          last7Impressions.toString(),
+          last7Clicks.toString(),
+          `${last7Ctr}%`,
+          formatTrend(trend?.impressions ?? null),
+          formatTrend(trend?.clicks ?? null),
+          formatTrend(trend?.ctr ?? null),
+        ];
+      }),
+    ];
+
+    const textPayload = rows.map((row) => row.join(' \t ')).join('\n');
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textPayload);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = textPayload;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopyFeedback('Données KPI copiées dans le presse-papier.');
+    } catch (err) {
+      console.error('Unable to copy spotlight metrics', err);
+      setCopyFeedback('Impossible de copier les données.');
+    }
+  }, [spotlights]);
 
   const renderOverview = () => (
     <div className="space-y-8">
@@ -185,16 +401,33 @@ export default function SponsorDashboard() {
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h2 className="text-2xl font-semibold text-white">Spotlight actifs</h2>
-            <button
-              type="button"
-              onClick={refreshAll}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
-            >
-              <RefreshCw size={16} /> Rafraîchir
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopySpotlights}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
+              >
+                <Copy size={16} /> Copier KPI
+              </button>
+              <button
+                type="button"
+                onClick={handleExportSpotlights}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
+              >
+                <Download size={16} /> Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={refreshAll}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
+              >
+                <RefreshCw size={16} /> Rafraîchir
+              </button>
+            </div>
           </div>
+          {copyFeedback && <p className="text-xs text-emerald-300">{copyFeedback}</p>}
           <div className="grid gap-4">
             {spotlights.length === 0 ? (
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-slate-300">
@@ -204,48 +437,98 @@ export default function SponsorDashboard() {
               spotlights.map((spotlight) => (
                 <div
                   key={spotlight.id}
-                  className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                  className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 flex flex-col gap-5"
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      {renderStatusBadge(spotlight.status)}
-                      {spotlight.start_date && (
-                        <span className="text-xs text-slate-400">
-                          {new Date(spotlight.start_date).toLocaleDateString('fr-FR')}
-                          {spotlight.end_date ? ` → ${new Date(spotlight.end_date).toLocaleDateString('fr-FR')}` : ''}
-                        </span>
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        {renderStatusBadge(spotlight.status)}
+                        {spotlight.start_date && (
+                          <span className="text-xs text-slate-400">
+                            {new Date(spotlight.start_date).toLocaleDateString('fr-FR')}
+                            {spotlight.end_date ? ` → ${new Date(spotlight.end_date).toLocaleDateString('fr-FR')}` : ''}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-xl font-semibold text-white">{spotlight.title}</h3>
+                      {spotlight.description && (
+                        <p className="text-sm text-slate-300 max-w-3xl">{spotlight.description}</p>
+                      )}
+                      {spotlight.call_to_action && (
+                        <p className="text-sm text-slate-400">
+                          CTA : <span className="text-slate-200">{spotlight.call_to_action}</span>
+                        </p>
                       )}
                     </div>
-                    <h3 className="text-xl font-semibold text-white">{spotlight.title}</h3>
-                    {spotlight.description && (
-                      <p className="text-sm text-slate-300 max-w-3xl">{spotlight.description}</p>
-                    )}
-                    {spotlight.call_to_action && (
-                      <p className="text-sm text-slate-400">
-                        CTA : <span className="text-slate-200">{spotlight.call_to_action}</span>
-                      </p>
-                    )}
+                    <div className="flex items-center gap-3 self-start">
+                      {spotlight.status !== 'active' && (
+                        <button
+                          type="button"
+                          onClick={() => updateSpotlightStatus(spotlight.id, 'active')}
+                          className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10"
+                        >
+                          Activer
+                        </button>
+                      )}
+                      {spotlight.status === 'active' && (
+                        <button
+                          type="button"
+                          onClick={() => updateSpotlightStatus(spotlight.id, 'completed')}
+                          className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                        >
+                          Terminer
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    {spotlight.status !== 'active' && (
-                      <button
-                        type="button"
-                        onClick={() => updateSpotlightStatus(spotlight.id, 'active')}
-                        className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10"
-                      >
-                        Activer
-                      </button>
-                    )}
-                    {spotlight.status === 'active' && (
-                      <button
-                        type="button"
-                        onClick={() => updateSpotlightStatus(spotlight.id, 'completed')}
-                        className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
-                      >
-                        Terminer
-                      </button>
-                    )}
-                  </div>
+                  {spotlight.performance && (
+                    <div className="grid gap-4 md:grid-cols-5">
+                      <div className="md:col-span-3 grid gap-4 sm:grid-cols-3">
+                        <MetricCard
+                          label="Impressions (7j)"
+                          value={spotlight.performance.last7Days.impressions.toLocaleString('fr-FR')}
+                          trend={spotlight.performanceInsights?.trend.impressions ?? null}
+                          helper={`Total : ${spotlight.performance.totals.impressions.toLocaleString('fr-FR')}`}
+                        />
+                        <MetricCard
+                          label="Clics (7j)"
+                          value={spotlight.performance.last7Days.clicks.toLocaleString('fr-FR')}
+                          trend={spotlight.performanceInsights?.trend.clicks ?? null}
+                          helper={`Total : ${spotlight.performance.totals.clicks.toLocaleString('fr-FR')}`}
+                        />
+                        <MetricCard
+                          label="CTR (7j)"
+                          value={
+                            spotlight.performance.last7Days.impressions > 0
+                              ? `${(
+                                  (spotlight.performance.last7Days.clicks /
+                                    spotlight.performance.last7Days.impressions) *
+                                  100
+                                ).toFixed(2)} %`
+                              : '0.00 %'
+                          }
+                          trend={spotlight.performanceInsights?.trend.ctr ?? null}
+                          helper={`CTR global : ${spotlight.performance.totals.ctr.toFixed(2)} %`}
+                        />
+                      </div>
+                      <div className="md:col-span-2 rounded-xl border border-slate-700/70 bg-slate-900/70 p-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs uppercase tracking-wider text-slate-500">Tendance 30 jours</p>
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                            <span className="inline-flex items-center gap-1 text-cyan-300">
+                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Impressions
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-orange-300">
+                              <span className="h-1.5 w-1.5 rounded-full bg-orange-300" /> Clics
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <SpotlightSparkline points={spotlight.performanceInsights?.sparkline ?? []} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -408,6 +691,17 @@ export default function SponsorDashboard() {
       )}
     </div>
   );
+
+  if (!isSponsorAccount) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-16 text-center text-slate-200">
+        <h2 className="text-3xl font-semibold mb-4">Accès sponsor requis</h2>
+        <p className="text-slate-400">
+          Connecte-toi avec un compte sponsor pour accéder au cockpit de pilotage des campagnes.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
