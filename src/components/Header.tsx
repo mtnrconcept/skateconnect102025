@@ -273,7 +273,7 @@ export default function Header({
       .slice(0, 20);
   }, [combinedResults, normalizedHighlightTokens]);
 
-  const displayedResults = useMemo(() => matchingResults.slice(0, 20), [matchingResults]);
+  const displayedResults = useMemo(() => filteredResults.slice(0, 20), [filteredResults]);
 
   useEffect(() => {
     if (hasSearchTerm) {
@@ -436,10 +436,10 @@ export default function Header({
                       isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
                     }`}
                   />
-                  {showSearchResults && matchingResults.length > 0 && (
+                  {showSearchResults && filteredResults.length > 0 && (
                     <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
                       <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
-                        {matchingResults.length} résultat{matchingResults.length > 1 ? 's' : ''}
+                        {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
                       </div>
                       {displayedResults.map((result) => {
                         const IconResult = result.icon ?? Search;
@@ -475,7 +475,7 @@ export default function Header({
                       )}
                     </div>
                   )}
-                  {showSearchResults && matchingResults.length === 0 && (
+                  {showSearchResults && filteredResults.length === 0 && (
                     <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
                       Aucun résultat pour « {searchTerm} »
                     </div>
