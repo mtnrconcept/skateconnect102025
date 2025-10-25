@@ -15,7 +15,9 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import type { Profile } from '../../types';
-import type { FakeDirectMessagePayload } from '../../types/messages';
+import { useConversations } from '../../hooks/useConversations';
+import { useMessages, type MessageWithSender } from '../../hooks/useMessages';
+import { getUserDisplayName } from '../../lib/userUtils';
 
 interface Participant {
   id: string;
@@ -34,6 +36,7 @@ interface ConversationMessage {
   content: string;
   timestamp: string;
   status?: 'sent' | 'delivered' | 'seen';
+  createdAt: string;
 }
 
 interface ConversationPreview {
@@ -43,7 +46,6 @@ interface ConversationPreview {
   lastMessageTime: string;
   unreadCount: number;
   mood?: string;
-  messages: ConversationMessage[];
   isMuted?: boolean;
   isPinned?: boolean;
   isGroup?: boolean;
@@ -51,8 +53,7 @@ interface ConversationPreview {
 
 interface MessagesSectionProps {
   profile: Profile | null;
-  externalMessages?: FakeDirectMessagePayload[];
-  onExternalMessagesHandled?: (messageIds: string[]) => void;
+  onConversationViewed?: (conversationId: string) => void;
 }
 
 type HeaderAction = 'call' | 'video' | 'info' | 'more' | 'sparkles';
@@ -82,202 +83,17 @@ const composerActionCopy: Record<ComposerAction, { title: string; description: s
 
 const emojiPalette = ['🔥', '🙌', '🎥', '🏆', '🤘', '📍', '💬', '✨'];
 
-const initialConversations: ConversationPreview[] = [
-  {
-    id: 'lea-dupont',
-    participant: {
-      id: '1',
-      name: 'Léa Dupont',
-      avatar: 'https://i.pravatar.cc/150?img=32',
-      isOnline: true,
-      location: 'Paris, République',
-      lastActive: 'En ligne',
-    },
-    lastMessagePreview: 'Trop hâte pour ce soir ! On y va avec Jules et Chloé.',
-    lastMessageTime: '2 min',
-    unreadCount: 2,
-    mood: '🔥 Session street',
-    messages: [
-      {
-        id: '1',
-        sender: 'other',
-        content:
-          'Yo ! On se retrouve toujours à République ? La session commence à 20h, on veut être là un peu avant pour s’échauffer.',
-        timestamp: '20:41',
-        status: 'seen',
-      },
-      {
-        id: '2',
-        sender: 'me',
-        content: "Carrément ! J’amène ma caméra, on peut filmer quelques lines.",
-        timestamp: '20:42',
-        status: 'seen',
-      },
-      {
-        id: '3',
-        sender: 'other',
-        content: 'Trop bien ! Jules a dit qu’il tenterait un nosegrind sur le ledge.',
-        timestamp: '20:43',
-        status: 'seen',
-      },
-      {
-        id: '4',
-        sender: 'other',
-        content: 'Tu viens avec ton rail portable ? Ça pourrait servir.',
-        timestamp: '20:44',
-        status: 'seen',
-      },
-      {
-        id: '5',
-        sender: 'me',
-        content: 'Je le charge dans le van. À toute !',
-        timestamp: '20:45',
-        status: 'sent',
-      },
-    ],
-    isMuted: false,
-    isPinned: true,
-  },
-  {
-    id: 'arnaud-ribeiro',
-    participant: {
-      id: '2',
-      name: 'Arnaud Ribeiro',
-      avatar: 'https://i.pravatar.cc/150?img=14',
-      isOnline: false,
-      location: 'Bordeaux',
-      lastActive: 'Actif il y a 1 h',
-    },
-    lastMessagePreview: 'On cale la vidéo pour la team ? On peut monter ça dimanche.',
-    lastMessageTime: '1 h',
-    unreadCount: 0,
-    mood: '🎬 Montage en cours',
-    messages: [
-      {
-        id: '1',
-        sender: 'me',
-        content: "Les rushs sont trop lourds ! Je t’envoie le dossier ce soir.",
-        timestamp: '18:12',
-        status: 'seen',
-      },
-      {
-        id: '2',
-        sender: 'other',
-        content: 'Parfait, je prépare déjà une tracklist chill pour le montage.',
-        timestamp: '18:20',
-        status: 'seen',
-      },
-    ],
-    isMuted: false,
-    isPinned: false,
-  },
-  {
-    id: 'sarah-levy',
-    participant: {
-      id: '3',
-      name: 'Sarah Lévy',
-      avatar: 'https://i.pravatar.cc/150?img=47',
-      isOnline: true,
-      location: 'Lyon',
-      lastActive: 'En ligne',
-    },
-    lastMessagePreview: 'On organise un ride dimanche ? Je peux ramener des pads pour tout le monde.',
-    lastMessageTime: '4 h',
-    unreadCount: 3,
-    messages: [
-      {
-        id: '1',
-        sender: 'other',
-        content: 'On organise un ride dimanche ? Je peux ramener des pads pour tout le monde.',
-        timestamp: '14:05',
-        status: 'seen',
-      },
-      {
-        id: '2',
-        sender: 'other',
-        content: 'On pourrait faire un mini contest friendly, ça motive toujours.',
-        timestamp: '14:08',
-        status: 'seen',
-      },
-    ],
-    isMuted: false,
-    isPinned: false,
-  },
-  {
-    id: 'crew-chat',
-    participant: {
-      id: 'crew',
-      name: 'Shredloc Crew',
-      avatar: '/logo2.png',
-      isOnline: false,
-      location: 'Chat de groupe',
-      lastActive: 'Actif il y a 5 h',
-    },
-    lastMessagePreview: 'Le contest local est confirmé, on a des places VIP !',
-    lastMessageTime: '5 h',
-    unreadCount: 0,
-    mood: '🏆 Contest local',
-    messages: [
-      {
-        id: '1',
-        sender: 'other',
-        content: "Le contest local est confirmé, on a des places VIP si vous êtes chauds !",
-        timestamp: '13:01',
-        status: 'delivered',
-      },
-      {
-        id: '2',
-        sender: 'me',
-        content: 'Yes ! On prépare une bannière Shredloc ?',
-        timestamp: '13:05',
-        status: 'sent',
-      },
-    ],
-    isMuted: false,
-    isPinned: false,
-    isGroup: true,
-  },
-  {
-    id: 'coach',
-    participant: {
-      id: '4',
-      name: 'Coach Camille',
-      avatar: 'https://i.pravatar.cc/150?img=56',
-      isOnline: false,
-      location: 'Marseille',
-      lastActive: 'Actif il y a 1 j',
-    },
-    lastMessagePreview: 'Super progression sur tes flips, on valide la routine pour le mois prochain.',
-    lastMessageTime: '1 j',
-    unreadCount: 0,
-    messages: [
-      {
-        id: '1',
-        sender: 'other',
-        content: 'Super progression sur tes flips, on valide la routine pour le mois prochain.',
-        timestamp: 'Hier',
-        status: 'seen',
-      },
-      {
-        id: '2',
-        sender: 'me',
-        content: 'Merci ! Je filme la série complète pour te l’envoyer.',
-        timestamp: 'Hier',
-        status: 'seen',
-      },
-    ],
-    isMuted: true,
-    isPinned: false,
-  },
-];
-
-export default function MessagesSection({
-  profile,
-  externalMessages = [],
-  onExternalMessagesHandled,
-}: MessagesSectionProps) {
-  const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? '');
+export default function MessagesSection({ profile, onConversationViewed }: MessagesSectionProps) {
+  const viewerId = profile?.id ?? null;
+  const {
+    conversations: conversationItems,
+    loading: conversationsLoading,
+    error: conversationsError,
+    hasMore: conversationsHasMore,
+    loadMore: loadMoreConversations,
+    markConversationReadLocally,
+  } = useConversations(viewerId);
+  const [selectedId, setSelectedId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
   const [isMobileView, setIsMobileView] = useState(false);
@@ -291,7 +107,99 @@ export default function MessagesSection({
   const [isSparkComposerOpen, setSparkComposerOpen] = useState(false);
   const [sparkNotes, setSparkNotes] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const processedExternalMessageIds = useRef<Set<string>>(new Set());
+  const [preferences, setPreferences] = useState<Record<string, { isMuted: boolean; isPinned: boolean }>>({});
+  const [systemMessages, setSystemMessages] = useState<Record<string, ConversationMessage[]>>({});
+
+  const {
+    messages,
+    sendMessage,
+    markAsRead,
+  } = useMessages({ conversationId: selectedId || null, viewerId });
+
+  const conversationPreviews = useMemo<ConversationPreview[]>(
+    () =>
+      conversationItems.map((item) => {
+        const conversationId = item.conversation.id;
+        const participantProfile = item.otherParticipant;
+        const prefs = preferences[conversationId] ?? { isMuted: false, isPinned: false };
+        const lastMessage = item.lastMessage;
+        const lastActivityReference =
+          participantProfile?.updated_at ?? item.conversation.last_message_at ?? item.conversation.created_at;
+
+        return {
+          id: conversationId,
+          participant: {
+            id: participantProfile?.id ?? conversationId,
+            name: getUserDisplayName(participantProfile, 'Membre Shredloc'),
+            avatar: participantProfile?.avatar_url || '/logo2.png',
+            isOnline: false,
+            location: participantProfile?.location || 'Spot à définir',
+            lastActive: formatRelativeTime(lastActivityReference),
+          },
+          lastMessagePreview: lastMessage?.content ?? 'Nouveau message',
+          lastMessageTime: formatRelativeTime(
+            lastMessage?.created_at ?? item.conversation.last_message_at ?? item.conversation.created_at,
+          ),
+          unreadCount: item.unreadCount,
+          mood: undefined,
+          isMuted: prefs.isMuted,
+          isPinned: prefs.isPinned,
+          isGroup: false,
+        };
+      }),
+    [conversationItems, formatRelativeTime, preferences],
+  );
+
+  const formatTime = useCallback(
+    (date: Date) =>
+      date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [],
+  );
+
+  const formatDateTime = useCallback(
+    (date: Date) =>
+      date.toLocaleString('fr-FR', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    [],
+  );
+
+  const formatRelativeTime = useCallback((isoDate: string | null | undefined) => {
+    if (!isoDate) {
+      return 'À l’instant';
+    }
+    const date = new Date(isoDate);
+    if (Number.isNaN(date.getTime())) {
+      return 'À l’instant';
+    }
+    const diffMs = Date.now() - date.getTime();
+    if (diffMs <= 0) {
+      return 'À l’instant';
+    }
+    const diffMinutes = Math.round(diffMs / (60 * 1000));
+    if (diffMinutes < 1) {
+      return 'À l’instant';
+    }
+    if (diffMinutes < 60) {
+      return `${diffMinutes} min`;
+    }
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `${diffHours} h`;
+    }
+    const diffDays = Math.round(diffHours / 24);
+    if (diffDays === 1) {
+      return 'Hier';
+    }
+    if (diffDays < 7) {
+      return `${diffDays} j`;
+    }
+    return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -323,14 +231,14 @@ export default function MessagesSection({
   const filteredConversations = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const base = term
-      ? conversations.filter((conversation) => {
+      ? conversationPreviews.filter((conversation) => {
           const { name } = conversation.participant;
           return (
             name.toLowerCase().includes(term) ||
             conversation.lastMessagePreview.toLowerCase().includes(term)
           );
         })
-      : conversations;
+      : conversationPreviews;
 
     const filteredByType = base.filter((conversation) => {
       if (activeFilter === 'unread') {
@@ -354,138 +262,47 @@ export default function MessagesSection({
     });
 
     return [...pinned, ...others];
-  }, [activeFilter, conversations, searchTerm]);
+  }, [activeFilter, conversationPreviews, searchTerm]);
 
   const selectedConversation = useMemo(
-    () => conversations.find((conversation) => conversation.id === selectedId),
-    [conversations, selectedId],
+    () => conversationPreviews.find((conversation) => conversation.id === selectedId) ?? null,
+    [conversationPreviews, selectedId],
   );
-  const messagesLength = selectedConversation?.messages.length ?? 0;
+  const conversationMessages = useMemo<ConversationMessage[]>(() => {
+    if (!selectedId) {
+      return [];
+    }
+
+    const baseMessages: ConversationMessage[] = messages.map((message: MessageWithSender) => {
+      const sender: ConversationSender = message.sender_id === viewerId ? 'me' : 'other';
+      const createdAt = message.created_at;
+      const date = new Date(createdAt);
+      return {
+        id: message.id,
+        sender,
+        content: message.content,
+        timestamp: formatTime(date),
+        status: sender === 'me' ? (message.is_read ? 'seen' : 'sent') : undefined,
+        createdAt,
+      };
+    });
+
+    const extras = systemMessages[selectedId] ?? [];
+    const combined = [...baseMessages, ...extras];
+    combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return combined;
+  }, [formatTime, messages, selectedId, systemMessages, viewerId]);
+
+  const messagesLength = conversationMessages.length;
   const isShredlocSelected = selectedConversation?.participant.avatar?.includes('logo2.png');
 
-  const formatTime = useCallback(
-    (date: Date) =>
-      date.toLocaleTimeString('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    [],
-  );
+  const conversationStartLabel = useMemo(() => {
+    if (!conversationMessages.length) {
+      return 'Conversation récente';
+    }
 
-  const formatDateTime = useCallback(
-    (date: Date) =>
-      date.toLocaleString('fr-FR', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }),
-    [],
-  );
-
-  const processExternalDirectMessage = useCallback(
-    (payload: FakeDirectMessagePayload) => {
-      const { profileId, profile: profileDetail, message } = payload;
-
-      if (!message?.id || processedExternalMessageIds.current.has(message.id)) {
-        return;
-      }
-
-      const sender: ConversationSender = message.sender === 'fake' ? 'other' : 'me';
-      const parsedDate = new Date(message.timestamp);
-      const timestamp = Number.isNaN(parsedDate.getTime())
-        ? 'À l’instant'
-        : formatTime(parsedDate);
-
-      let shouldSelectConversation = false;
-
-      setConversations((previous) => {
-        const existingConversation = previous.find((conversation) => conversation.id === profileId);
-
-        if (existingConversation) {
-          if (existingConversation.messages.some((item) => item.id === message.id)) {
-            return previous;
-          }
-
-          if (sender === 'me' && selectedId !== profileId) {
-            shouldSelectConversation = true;
-          }
-
-          const updatedConversation: ConversationPreview = {
-            ...existingConversation,
-            participant: {
-              ...existingConversation.participant,
-              isOnline: true,
-              lastActive:
-                sender === 'me'
-                  ? 'En ligne'
-                  : existingConversation.participant.lastActive,
-            },
-            lastMessagePreview: message.content,
-            lastMessageTime: 'À l’instant',
-            unreadCount:
-              sender === 'other' && selectedId !== profileId
-                ? existingConversation.unreadCount + 1
-                : existingConversation.unreadCount,
-            messages: [
-              ...existingConversation.messages,
-              {
-                id: message.id,
-                sender,
-                content: message.content,
-                timestamp,
-                status: sender === 'me' ? 'sent' : undefined,
-              },
-            ],
-          };
-
-          return previous.map((conversation) =>
-            conversation.id === profileId ? updatedConversation : conversation,
-          );
-        }
-
-        const displayName =
-          profileDetail?.display_name || profileDetail?.username || 'Membre Shredloc';
-        const avatar = profileDetail?.avatar_url || '/logo2.png';
-        const location = profileDetail?.location || 'Spot à définir';
-
-        const newConversation: ConversationPreview = {
-          id: profileId,
-          participant: {
-            id: profileId,
-            name: displayName,
-            avatar,
-            isOnline: true,
-            location,
-            lastActive: sender === 'me' ? 'En ligne' : 'Actif récemment',
-          },
-          lastMessagePreview: message.content,
-          lastMessageTime: 'À l’instant',
-          unreadCount: sender === 'other' ? 1 : 0,
-          messages: [
-            {
-              id: message.id,
-              sender,
-              content: message.content,
-              timestamp,
-              status: sender === 'me' ? 'sent' : undefined,
-            },
-          ],
-        };
-
-        shouldSelectConversation = sender === 'me';
-        return [newConversation, ...previous];
-      });
-
-      processedExternalMessageIds.current.add(message.id);
-
-      if (shouldSelectConversation) {
-        setSelectedId(profileId);
-        if (isMobileView) {
-          setMobileConversationOpen(true);
-        }
-      }
-    },
-    [formatTime, isMobileView, selectedId],
-  );
+    return `Conversation depuis ${formatRelativeTime(conversationMessages[0].createdAt)}`;
+  }, [conversationMessages, formatRelativeTime]);
 
   const showToast = useCallback((message: string) => {
     setToast({ id: Date.now(), message });
@@ -493,28 +310,32 @@ export default function MessagesSection({
 
   const appendSystemMessage = useCallback(
     (conversationId: string, content: string) => {
-      setConversations((previous) =>
-        previous.map((conversation) =>
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                lastMessagePreview: content,
-                lastMessageTime: 'À l’instant',
-                messages: [
-                  ...conversation.messages,
-                  {
-                    id: `system-${Date.now()}`,
-                    sender: 'system',
-                    content,
-                    timestamp: formatTime(new Date()),
-                  },
-                ],
-              }
-            : conversation,
-        ),
-      );
+      const now = new Date();
+      const message: ConversationMessage = {
+        id: `system-${Date.now()}`,
+        sender: 'system',
+        content,
+        timestamp: formatTime(now),
+        createdAt: now.toISOString(),
+      };
+
+      setSystemMessages((previous) => {
+        const existing = previous[conversationId] ?? [];
+        return {
+          ...previous,
+          [conversationId]: [...existing, message],
+        };
+      });
+
+      if (conversationId === selectedId && typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
+        });
+      }
     },
-    [formatTime],
+    [formatTime, selectedId],
   );
 
   const handleToolbarAction = (action: HeaderAction) => {
@@ -608,17 +429,13 @@ export default function MessagesSection({
       return;
     }
 
-    setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === selectedConversation.id
-          ? {
-              ...conversation,
-              isMuted: pendingOptions.isMuted,
-              isPinned: pendingOptions.isPinned,
-            }
-          : conversation,
-      ),
-    );
+    setPreferences((previous) => ({
+      ...previous,
+      [selectedConversation.id]: {
+        isMuted: pendingOptions.isMuted,
+        isPinned: pendingOptions.isPinned,
+      },
+    }));
 
     setMoreOptionsOpen(false);
 
@@ -666,14 +483,12 @@ export default function MessagesSection({
     setSparkComposerOpen(false);
 
     if (selectedConversation) {
-      setPendingOptions({
-        isMuted: selectedConversation.isMuted ?? false,
-        isPinned: selectedConversation.isPinned ?? false,
-      });
+      const prefs = preferences[selectedConversation.id] ?? { isMuted: false, isPinned: false };
+      setPendingOptions(prefs);
     } else {
       setPendingOptions({ isMuted: false, isPinned: false });
     }
-  }, [selectedConversation]);
+  }, [preferences, selectedConversation]);
 
   useEffect(() => {
     if (!messagesEndRef.current) return;
@@ -693,70 +508,48 @@ export default function MessagesSection({
   }, [toast]);
 
   useEffect(() => {
-    if (!externalMessages.length) {
+    if (!conversationPreviews.length) {
+      setSelectedId('');
       return;
     }
 
-    const processedIds: string[] = [];
-
-    externalMessages.forEach((payload) => {
-      if (!payload?.message?.id) {
-        return;
-      }
-
-      processExternalDirectMessage(payload);
-      processedIds.push(payload.message.id);
-    });
-
-    if (processedIds.length > 0) {
-      onExternalMessagesHandled?.(processedIds);
+    if (!selectedId || !conversationPreviews.some((conversation) => conversation.id === selectedId)) {
+      setSelectedId(conversationPreviews[0].id);
     }
-  }, [externalMessages, onExternalMessagesHandled, processExternalDirectMessage]);
+  }, [conversationPreviews, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+
+    markConversationReadLocally(selectedId);
+    void markAsRead();
+    onConversationViewed?.(selectedId);
+  }, [markAsRead, markConversationReadLocally, onConversationViewed, selectedId]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedId(conversationId);
-    setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === conversationId
-          ? { ...conversation, unreadCount: 0 }
-          : conversation,
-      ),
-    );
-
     if (isMobileView) {
       setMobileConversationOpen(true);
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     const trimmed = messageDraft.trim();
     if (!trimmed || !selectedConversation) return;
 
-    const newMessage: ConversationMessage = {
-      id: `${Date.now()}`,
-      sender: 'me',
-      content: trimmed,
-      timestamp: formatTime(new Date()),
-      status: 'sent',
-    };
-
-    setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === selectedConversation.id
-          ? {
-              ...conversation,
-              lastMessagePreview: trimmed,
-              lastMessageTime: 'À l’instant',
-              unreadCount: 0,
-              messages: [...conversation.messages, newMessage],
-            }
-          : conversation,
-      ),
-    );
+    try {
+      await sendMessage(trimmed);
+      showToast('Message envoyé.');
+    } catch (error) {
+      console.error('Erreur lors de l’envoi du message :', error);
+      showToast('Impossible d’envoyer le message pour le moment.');
+      return;
+    }
 
     setMessageDraft('');
     setActiveComposerAction(null);
-    showToast('Message envoyé.');
   };
 
   return (
@@ -838,8 +631,16 @@ export default function MessagesSection({
               </div>
 
               <div className="flex-1 overflow-y-auto min-h-0">
-                {filteredConversations.length === 0 ? (
-                  <div className="p-6 text-center text-gray-500 text-sm">Aucun résultat pour « {searchTerm} »</div>
+                {conversationsError ? (
+                  <div className="p-6 text-center text-red-400 text-sm">
+                    Impossible de charger les conversations pour le moment.
+                  </div>
+                ) : conversationsLoading && !conversationPreviews.length ? (
+                  <div className="p-6 text-center text-gray-500 text-sm">Chargement des conversations…</div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500 text-sm">
+                    Aucun résultat pour « {searchTerm} »
+                  </div>
                 ) : (
                   <ul className="divide-y divide-dark-700/60">
                     {filteredConversations.map((conversation) => {
@@ -906,6 +707,17 @@ export default function MessagesSection({
                       );
                     })}
                   </ul>
+                )}
+                {conversationsHasMore && (
+                  <div className="p-4">
+                    <button
+                      type="button"
+                      onClick={() => void loadMoreConversations()}
+                      className="w-full text-sm font-medium text-orange-300 bg-orange-500/10 border border-orange-500/40 rounded-full py-2 hover:bg-orange-500/20 transition-colors"
+                    >
+                      Charger plus de conversations
+                    </button>
+                  </div>
                 )}
               </div>
             </aside>
@@ -993,9 +805,9 @@ export default function MessagesSection({
                     className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6"
                   >
                     <div className="text-center text-xs text-gray-500 uppercase tracking-wide">
-                      Conversation depuis 3 jours
+                      {conversationStartLabel}
                     </div>
-                    {selectedConversation.messages.map((message) => {
+                    {conversationMessages.map((message) => {
                       if (message.sender === 'system') {
                         return (
                           <div key={message.id} className="flex justify-center">
