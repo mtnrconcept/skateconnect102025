@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, MapPin, Star, Users, Upload, Heart, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import LazyImage from './LazyImage';
@@ -33,43 +33,6 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const [ratingsPage, setRatingsPage] = useState(1);
   const [ratingsTotal, setRatingsTotal] = useState(0);
   const [ratingsLoading, setRatingsLoading] = useState(false);
-
-  useEffect(() => {
-    setRatingSummary(buildSummaryFromSpot(spot));
-    setRatings([]);
-    setRatingsTotal(0);
-    setRatingsPage(1);
-    loadSpotMedia();
-    loadCurrentUser();
-    loadSpotData();
-    loadSpotRatings(1, true);
-  }, [spot.id, loadSpotRatings]);
-
-  const loadCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setCurrentUser(user);
-    if (user) {
-      checkUserLike(user.id);
-    }
-  };
-
-  const loadSpotData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('spots')
-        .select('*')
-        .eq('id', spot.id)
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        setSpotData(data);
-        setRatingSummary(buildSummaryFromSpot(data));
-      }
-    } catch (error) {
-      console.error('Error loading spot data:', error);
-    }
-  };
 
   const loadSpotRatings = useCallback(
     async (page: number = 1, replace: boolean = false) => {
@@ -120,6 +83,43 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
     },
     [spot.id]
   );
+
+  useEffect(() => {
+    setRatingSummary(buildSummaryFromSpot(spot));
+    setRatings([]);
+    setRatingsTotal(0);
+    setRatingsPage(1);
+    loadSpotMedia();
+    loadCurrentUser();
+    loadSpotData();
+    loadSpotRatings(1, true);
+  }, [spot.id, loadSpotRatings]);
+
+  const loadCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setCurrentUser(user);
+    if (user) {
+      checkUserLike(user.id);
+    }
+  };
+
+  const loadSpotData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('spots')
+        .select('*')
+        .eq('id', spot.id)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setSpotData(data);
+        setRatingSummary(buildSummaryFromSpot(data));
+      }
+    } catch (error) {
+      console.error('Error loading spot data:', error);
+    }
+  };
 
   const handleRatingSaved = async () => {
     await loadSpotData();
