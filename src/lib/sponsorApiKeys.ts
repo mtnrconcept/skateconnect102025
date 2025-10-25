@@ -1,5 +1,6 @@
 import type { SponsorApiKey } from '../types';
 import { supabase } from './supabase.js';
+import { isSchemaMissing, withTableFallback } from './postgrest.js';
 
 export interface CreateSponsorApiKeyParams {
   sponsorId: string;
@@ -36,18 +37,28 @@ async function hashKey(rawKey: string): Promise<string> {
     .join('');
 }
 
+function missingApiKeyTableError(): Error {
+  return new Error(
+    'La table Supabase "sponsor_api_keys" est introuvable. Exécute les migrations sponsor ou expose la vue adéquate.',
+  );
+}
+
 export async function fetchSponsorApiKeys(sponsorId: string): Promise<SponsorApiKey[]> {
-  const { data, error } = await supabase
-    .from('sponsor_api_keys')
-    .select('*')
-    .eq('sponsor_id', sponsorId)
-    .order('created_at', { ascending: false });
+  const rows = await withTableFallback<SponsorApiKey[] | null>(
+    supabase
+      .from('sponsor_api_keys')
+      .select('*')
+      .eq('sponsor_id', sponsorId)
+      .order('created_at', { ascending: false }),
+    () => [],
+    {
+      onMissing: () => {
+        console.info('sponsor_api_keys table is missing. Returning an empty API key list.');
+      },
+    },
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as SponsorApiKey[];
+  return (rows ?? []) as SponsorApiKey[];
 }
 
 export async function createSponsorApiKey(
@@ -70,6 +81,9 @@ export async function createSponsorApiKey(
     .single();
 
   if (error) {
+    if (isSchemaMissing(error)) {
+      throw missingApiKeyTableError();
+    }
     throw error;
   }
 
@@ -85,6 +99,9 @@ export async function revokeSponsorApiKey(id: string): Promise<SponsorApiKey> {
     .single();
 
   if (error) {
+    if (isSchemaMissing(error)) {
+      throw missingApiKeyTableError();
+    }
     throw error;
   }
 
