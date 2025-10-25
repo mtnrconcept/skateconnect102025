@@ -56,9 +56,9 @@ export default function SpotGrid({
   const [sliderTransitionEnabled, setSliderTransitionEnabled] = useState(false);
 
   const getAvailableHeight = useCallback(() => {
-    const parent = sliderRef.current?.parentElement;
-    if (!parent) return null;
-    const available = parent.clientHeight - SAFETY_MARGIN;
+    const panel = sliderRef.current?.closest('[data-spot-panel]') as HTMLElement | null;
+    if (!panel) return null;
+    const available = panel.clientHeight - SAFETY_MARGIN;
     if (!Number.isFinite(available)) return null;
     return available > 0 ? available : 0;
   }, []);
@@ -215,11 +215,10 @@ export default function SpotGrid({
   /** Mesure de la page visible */
   const measureCurrentPage = useCallback(() => {
     if (pendingAnimation) return;
-    const page = sliderInnerRef.current?.querySelector<HTMLElement>('[data-page]');
-    if (!page) return;
-    const { height } = page.getBoundingClientRect();
-    setSliderHeight(clampHeight(height));
-  }, [pendingAnimation, clampHeight]);
+    const available = getAvailableHeight();
+    if (available === null) return;
+    setSliderHeight(available);
+  }, [pendingAnimation, getAvailableHeight]);
 
   useLayoutEffect(() => {
     measureCurrentPage();
@@ -309,7 +308,7 @@ export default function SpotGrid({
 
   const pageStyle: CSSProperties = {
     height: '100%',
-    gridAutoRows: '1fr',
+    gridAutoRows: 'minmax(0, 1fr)',
   };
 
   const sliderStyle: CSSProperties = {
