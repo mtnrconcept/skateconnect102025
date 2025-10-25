@@ -2,6 +2,7 @@ import type {
   Profile,
   SponsorBranding,
   SponsorContactInfo,
+  SponsorMediaKitResource,
   SponsorPermissions,
 } from '../types';
 
@@ -32,6 +33,23 @@ export const demoSponsorPermissions: SponsorPermissions = {
   canManageOpportunities: true,
 };
 
+export const demoSponsorMediaKits: SponsorMediaKitResource[] = [
+  {
+    id: 'kit-b2b-overview',
+    label: 'Media kit – Présentation marque',
+    url: 'https://cdn.shredloc.example/media-kit/shredloc-partner-lab.pdf',
+    format: 'pdf',
+    description: 'Positionnement, audiences & activations emblématiques.',
+  },
+  {
+    id: 'kit-case-studies',
+    label: 'Cases & résultats campagne',
+    url: 'https://cdn.shredloc.example/media-kit/shredloc-case-studies.zip',
+    format: 'zip',
+    description: 'Études de cas détaillées + assets vidéos HD.',
+  },
+];
+
 export const sponsorModeHighlights = [
   'Cockpit analytics en temps réel pour suivre les riders engagés.',
   'Gestion des Spotlight, campagnes et inventaire boutique en un endroit.',
@@ -50,5 +68,6 @@ export function buildSponsorExperienceProfile(profile: Profile): Profile {
     sponsor_permissions: mergedPermissions,
     sponsor_branding: profile.sponsor_branding ?? demoSponsorBranding,
     sponsor_contact: profile.sponsor_contact ?? demoSponsorContact,
+    sponsor_media_kits: profile.sponsor_media_kits ?? demoSponsorMediaKits,
   };
 }

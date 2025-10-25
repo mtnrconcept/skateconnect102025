@@ -6,6 +6,14 @@ export interface SponsorContactInfo {
   address?: string | null;
 }
 
+export interface SponsorMediaKitResource {
+  id: string;
+  label: string;
+  url: string;
+  format?: string | null;
+  description?: string | null;
+}
+
 export interface SponsorBranding {
   brand_name: string;
   logo_url?: string | null;
@@ -40,6 +48,7 @@ export interface Profile {
   sponsor_contact?: SponsorContactInfo | null;
   sponsor_branding?: SponsorBranding | null;
   sponsor_permissions?: SponsorPermissions | null;
+  sponsor_media_kits?: SponsorMediaKitResource[] | null;
   location?: string | null;
   sponsors?: string[] | null;
   favorite_tricks?: string[] | null;
