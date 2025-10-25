@@ -516,6 +516,45 @@ export interface SponsorShopItem {
   updated_at: string;
 }
 
+export interface SponsorShopItemStat {
+  id: string;
+  sponsor_id: string;
+  item_id: string;
+  metric_date: string;
+  views_count: number;
+  cart_additions: number;
+  orders_count: number;
+  units_sold: number;
+  revenue_cents: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SponsorShopAnalyticsTotals {
+  views: number;
+  carts: number;
+  orders: number;
+  units: number;
+  revenueCents: number;
+  conversionRate: number;
+}
+
+export interface SponsorShopAnalyticsHistoryPoint extends SponsorShopAnalyticsTotals {
+  metricDate: string;
+}
+
+export interface SponsorShopAnalyticsPerItem extends SponsorShopAnalyticsTotals {
+  itemId: string;
+  lastMetricDate: string | null;
+}
+
+export interface SponsorShopAnalyticsSummary {
+  updatedAt: string | null;
+  totals: SponsorShopAnalyticsTotals;
+  history: SponsorShopAnalyticsHistoryPoint[];
+  perItem: Record<string, SponsorShopAnalyticsPerItem>;
+}
+
 export interface SponsorApiKey {
   id: string;
   sponsor_id: string;
