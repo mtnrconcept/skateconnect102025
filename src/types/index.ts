@@ -64,6 +64,9 @@ export interface Spot {
   is_verified: boolean;
   likes_count: number;
   comments_count: number;
+  rating_average?: number | null;
+  rating_count?: number | null;
+  rating_distribution?: RatingDistribution | Record<string, number> | null;
   created_at: string;
   updated_at: string;
   creator?: Profile;
@@ -233,12 +236,19 @@ export interface Follow {
   created_at: string;
 }
 
+export type RatingBucket = 1 | 2 | 3 | 4 | 5;
+
+export type RatingDistribution = Record<RatingBucket, number>;
+
 export interface SpotRating {
   id: string;
   user_id: string;
   spot_id: string;
   rating: number;
+  comment: string | null;
   created_at: string;
+  updated_at: string;
+  user?: Profile;
 }
 
 export interface SpotMedia {
@@ -478,6 +488,7 @@ export type Section =
   | 'feed'
   | 'events'
   | 'challenges'
+  | 'search'
   | 'sponsors'
   | 'pricing'
   | 'profile'

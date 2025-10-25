@@ -13,6 +13,7 @@ import BadgesSection from './components/sections/BadgesSection';
 import RewardsSection from './components/sections/RewardsSection';
 import LeaderboardSection from './components/sections/LeaderboardSection';
 import PricingSection from './components/sections/PricingSection';
+import SearchResultsSection from './components/sections/SearchResultsSection';
 import SettingsSection from './components/sections/SettingsSection';
 import MessagesSection from './components/sections/MessagesSection';
 import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
@@ -33,8 +34,11 @@ import {
   type SubscriptionPlan,
 } from './lib/subscription';
 import type { Profile, Section, ContentNavigationOptions, ProfileExperienceMode } from './types';
+import type { GlobalSearchResult } from './types/search';
 import { buildSponsorExperienceProfile } from './data/sponsorExperience';
 import type { FakeDirectMessagePayload } from './types/messages';
+import { useRouter } from './lib/router';
+import SearchPage from './components/search/SearchPage';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const isMapAvailable = typeof mapboxToken === 'string' && mapboxToken.trim().length > 0;
@@ -74,6 +78,13 @@ function App() {
     return DEFAULT_SUBSCRIPTION_PLAN;
   });
   const [restrictionNotice, setRestrictionNotice] = useState<RestrictionNotice | null>(null);
+  const [searchState, setSearchState] = useState<{ query: string; results: GlobalSearchResult[] }>(() => ({
+    query: '',
+    results: [],
+  }));
+
+  const { location, navigate } = useRouter();
+  const isSearchRoute = location.pathname === '/search';
 
   const sectionDisplayNames = useMemo<Record<Section, string>>(
     () => ({
@@ -81,6 +92,7 @@ function App() {
       map: 'la carte',
       events: 'les événements',
       challenges: 'les défis sponsorisés',
+      search: 'les résultats de recherche',
       sponsors: "l’espace sponsor",
       pricing: 'les abonnements',
       profile: 'ton profil avancé',
@@ -306,6 +318,10 @@ function App() {
       return false;
     }
 
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
+
     setRestrictionNotice(null);
     setCurrentSection(section);
     if (options) {
@@ -437,52 +453,64 @@ function App() {
             onSectionChange={handleNavigateToContent}
             onNavigateToContent={handleNavigateToContent}
             onSearchFocusChange={setIsSearchActive}
+            onSearchSubmit={(query, results) => {
+              setSearchState({ query, results });
+              handleNavigateToContent('search');
+            }}
           />
           <div className={dimmedClass}>
-            <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
+            {!isSearchRoute && (
+              <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
+            )}
           </div>
 
           <main className={`flex-1 pt-16 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
-            {currentSection === 'map' && (
-              <MapSection
-                focusSpotId={mapFocusSpotId}
-                onSpotFocusHandled={() => setMapFocusSpotId(null)}
-                isMapAvailable={isMapAvailable}
-              />
+            {isSearchRoute ? (
+              <SearchPage onNavigateToContent={handleNavigateToContent} currentPlan={subscriptionPlan} />
+            ) : (
+              <>
+                {currentSection === 'map' && (
+                  <MapSection
+                    focusSpotId={mapFocusSpotId}
+                    onSpotFocusHandled={() => setMapFocusSpotId(null)}
+                    isMapAvailable={isMapAvailable}
+                  />
+                )}
+                {currentSection === 'feed' && <FeedSection currentUser={activeProfile} />}
+                {currentSection === 'events' && <EventsSection profile={activeProfile} />}
+                {currentSection === 'challenges' && (
+                  <ChallengesSection
+                    profile={activeProfile}
+                    focusConfig={challengeFocus}
+                    onFocusHandled={() => setChallengeFocus(null)}
+                  />
+                )}
+                {currentSection === 'sponsors' &&
+                  (activeProfile?.role === 'sponsor' ? (
+                    <SponsorDashboard />
+                  ) : (
+                    <SponsorsSection profile={activeProfile} />
+                  ))}
+                {currentSection === 'pricing' && <PricingSection />}
+                {currentSection === 'profile' && (
+                  <ProfileSection profile={activeProfile} onProfileUpdate={handleProfileUpdated} />
+                )}
+                {currentSection === 'badges' && <BadgesSection profile={activeProfile} />}
+                {currentSection === 'rewards' && <RewardsSection profile={activeProfile} />}
+                {currentSection === 'leaderboard' && <LeaderboardSection profile={activeProfile} />}
+                {currentSection === 'messages' && <MessagesSection profile={activeProfile} />}
+                {currentSection === 'settings' && (
+                  <SettingsSection
+                    profile={activeProfile}
+                    onNavigate={handleNavigateToContent}
+                    profileMode={profileMode}
+                    onProfileModeChange={handleProfileModeChange}
+                  />
+                )}
+                {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={handleNavigateToContent} />}
+                {currentSection === 'terms' && <TermsSection onNavigate={handleNavigateToContent} />}
+              </>
             )}
-            {currentSection === 'feed' && <FeedSection currentUser={activeProfile} />}
-            {currentSection === 'events' && <EventsSection profile={activeProfile} />}
-            {currentSection === 'challenges' && (
-              <ChallengesSection
-                profile={activeProfile}
-                focusConfig={challengeFocus}
-                onFocusHandled={() => setChallengeFocus(null)}
-              />
-            )}
-            {currentSection === 'sponsors' &&
-              (activeProfile?.role === 'sponsor' ? (
-                <SponsorDashboard />
-              ) : (
-                <SponsorsSection profile={activeProfile} />
-              ))}
-            {currentSection === 'pricing' && <PricingSection />}
-            {currentSection === 'profile' && (
-              <ProfileSection profile={activeProfile} onProfileUpdate={handleProfileUpdated} />
-            )}
-            {currentSection === 'badges' && <BadgesSection profile={activeProfile} />}
-            {currentSection === 'rewards' && <RewardsSection profile={activeProfile} />}
-            {currentSection === 'leaderboard' && <LeaderboardSection profile={activeProfile} />}
-            {currentSection === 'messages' && <MessagesSection profile={activeProfile} />}
-            {currentSection === 'settings' && (
-              <SettingsSection
-                profile={activeProfile}
-                onNavigate={handleNavigateToContent}
-                profileMode={profileMode}
-                onProfileModeChange={handleProfileModeChange}
-              />
-            )}
-            {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={handleNavigateToContent} />}
-            {currentSection === 'terms' && <TermsSection onNavigate={handleNavigateToContent} />}
           </main>
 
           <div className={dimmedClass}>
