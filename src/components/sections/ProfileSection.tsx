@@ -142,7 +142,9 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select(
+            '*, sponsor_branding, sponsor_contact, sponsor_permissions, sponsor_media_kits'
+          )
           .eq('id', profileId)
           .maybeSingle();
 
