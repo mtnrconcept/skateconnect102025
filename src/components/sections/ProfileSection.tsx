@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { MapPin, Calendar, Award, Users, TrendingUp, Gift } from 'lucide-react';
+import { MapPin, Award } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { filterOutProfileMediaPosts } from '../../lib/postUtils';
@@ -9,6 +9,7 @@ import StatsDisplay from '../StatsDisplay';
 import XPHistory from '../XPHistory';
 import GamificationTester from '../GamificationTester';
 import PostMediaViewer from '../PostMediaViewer';
+import SponsorProfileHero from '../profile/sponsor/SponsorProfileHero';
 import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
@@ -234,6 +235,8 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
+      {profileData.role === 'sponsor' ? <SponsorProfileHero profile={profileData} /> : null}
+
       <div className="bg-dark-800 rounded-xl border border-dark-700 mb-6">
         <div
           className={`relative h-48 rounded-t-xl overflow-hidden ${
