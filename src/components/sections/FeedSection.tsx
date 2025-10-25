@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Heart, MessageCircle, MapPin, Send, Video, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import {
+  Heart,
+  MessageCircle,
+  MapPin,
+  Send,
+  Video,
+  X,
+  Image as ImageIcon,
+  Loader2,
+  CalendarDays,
+  Flag,
+  Award,
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { uploadFile } from '../../lib/storage';
@@ -11,7 +23,9 @@ import PostMediaViewer from '../PostMediaViewer';
 import FakeProfileModal from '../FakeProfileModal';
 import FakeDirectMessageModal from '../FakeDirectMessageModal';
 import ProfilePreviewModal from '../ProfilePreviewModal';
-import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId } from '../../data/fakeFeed';
+import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId, fakeLeaderboardEntries } from '../../data/fakeFeed';
+import { eventsCatalog } from '../../data/eventsCatalog';
+import { createFallbackChallenges } from '../../data/challengesCatalog';
 import type { FakeProfileDetails } from '../../data/fakeFeed';
 import type { Comment, Post, Profile } from '../../types';
 
@@ -59,6 +73,15 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     return initial;
   });
   const [activeFakeMessageProfileId, setActiveFakeMessageProfileId] = useState<string | null>(null);
+
+  const upcomingEvents = useMemo(() => eventsCatalog.slice(0, 3), []);
+  const sponsorChallenges = useMemo(
+    () => createFallbackChallenges().filter((challenge) => challenge.challenge_type === 'brand').slice(0, 2),
+    [],
+  );
+  const topAthletes = useMemo(() => fakeLeaderboardEntries.slice(0, 3), []);
+
+  const formatNumber = (value: number) => new Intl.NumberFormat('fr-FR').format(value);
 
   useEffect(() => {
     loadPosts();
@@ -518,398 +541,486 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
-          {filterButtons.map((button) => (
-            <button
-              key={button.id}
-              type="button"
-              onClick={() => setFilter(button.id)}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors border ${
-                filter === button.id
-                  ? 'bg-orange-500 text-white border-orange-500'
-                  : 'border-dark-700 text-gray-400 hover:text-white hover:border-orange-500/60'
-              }`}
-            >
-              {button.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 mb-6 mt-4 sm:mt-6 overflow-x-auto pb-2 no-scrollbar">
-          <div className="flex-shrink-0 flex flex-col items-center gap-1">
-            <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5">
-              {currentUser?.avatar_url ? (
-                <img
-                  src={currentUser.avatar_url}
-                  alt="Your story"
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold">
-                  {getUserInitial(currentUser)}
-                </div>
-              )}
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="flex-1 lg:max-w-2xl xl:max-w-3xl">
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
+              {filterButtons.map((button) => (
+                <button
+                  key={button.id}
+                  type="button"
+                  onClick={() => setFilter(button.id)}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors border ${
+                    filter === button.id
+                      ? 'bg-orange-500 text-white border-orange-500'
+                      : 'border-dark-700 text-gray-400 hover:text-white hover:border-orange-500/60'
+                  }`}
+                >
+                  {button.label}
+                </button>
+              ))}
             </div>
-            <span className="text-xs text-gray-400">You</span>
-          </div>
-          {storyPosts.slice(0, 10).map((post, idx) => (
-            <button
-              key={post.id}
-              className="flex-shrink-0 flex flex-col items-center gap-1 focus:outline-none"
-              onClick={() => {
-                setActiveStoryIndex(idx);
-                setActiveStoryMediaIndex(0);
-                setShowStoryViewer(true);
-              }}
-            >
-              <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5 overflow-hidden">
-                {post.media_urls?.[0] ? (
-                  isVideoUrl(post.media_urls[0]) ? (
-                    <video
-                      src={post.media_urls[0]}
-                      className="w-full h-full object-cover rounded-full"
-                      muted
-                      playsInline
-                      loop
-                    />
-                  ) : (
+            <div className="flex items-center gap-3 mb-6 mt-4 sm:mt-6 overflow-x-auto pb-2 no-scrollbar">
+              <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5">
+                  {currentUser?.avatar_url ? (
                     <img
-                      src={post.media_urls[0]}
-                      alt={getUserDisplayName(post.user)}
+                      src={currentUser.avatar_url}
+                      alt="Your story"
                       className="w-full h-full rounded-full object-cover"
                     />
-                  )
-                ) : post.user?.avatar_url ? (
-                  <img
-                    src={post.user.avatar_url}
-                    alt={getUserDisplayName(post.user)}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold text-sm">
-                    {getUserInitial(post.user)}
-                  </div>
-                )}
-              </div>
-              <span className="text-xs text-gray-400 truncate max-w-[64px]">{post.user?.username || 'Story'}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="bg-dark-800 rounded-lg border border-dark-700 p-4 mb-6">
-          <form onSubmit={handleCreatePost}>
-            <div className="flex gap-3">
-              {currentUser?.avatar_url ? (
-                <img
-                  src={currentUser.avatar_url}
-                  alt={getUserDisplayName(currentUser)}
-                  className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-orange-500"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                  {getUserInitial(currentUser)}
+                  ) : (
+                    <div className="w-full h-full rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold">
+                      {getUserInitial(currentUser)}
+                    </div>
+                  )}
                 </div>
-              )}
-              <div className="flex-1">
-                <textarea
-                  value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
-                  placeholder="Partagez votre session, un nouveau trick, ou un spot découvert..."
-                  className="w-full border-0 focus:ring-0 resize-none bg-dark-800 text-white placeholder-gray-500"
-                  rows={3}
-                />
-
-                {mediaPreview.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    {mediaPreview.map((preview, index) => (
-                      <div key={index} className="relative aspect-video rounded-lg overflow-hidden bg-dark-700">
-                        {preview.type === 'image' ? (
-                          <img
-                            src={preview.url}
-                            alt={`Preview ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <video
-                            src={preview.url}
-                            className="w-full h-full object-cover"
-                            controls
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeMedia(index)}
-                          className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 transition-colors shadow-lg"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {uploading && (
-                  <div className="mt-3 flex items-center gap-2 text-orange-500 text-sm">
-                    <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span>Téléchargement en cours...</span>
-                  </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  multiple
-                  onChange={(e) => handleMediaSelect(e, 'image')}
-                  className="hidden"
-                />
-                <input
-                  ref={videoInputRef}
-                  type="file"
-                  accept="video/mp4,video/quicktime,video/webm"
-                  onChange={(e) => handleMediaSelect(e, 'video')}
-                  className="hidden"
-                />
-
-                <div className="flex items-center justify-between mt-2 pt-2 border-t border-dark-700">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading || mediaPreview.length >= 4}
-                      className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Ajouter des photos"
-                    >
-                      <ImageIcon size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => videoInputRef.current?.click()}
-                      disabled={uploading || mediaPreview.length >= 1}
-                      className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Ajouter une vidéo"
-                    >
-                      <Video size={20} />
-                    </button>
-                    <button type="button" className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400" title="Localisation">
-                      <MapPin size={20} />
-                    </button>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={(!newPostContent.trim() && uploadedMedia.length === 0) || uploading}
-                    className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    <Send size={18} />
-                    <span>Publier</span>
-                  </button>
-                </div>
+                <span className="text-xs text-gray-400">You</span>
               </div>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-8 text-gray-400">Chargement des posts...</div>
-      ) : posts.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <p className="text-lg mb-2">Aucun post pour le moment</p>
-          <p className="text-sm">Soyez le premier à partager quelque chose!</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {posts.map((post) => (
-            <div key={post.id} className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-start gap-3 mb-3">
-                    <button
-                      type="button"
-                      onClick={() => handleAvatarClick(post)}
-                      className={`group relative flex-shrink-0 focus:outline-none ${post.isFake ? 'rounded-full focus-visible:ring-2 focus-visible:ring-orange-500' : ''}`}
-                      title={post.isFake ? 'Voir le profil' : getUserDisplayName(post.user)}
-                    >
-                    {post.user?.avatar_url ? (
+              {storyPosts.slice(0, 10).map((post, idx) => (
+                <button
+                  key={post.id}
+                  className="flex-shrink-0 flex flex-col items-center gap-1 focus:outline-none"
+                  onClick={() => {
+                    setActiveStoryIndex(idx);
+                    setActiveStoryMediaIndex(0);
+                    setShowStoryViewer(true);
+                  }}
+                >
+                  <div className="w-16 h-16 rounded-full border-2 border-orange-500 p-0.5 overflow-hidden">
+                    {post.media_urls?.[0] ? (
+                      isVideoUrl(post.media_urls[0]) ? (
+                        <video
+                          src={post.media_urls[0]}
+                          className="w-full h-full object-cover rounded-full"
+                          muted
+                          playsInline
+                          loop
+                        />
+                      ) : (
+                        <img
+                          src={post.media_urls[0]}
+                          alt={getUserDisplayName(post.user)}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      )
+                    ) : post.user?.avatar_url ? (
                       <img
                         src={post.user.avatar_url}
                         alt={getUserDisplayName(post.user)}
-                        className={`w-10 h-10 rounded-full object-cover border-2 ${post.isFake ? 'border-orange-500 transition-colors group-hover:border-orange-400' : 'border-orange-500'}`}
+                        className="w-full h-full rounded-full object-cover"
                       />
                     ) : (
-                      <div className={`w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold ${post.isFake ? 'transition-colors group-hover:bg-orange-400' : ''}`}>
+                      <div className="w-full h-full rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold text-sm">
                         {getUserInitial(post.user)}
                       </div>
                     )}
-                  </button>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white">{getUserDisplayName(post.user)}</span>
-                      <MapPin size={14} className="text-orange-500" />
-                    </div>
-                    <div className="text-xs text-gray-500">{formatDate(post.created_at)}</div>
                   </div>
-                  {currentUser && !post.isFake && post.user_id !== currentUser.id && (
-                    <button
-                      type="button"
-                      onClick={() => void toggleFollow(post.user_id)}
-                      disabled={!!followLoadingMap[post.user_id]}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
-                        followingMap[post.user_id]
-                          ? 'border border-orange-500/60 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20'
-                          : 'bg-orange-500 text-white hover:bg-orange-600'
-                      } ${followLoadingMap[post.user_id] ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                      {followLoadingMap[post.user_id] ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : followingMap[post.user_id] ? (
-                        'Abonné·e'
-                      ) : (
-                        'Suivre'
-                      )}
-                    </button>
-                  )}
-                  {currentUser && post.isFake && (
-                    <button
-                      type="button"
-                      onClick={() => toggleFakeFollow(post.user_id)}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                        fakeFollowingMap[post.user_id]
-                          ? 'border border-orange-500/60 bg-orange-500/15 text-orange-200 hover:bg-orange-500/25'
-                          : 'bg-orange-500 text-white hover:bg-orange-600'
-                      }`}
-                    >
-                      {fakeFollowingMap[post.user_id] ? 'Suivi·e' : 'Suivre'}
-                    </button>
-                  )}
-                </div>
+                  <span className="text-xs text-gray-400 truncate max-w-[64px]">{post.user?.username || 'Story'}</span>
+                </button>
+              ))}
+            </div>
 
-                {post.content && (
-                  <p className="text-gray-300 mb-3 whitespace-pre-wrap">{post.content}</p>
-                )}
-
-                {post.media_urls && post.media_urls.length > 0 && (
-                  <div className={`grid gap-2 mb-3 ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                    {post.media_urls.map((url, index) => (
-                      <div key={index} className="relative rounded-lg overflow-hidden bg-dark-700">
-                        {post.post_type === 'video' ? (
-                          <video
-                            src={url}
-                            className="w-full aspect-video object-cover"
-                            controls
-                            playsInline
-                          />
-                        ) : (
-                          <img
-                            src={url}
-                            alt={`Media ${index + 1}`}
-                            className="w-full aspect-auto object-cover"
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {post.spot && (
-                  <div className="flex items-center gap-2 text-sm text-orange-500 mb-3">
-                    <MapPin size={16} />
-                    <span>{post.spot.name}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-dark-700 px-4 py-3">
-                <div className="flex items-center gap-4 mb-2">
-                  <button
-                    onClick={() => handleLike(post.id)}
-                    className={`transition-colors ${
-                      post.liked_by_user
-                        ? 'text-orange-500'
-                        : 'text-gray-400 hover:text-orange-500'
-                    }`}
-                  >
-                    <Heart size={24} className={post.liked_by_user ? 'fill-current' : ''} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newExpanded = new Set(expandedComments);
-                      if (newExpanded.has(post.id)) {
-                        newExpanded.delete(post.id);
-                      } else {
-                        newExpanded.add(post.id);
-                      }
-                      setExpandedComments(newExpanded);
-                    }}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    <MessageCircle size={24} />
-                  </button>
-                  <button
-                    className={`text-gray-400 transition-colors ${post.isFake ? 'hover:text-white' : 'opacity-60 cursor-not-allowed'}`}
-                    onClick={() => {
-                      if (!post.isFake) {
-                        return;
-                      }
-                      if (!currentUser) {
-                        alert('Connectez-vous pour envoyer un message.');
-                        return;
-                      }
-                      setActiveFakeMessageProfileId(post.user_id);
-                    }}
-                    type="button"
-                  >
-                    <Send size={24} />
-                  </button>
-                </div>
-                <div className="text-sm text-white mb-1">
-                  <span className="font-semibold">Liked by {post.likes_count || 1234}</span>
-                </div>
-                <p className="text-sm text-gray-300">
-                  <span className="font-semibold text-white">{post.user?.username}</span>{' '}
-                  {post.content?.substring(0, 80) || 'Sunset session was insane! New trick unlocked!'}
-                  {post.content && post.content.length > 80 && '...'}
-                </p>
-                {post.comments_count > 0 && (
-                  <button
-                    onClick={() => {
-                      const newExpanded = new Set(expandedComments);
-                      if (newExpanded.has(post.id)) {
-                        newExpanded.delete(post.id);
-                      } else {
-                        newExpanded.add(post.id);
-                      }
-                      setExpandedComments(newExpanded);
-                    }}
-                    className="text-sm text-gray-500 mt-1"
-                  >
-                    View all {post.comments_count} comments
-                  </button>
-                )}
-              </div>
-
-              {expandedComments.has(post.id) && (
-                <div className="border-t border-dark-700 px-4 py-4">
-                  {post.isFake ? (
-                    <FakeCommentSection
-                      comments={fakeCommentsMap[post.id] ?? []}
-                      currentUser={currentUser}
-                      onAddComment={(content) => handleFakeCommentAdd(post.id, content)}
-                      onDeleteComment={(commentId) => handleFakeCommentDelete(post.id, commentId)}
+            <div className="bg-dark-800 rounded-lg border border-dark-700 p-4 mb-6">
+              <form onSubmit={handleCreatePost}>
+                <div className="flex gap-3">
+                  {currentUser?.avatar_url ? (
+                    <img
+                      src={currentUser.avatar_url}
+                      alt={getUserDisplayName(currentUser)}
+                      className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-orange-500"
                     />
                   ) : (
-                    <CommentSection
-                      postId={post.id}
-                      currentUser={currentUser}
-                      onCommentCountChange={(count) => handleCommentCountChange(post.id, count)}
+                    <div className="w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      {getUserInitial(currentUser)}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <textarea
+                      value={newPostContent}
+                      onChange={(e) => setNewPostContent(e.target.value)}
+                      placeholder="Partagez votre session, un nouveau trick, ou un spot découvert..."
+                      className="w-full border-0 focus:ring-0 resize-none bg-dark-800 text-white placeholder-gray-500"
+                      rows={3}
                     />
+
+                    {mediaPreview.length > 0 && (
+                      <div className="grid grid-cols-2 gap-2 mt-3">
+                        {mediaPreview.map((preview, index) => (
+                          <div key={index} className="relative aspect-video rounded-lg overflow-hidden bg-dark-700">
+                            {preview.type === 'image' ? (
+                              <img
+                                src={preview.url}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <video
+                                src={preview.url}
+                                className="w-full h-full object-cover"
+                                controls
+                              />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeMedia(index)}
+                              className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 transition-colors shadow-lg"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {uploading && (
+                      <div className="mt-3 flex items-center gap-2 text-orange-500 text-sm">
+                        <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Téléchargement en cours...</span>
+                      </div>
+                    )}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      multiple
+                      onChange={(e) => handleMediaSelect(e, 'image')}
+                      className="hidden"
+                    />
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept="video/mp4,video/quicktime,video/webm"
+                      onChange={(e) => handleMediaSelect(e, 'video')}
+                      className="hidden"
+                    />
+
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-dark-700">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading || mediaPreview.length >= 4}
+                          className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Ajouter des photos"
+                        >
+                          <ImageIcon size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => videoInputRef.current?.click()}
+                          disabled={uploading || mediaPreview.length >= 1}
+                          className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Ajouter une vidéo"
+                        >
+                          <Video size={20} />
+                        </button>
+                        <button type="button" className="p-2 hover:bg-dark-700 rounded-full transition-colors text-gray-400" title="Localisation">
+                          <MapPin size={20} />
+                        </button>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={(!newPostContent.trim() && uploadedMedia.length === 0) || uploading}
+                        className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <Send size={18} />
+                        <span>Publier</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-8 text-gray-400">Chargement des posts...</div>
+          ) : posts.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <p className="text-lg mb-2">Aucun post pour le moment</p>
+              <p className="text-sm">Soyez le premier à partager quelque chose!</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {posts.map((post) => (
+                <div key={post.id} className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
+                  <div className="p-4">
+                    <div className="flex items-start gap-3 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => handleAvatarClick(post)}
+                        className={`group relative flex-shrink-0 focus:outline-none ${post.isFake ? 'rounded-full focus-visible:ring-2 focus-visible:ring-orange-500' : ''}`}
+                        title={post.isFake ? 'Voir le profil' : getUserDisplayName(post.user)}
+                      >
+                        {post.user?.avatar_url ? (
+                          <img
+                            src={post.user.avatar_url}
+                            alt={getUserDisplayName(post.user)}
+                            className={`w-10 h-10 rounded-full object-cover border-2 ${post.isFake ? 'border-orange-500 transition-colors group-hover:border-orange-400' : 'border-orange-500'}`}
+                          />
+                        ) : (
+                          <div className={`w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold ${post.isFake ? 'transition-colors group-hover:bg-orange-400' : ''}`}>
+                            {getUserInitial(post.user)}
+                          </div>
+                        )}
+                      </button>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{getUserDisplayName(post.user)}</span>
+                          <MapPin size={14} className="text-orange-500" />
+                        </div>
+                        <div className="text-xs text-gray-500">{formatDate(post.created_at)}</div>
+                      </div>
+                      {currentUser && !post.isFake && post.user_id !== currentUser.id && (
+                        <button
+                          type="button"
+                          onClick={() => void toggleFollow(post.user_id)}
+                          disabled={!!followLoadingMap[post.user_id]}
+                          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                            followingMap[post.user_id]
+                              ? 'border border-orange-500/60 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20'
+                              : 'bg-orange-500 text-white hover:bg-orange-600'
+                          } ${followLoadingMap[post.user_id] ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {followLoadingMap[post.user_id] ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : followingMap[post.user_id] ? (
+                            'Abonné·e'
+                          ) : (
+                            'Suivre'
+                          )}
+                        </button>
+                      )}
+                      {currentUser && post.isFake && (
+                        <button
+                          type="button"
+                          onClick={() => toggleFakeFollow(post.user_id)}
+                          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                            fakeFollowingMap[post.user_id]
+                              ? 'border border-orange-500/60 bg-orange-500/15 text-orange-200 hover:bg-orange-500/25'
+                              : 'bg-orange-500 text-white hover:bg-orange-600'
+                          }`}
+                        >
+                          {fakeFollowingMap[post.user_id] ? 'Suivi·e' : 'Suivre'}
+                        </button>
+                      )}
+                    </div>
+
+                    {post.content && (
+                      <p className="text-gray-300 mb-3 whitespace-pre-wrap">{post.content}</p>
+                    )}
+
+                    {post.media_urls && post.media_urls.length > 0 && (
+                      <div className={`grid gap-2 mb-3 ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                        {post.media_urls.map((url, index) => (
+                          <div key={index} className="relative rounded-lg overflow-hidden bg-dark-700">
+                            {post.post_type === 'video' ? (
+                              <video
+                                src={url}
+                                className="w-full aspect-video object-cover"
+                                controls
+                                playsInline
+                              />
+                            ) : (
+                              <img
+                                src={url}
+                                alt={`Media ${index + 1}`}
+                                className="w-full aspect-auto object-cover"
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {post.spot && (
+                      <div className="flex items-center gap-2 text-sm text-orange-500 mb-3">
+                        <MapPin size={16} />
+                        <span>{post.spot.name}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-dark-700 px-4 py-3">
+                    <div className="flex items-center gap-4 mb-2">
+                      <button
+                        onClick={() => handleLike(post.id)}
+                        className={`transition-colors ${
+                          post.liked_by_user
+                            ? 'text-orange-500'
+                            : 'text-gray-400 hover:text-orange-500'
+                        }`}
+                      >
+                        <Heart size={24} className={post.liked_by_user ? 'fill-current' : ''} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newExpanded = new Set(expandedComments);
+                          if (newExpanded.has(post.id)) {
+                            newExpanded.delete(post.id);
+                          } else {
+                            newExpanded.add(post.id);
+                          }
+                          setExpandedComments(newExpanded);
+                        }}
+                        className="text-gray-400 hover:text-white transition-colors"
+                      >
+                        <MessageCircle size={24} />
+                      </button>
+                      <button
+                        className={`text-gray-400 transition-colors ${post.isFake ? 'hover:text-white' : 'opacity-60 cursor-not-allowed'}`}
+                        onClick={() => {
+                          if (!post.isFake) {
+                            return;
+                          }
+                          if (!currentUser) {
+                            alert('Connectez-vous pour envoyer un message.');
+                            return;
+                          }
+                          setActiveFakeMessageProfileId(post.user_id);
+                        }}
+                        type="button"
+                      >
+                        <Send size={24} />
+                      </button>
+                    </div>
+                    <div className="text-sm text-white mb-1">
+                      <span className="font-semibold">Liked by {post.likes_count || 1234}</span>
+                    </div>
+                    <p className="text-sm text-gray-300">
+                      <span className="font-semibold text-white">{post.user?.username}</span>{' '}
+                      {post.content?.substring(0, 80) || 'Sunset session was insane! New trick unlocked!'}
+                      {post.content && post.content.length > 80 && '...'}
+                    </p>
+                    {post.comments_count > 0 && (
+                      <button
+                        onClick={() => {
+                          const newExpanded = new Set(expandedComments);
+                          if (newExpanded.has(post.id)) {
+                            newExpanded.delete(post.id);
+                          } else {
+                            newExpanded.add(post.id);
+                          }
+                          setExpandedComments(newExpanded);
+                        }}
+                        className="text-sm text-gray-500 mt-1"
+                      >
+                        View all {post.comments_count} comments
+                      </button>
+                    )}
+                  </div>
+
+                  {expandedComments.has(post.id) && (
+                    <div className="border-t border-dark-700 px-4 py-4">
+                      {post.isFake ? (
+                        <FakeCommentSection
+                          comments={fakeCommentsMap[post.id] ?? []}
+                          currentUser={currentUser}
+                          onAddComment={(content) => handleFakeCommentAdd(post.id, content)}
+                          onDeleteComment={(commentId) => handleFakeCommentDelete(post.id, commentId)}
+                        />
+                      ) : (
+                        <CommentSection
+                          postId={post.id}
+                          currentUser={currentUser}
+                          onCommentCountChange={(count) => handleCommentCountChange(post.id, count)}
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
+        <aside className="hidden lg:flex lg:w-[320px] xl:w-[360px] flex-col gap-6">
+          <section className="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-gray-300">
+                <CalendarDays size={18} className="text-orange-400" />
+                <h3 className="text-sm font-semibold uppercase tracking-wide">Événements à venir</h3>
+              </div>
+              <span className="text-xs text-gray-500">Top 3</span>
+            </div>
+            <ul className="mt-4 space-y-4">
+              {upcomingEvents.map((event) => (
+                <li key={event.id} className="rounded-md border border-dark-700 bg-dark-900/40 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-white">{event.title}</p>
+                    {event.is_sponsor_event && (
+                      <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-300">
+                        Sponsor
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400">{event.date}</p>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                    <MapPin size={14} className="text-orange-400" />
+                    <span>{event.location}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div className="flex items-center gap-2 text-gray-300">
+              <Flag size={18} className="text-orange-400" />
+              <h3 className="text-sm font-semibold uppercase tracking-wide">Défis sponsors</h3>
+            </div>
+            <ul className="mt-4 space-y-4">
+              {sponsorChallenges.map((challenge) => (
+                <li key={challenge.id} className="rounded-md border border-dark-700 bg-dark-900/40 p-3">
+                  <p className="text-sm font-semibold text-white">{challenge.title}</p>
+                  <p className="mt-1 text-xs text-gray-400">{challenge.description}</p>
+                  <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                    <span>Participants : {formatNumber(challenge.participants_count ?? 0)}</span>
+                    <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-300">
+                      Récompense
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400">{challenge.prize}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div className="flex items-center gap-2 text-gray-300">
+              <Award size={18} className="text-orange-400" />
+              <h3 className="text-sm font-semibold uppercase tracking-wide">Meilleurs sportifs</h3>
+            </div>
+            <ul className="mt-4 space-y-4">
+              {topAthletes.map((entry, index) => (
+                <li key={entry.user_id} className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full border border-orange-500/40 text-sm font-semibold text-orange-300">
+                    #{index + 1}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {entry.profile.avatar_url ? (
+                      <img
+                        src={entry.profile.avatar_url}
+                        alt={getUserDisplayName(entry.profile)}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
+                        {getUserInitial(entry.profile)}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-white">{getUserDisplayName(entry.profile)}</p>
+                      <p className="text-xs text-gray-400">{formatNumber(entry.total_xp)} XP · Niveau {entry.current_level}</p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </aside>
+      </div>
+
       {showStoryViewer && storyPosts.length > 0 && (
         <PostMediaViewer
           posts={storyPosts}
