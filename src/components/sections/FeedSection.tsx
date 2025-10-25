@@ -48,7 +48,6 @@ interface FeedSectionProps {
 export default function FeedSection({ currentUser }: FeedSectionProps) {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [newPostContent, setNewPostContent] = useState('');
-  const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [uploadedMedia, setUploadedMedia] = useState<string[]>([]);
@@ -143,23 +142,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
 
   useEffect(() => {
     loadPosts();
-  }, [filter, currentUser?.id]);
-
-  const applyFilter = (data: FeedPost[]) => {
-    if (filter === 'all') {
-      return data;
-    }
-
-    return data.filter((post) => {
-      if (!post.isFake) {
-        return true;
-      }
-      if (!post.segments || post.segments.length === 0) {
-        return filter === 'all';
-      }
-      return post.segments.includes(filter as 'following' | 'local');
-    });
-  };
+  }, [currentUser?.id]);
 
   const sortPostsByDateDesc = (data: FeedPost[]) =>
     [...data].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -169,8 +152,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       ...post,
       comments_count: fakeCommentsMap[post.id]?.length ?? 0,
     }));
-    const filtered = applyFilter(clones);
-    setPosts(sortPostsByDateDesc(filtered));
+    setPosts(sortPostsByDateDesc(clones));
     setFollowingMap({});
     setFollowLoadingMap({});
   };
@@ -249,8 +231,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
         comments_count: fakeCommentsMap[post.id]?.length ?? 0,
       }));
       const combinedPosts = [...postsWithLikes, ...fakePostsForFeed];
-      const applied = applyFilter(combinedPosts);
-      const sorted = sortPostsByDateDesc(applied);
+      const sorted = sortPostsByDateDesc(combinedPosts);
       setPosts(sorted);
       await loadFollowingState(sorted);
     } catch (error) {
@@ -592,12 +573,6 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     }
   };
 
-  const filterButtons = [
-    { id: 'all', label: 'Tout' },
-    { id: 'following', label: 'Abonnements' },
-    { id: 'local', label: 'Local' },
-  ];
-
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6">
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -613,29 +588,9 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                   <p className="text-lg font-semibold text-white">Partage ta session</p>
                 </div>
               </div>
-              <span className="hidden rounded-full border border-dark-700/80 px-3 py-1 text-xs font-medium text-orange-300 sm:inline-flex">
-                {filterButtons.find((button) => button.id === filter)?.label ?? 'Tout'}
-              </span>
             </div>
 
-            <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar sm:mt-6">
-              {filterButtons.map((button) => (
-                <button
-                  key={button.id}
-                  type="button"
-                  onClick={() => setFilter(button.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors border ${
-                    filter === button.id
-                      ? 'bg-orange-500 text-white border-orange-500 shadow-[0_8px_20px_rgba(249,115,22,0.35)]'
-                      : 'border-dark-700 text-gray-400 hover:text-white hover:border-orange-500/60'
-                  }`}
-                >
-                  {button.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-6 flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar">
+            <div className="mt-8 flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar sm:mt-10">
               <div className="flex-shrink-0 flex flex-col items-center gap-1">
                 <div className="h-16 w-16 rounded-full border-2 border-orange-500 p-0.5">
                   {currentUser?.avatar_url ? (
