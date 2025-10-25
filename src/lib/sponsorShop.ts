@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { isSchemaMissing, withTableFallback } from './postgrest.js';
 import type { SponsorShopItem } from '../types';
 
 export interface ShopItemPayload {
@@ -13,18 +14,28 @@ export interface ShopItemPayload {
   metadata?: Record<string, string | number> | null;
 }
 
+function missingShopTableError(): Error {
+  return new Error(
+    'La table Supabase "sponsor_shop_items" est introuvable. Exécute les migrations sponsor ou expose la vue adéquate.',
+  );
+}
+
 export async function fetchSponsorShopItems(sponsorId: string): Promise<SponsorShopItem[]> {
-  const { data, error } = await supabase
-    .from('sponsor_shop_items')
-    .select('*')
-    .eq('sponsor_id', sponsorId)
-    .order('updated_at', { ascending: false });
+  const rows = await withTableFallback<SponsorShopItem[] | null>(
+    supabase
+      .from('sponsor_shop_items')
+      .select('*')
+      .eq('sponsor_id', sponsorId)
+      .order('updated_at', { ascending: false }),
+    () => [],
+    {
+      onMissing: () => {
+        console.info('sponsor_shop_items table is missing. Returning an empty shop inventory.');
+      },
+    },
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as SponsorShopItem[];
+  return (rows ?? []) as SponsorShopItem[];
 }
 
 export async function createSponsorShopItem(payload: ShopItemPayload): Promise<SponsorShopItem> {
@@ -45,6 +56,9 @@ export async function createSponsorShopItem(payload: ShopItemPayload): Promise<S
     .single();
 
   if (error) {
+    if (isSchemaMissing(error)) {
+      throw missingShopTableError();
+    }
     throw error;
   }
 
@@ -63,6 +77,9 @@ export async function updateSponsorShopItem(
     .single();
 
   if (error) {
+    if (isSchemaMissing(error)) {
+      throw missingShopTableError();
+    }
     throw error;
   }
 

@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { isSchemaMissing, withTableFallback } from './postgrest.js';
 import type { SponsorSpotlight } from '../types';
 
 export interface SpotlightPayload {
@@ -13,18 +14,28 @@ export interface SpotlightPayload {
   end_date?: string | null;
 }
 
+function missingSpotlightTableError(): Error {
+  return new Error(
+    'La table Supabase "sponsor_spotlights" est introuvable. Exécute les migrations sponsor ou expose la vue adéquate.',
+  );
+}
+
 export async function fetchSponsorSpotlights(sponsorId: string): Promise<SponsorSpotlight[]> {
-  const { data, error } = await supabase
-    .from('sponsor_spotlights')
-    .select('*')
-    .eq('sponsor_id', sponsorId)
-    .order('updated_at', { ascending: false });
+  const rows = await withTableFallback<SponsorSpotlight[] | null>(
+    supabase
+      .from('sponsor_spotlights')
+      .select('*')
+      .eq('sponsor_id', sponsorId)
+      .order('updated_at', { ascending: false }),
+    () => [],
+    {
+      onMissing: () => {
+        console.info('sponsor_spotlights table is missing. Returning an empty spotlight list.');
+      },
+    },
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as SponsorSpotlight[];
+  return (rows ?? []) as SponsorSpotlight[];
 }
 
 export async function createSponsorSpotlight(payload: SpotlightPayload): Promise<SponsorSpotlight> {
@@ -45,6 +56,9 @@ export async function createSponsorSpotlight(payload: SpotlightPayload): Promise
     .single();
 
   if (error) {
+    if (isSchemaMissing(error)) {
+      throw missingSpotlightTableError();
+    }
     throw error;
   }
 
@@ -63,6 +77,9 @@ export async function updateSponsorSpotlight(
     .single();
 
   if (error) {
+    if (isSchemaMissing(error)) {
+      throw missingSpotlightTableError();
+    }
     throw error;
   }
 
@@ -72,6 +89,9 @@ export async function updateSponsorSpotlight(
 export async function deleteSponsorSpotlight(id: string): Promise<void> {
   const { error } = await supabase.from('sponsor_spotlights').delete().eq('id', id);
   if (error) {
+    if (isSchemaMissing(error)) {
+      throw missingSpotlightTableError();
+    }
     throw error;
   }
 }
