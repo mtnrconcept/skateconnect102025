@@ -34,6 +34,7 @@ import {
   createSponsorShopItem,
   fetchSponsorShopItems,
   updateSponsorShopItem,
+  createSponsorShopItem,
   type ShopItemPayload,
 } from '../lib/sponsorShop';
 import {
@@ -193,7 +194,7 @@ interface SponsorContextValue {
   createShopItem: (
     payload: Omit<ShopItemPayload, 'sponsor_id'>,
   ) => Promise<SponsorShopItem | null>;
-  editShopItem: (
+  updateShopItem: (
     shopItemId: string,
     updates: Partial<Omit<SponsorShopItem, 'id' | 'sponsor_id' | 'created_at' | 'updated_at'>>,
   ) => Promise<SponsorShopItem | null>;
@@ -452,29 +453,26 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       if (!sponsorId || !permissions.canManageShop) {
         return null;
       }
-
       try {
-        const record = await createSponsorShopItem({ ...payload, sponsor_id: sponsorId });
-        setShopItems((current) => [record, ...current]);
+        const created = await createSponsorShopItem({ ...payload, sponsor_id: sponsorId });
+        setShopItems((current) => [created, ...current]);
         setError(null);
-        return record;
+        return created;
       } catch (cause) {
         if (isSchemaMissing(cause)) {
           warnSchemaMissing('createShopItem', cause);
-          const message = 'Fonction boutique indisponible (schéma sponsor non déployé).';
-          setError(message);
-          throw cause instanceof Error ? cause : new Error(message);
+          setError('Impossible de créer un produit : schéma sponsor indisponible.');
+          return null;
         }
         console.error('Unable to create shop item', cause);
-        const message = 'Impossible de créer un produit dans la boutique.';
-        setError(message);
-        throw cause instanceof Error ? cause : new Error(message);
+        setError('Impossible de créer un produit de la boutique.');
+        return null;
       }
     },
     [permissions.canManageShop, sponsorId],
   );
 
-  const editShopItemHandler = useCallback(
+  const updateShopItemHandler = useCallback(
     async (
       shopItemId: string,
       updates: Partial<Omit<SponsorShopItem, 'id' | 'sponsor_id' | 'created_at' | 'updated_at'>>,
@@ -482,25 +480,22 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       if (!sponsorId || !permissions.canManageShop) {
         return null;
       }
-
       try {
-        const record = await updateSponsorShopItem(shopItemId, updates);
+        const updated = await updateSponsorShopItem(shopItemId, updates);
         setShopItems((current) =>
-          current.map((item) => (item.id === record.id ? record : item)),
+          current.map((item) => (item.id === shopItemId ? updated : item)),
         );
         setError(null);
-        return record;
+        return updated;
       } catch (cause) {
         if (isSchemaMissing(cause)) {
-          warnSchemaMissing('editShopItem', cause);
-          const message = 'Fonction boutique indisponible (schéma sponsor non déployé).';
-          setError(message);
-          throw cause instanceof Error ? cause : new Error(message);
+          warnSchemaMissing('updateShopItem', cause);
+          setError('Impossible de modifier le produit : schéma sponsor indisponible.');
+          return null;
         }
-        console.error('Unable to edit shop item', cause);
-        const message = 'Impossible de modifier ce produit de la boutique.';
-        setError(message);
-        throw cause instanceof Error ? cause : new Error(message);
+        console.error('Unable to update sponsor shop item', cause);
+        setError('Impossible de modifier ce produit.');
+        return null;
       }
     },
     [permissions.canManageShop, sponsorId],
@@ -684,7 +679,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItem: createShopItemHandler,
-    editShopItem: editShopItemHandler,
+    updateShopItem: updateShopItemHandler,
     revokeApiKey: revokeApiKeyHandler,
     createApiKey: createApiKeyHandler,
     upsertOpportunity,
@@ -715,7 +710,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItemHandler,
-    editShopItemHandler,
+    updateShopItemHandler,
     revokeApiKeyHandler,
     createApiKeyHandler,
     upsertOpportunity,

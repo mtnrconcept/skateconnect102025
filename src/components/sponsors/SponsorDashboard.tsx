@@ -10,7 +10,7 @@ import {
   Mail,
   Megaphone,
   Pencil,
-  Plus,
+  PlusCircle,
   Phone,
   RefreshCw,
   Store,
@@ -22,7 +22,9 @@ import { useSponsorContext } from '../../contexts/SponsorContext';
 import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
 import SponsorOpportunitiesView from './opportunities/SponsorOpportunitiesView';
 import type { SponsorShopItem, SponsorSpotlight } from '../../types';
-import SponsorShopItemFormModal from './SponsorShopItemFormModal';
+import SponsorShopItemModal, {
+  type SponsorShopItemFormValues,
+} from './shop/SponsorShopItemModal';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
@@ -159,6 +161,8 @@ export default function SponsorDashboard() {
     refreshAll,
     updateSpotlightStatus,
     updateShopItemAvailability,
+    createShopItem,
+    updateShopItem,
     revokeApiKey,
     createApiKey,
   } = useSponsorContext();
@@ -168,6 +172,7 @@ export default function SponsorDashboard() {
   const [isCreatingKey, setIsCreatingKey] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [shopModalMode, setShopModalMode] = useState<'create' | 'edit'>('create');
   const [shopItemBeingEdited, setShopItemBeingEdited] = useState<SponsorShopItem | null>(null);
 
   const primaryColor = branding?.primary_color ?? '#0ea5e9';
@@ -236,6 +241,62 @@ export default function SponsorDashboard() {
     const timer = window.setTimeout(() => setCopyFeedback(null), 2500);
     return () => window.clearTimeout(timer);
   }, [copyFeedback]);
+
+  const closeShopModal = useCallback(() => {
+    setIsShopModalOpen(false);
+    setShopItemBeingEdited(null);
+  }, []);
+
+  const handleOpenCreateShopItem = useCallback(() => {
+    setShopModalMode('create');
+    setShopItemBeingEdited(null);
+    setIsShopModalOpen(true);
+  }, []);
+
+  const handleOpenEditShopItem = useCallback((item: SponsorShopItem) => {
+    setShopModalMode('edit');
+    setShopItemBeingEdited(item);
+    setIsShopModalOpen(true);
+  }, []);
+
+  const handleShopItemSubmit = useCallback(
+    async (values: SponsorShopItemFormValues) => {
+      if (shopModalMode === 'create') {
+        const created = await createShopItem({
+          name: values.name.trim(),
+          description: values.description.trim(),
+          price_cents: values.priceCents,
+          currency: values.currency,
+          stock: values.stock,
+          is_active: values.isActive,
+          image_url: values.imageUrl,
+        });
+        if (!created) {
+          throw new Error('Unable to create shop item');
+        }
+        return;
+      }
+
+      if (!shopItemBeingEdited) {
+        throw new Error('Missing shop item reference');
+      }
+
+      const updated = await updateShopItem(shopItemBeingEdited.id, {
+        name: values.name.trim(),
+        description: values.description.trim(),
+        price_cents: values.priceCents,
+        currency: values.currency,
+        stock: values.stock,
+        is_active: values.isActive,
+        image_url: values.imageUrl,
+      });
+
+      if (!updated) {
+        throw new Error('Unable to update shop item');
+      }
+    },
+    [createShopItem, shopItemBeingEdited, shopModalMode, updateShopItem],
+  );
 
   const serializeSpotlightForExport = useCallback((spotlight: SponsorSpotlight) => {
       const performance = spotlight.performance;
@@ -568,79 +629,73 @@ export default function SponsorDashboard() {
           La gestion de la boutique n'est pas incluse dans ton pack actuel.
         </div>
       ) : (
-        <>
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-white">Catalogue boutique</h3>
-              <p className="text-sm text-slate-400">Ajoute de nouveaux produits ou mets à jour ton inventaire.</p>
+              <h2 className="text-2xl font-semibold text-white">Inventaire boutique</h2>
+              <p className="text-sm text-slate-400">
+                Gère les produits mis à disposition des riders et partenaires. Mets à jour le stock et l'état en un clic.
+              </p>
             </div>
             <button
               type="button"
-              onClick={openCreateShopItemModal}
-              className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/20"
+              onClick={handleOpenCreateShopItem}
+              className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-100 hover:border-sky-400 hover:bg-sky-500/10"
             >
-              <Plus size={16} /> Ajouter un produit
+              <PlusCircle size={18} /> Ajouter un produit
             </button>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             {shopItems.length === 0 ? (
               <div className="md:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-center text-slate-300">
-                Aucun produit listé pour l'instant.
+                Aucun produit listé pour l'instant. Lance ta première offre pour activer la boutique.
               </div>
             ) : (
               shopItems.map((item) => (
-                <div key={item.id} className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6">
-                  {item.image_url ? (
-                    <div className="overflow-hidden rounded-xl border border-slate-700/60">
-                      <img src={item.image_url} alt={item.name} className="h-40 w-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-700 text-sm text-slate-500">
-                      Aucun visuel pour l'instant
-                    </div>
-                  )}
-
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">{item.name}</h3>
-                      <p className="text-sm text-slate-400">
+                <div key={item.id} className="flex flex-col gap-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{item.name}</h3>
+                        <p className="text-xs uppercase tracking-widest text-slate-500">
+                          {item.is_active ? 'Actif' : 'En pause'}
+                        </p>
+                      </div>
+                      <span className="text-base font-medium text-slate-200">
                         {(item.price_cents / 100).toLocaleString('fr-FR', {
                           style: 'currency',
                           currency: item.currency,
                         })}
-                      </p>
+                      </span>
                     </div>
+                    {item.description && <p className="text-sm text-slate-300">{item.description}</p>}
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                      <span>Stock : {item.stock}</span>
+                      {item.image_url && (
+                        <a
+                          href={item.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 px-3 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
+                        >
+                          Aperçu visuel
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => openEditShopItemModal(item)}
-                      className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
+                      onClick={() => handleOpenEditShopItem(item)}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-3 py-1 text-sm text-slate-200 hover:border-slate-400 hover:text-white"
                     >
-                      <Pencil size={14} /> Modifier
+                      <Pencil size={16} /> Modifier
                     </button>
-                  </div>
-
-                  {item.description && <p className="text-sm text-slate-300">{item.description}</p>}
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-widest">
-                    <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-400">Stock : {item.stock}</span>
-                    <span
-                      className={`rounded-full px-3 py-1 ${
-                        item.is_active
-                          ? 'border border-emerald-500/60 text-emerald-200'
-                          : 'border border-slate-600 text-slate-400'
-                      }`}
-                    >
-                      {item.is_active ? 'Actif' : 'En pause'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm text-slate-400">
-                    <span>Dernière mise à jour : {new Date(item.updated_at).toLocaleDateString('fr-FR')}</span>
                     <button
                       type="button"
                       onClick={() => updateShopItemAvailability(item.id, !item.is_active)}
-                      className={`rounded-full border px-3 py-1 transition ${
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${
                         item.is_active
                           ? 'border-emerald-500/60 text-emerald-200 hover:bg-emerald-500/10'
                           : 'border-slate-600 text-slate-300 hover:bg-slate-800'
@@ -653,7 +708,7 @@ export default function SponsorDashboard() {
               ))
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -836,12 +891,13 @@ export default function SponsorDashboard() {
         </div>
       </div>
       {isShopModalOpen && (
-        <SponsorShopItemFormModal
-          mode={shopItemBeingEdited ? 'edit' : 'create'}
-          item={shopItemBeingEdited}
-          onClose={closeShopItemModal}
+        <SponsorShopItemModal
+          mode={shopModalMode}
+          item={shopItemBeingEdited ?? undefined}
+          onClose={closeShopModal}
+          onSubmit={handleShopItemSubmit}
         />
       )}
-    </>
+    </div>
   );
 }
