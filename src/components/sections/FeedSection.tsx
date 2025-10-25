@@ -11,13 +11,8 @@ import PostMediaViewer from '../PostMediaViewer';
 import FakeProfileModal from '../FakeProfileModal';
 import FakeDirectMessageModal from '../FakeDirectMessageModal';
 import ProfilePreviewModal from '../ProfilePreviewModal';
-import {
-  fakeFeedPosts,
-  fakeProfilesById,
-  fakePostsByProfileId,
-  fakeMessagesByProfileId,
-} from '../../data/fakeFeed';
-import type { FakeMessage, FakeProfileDetails } from '../../data/fakeFeed';
+import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId } from '../../data/fakeFeed';
+import type { FakeProfileDetails } from '../../data/fakeFeed';
 import type { Comment, Post, Profile } from '../../types';
 
 type FeedPost = Post & {
@@ -29,35 +24,6 @@ type FeedPost = Post & {
 type FeedComment = Comment & {
   user: Profile | FakeProfileDetails;
 };
-
-const fakeReplyTemplates: Record<string, string[]> = {
-  'fake-rider-aurora': [
-    'Grave partante, je t’envoie le plan pour filmer ça !',
-    'Merci pour ton message, on cale une session sunrise très vite.',
-  ],
-  'fake-rider-keita': [
-    'Toujours chaud pour des manuals combos, on se capte ce week-end ?',
-    'Je réserve une heure ce soir pour qu’on ride ensemble.',
-  ],
-  'fake-rider-ivy': [
-    'Avec plaisir ! Je prépare déjà quelques spots rooftops à explorer.',
-    'Yes ! On tourne une capsule pour le crew très bientôt.',
-  ],
-  'fake-rider-tom': [
-    'Ramène ta créativité sur le DIY, on a besoin de nouvelles idées.',
-    'Toujours open pour partager des tips sur la construction.',
-  ],
-  'fake-rider-sahana': [
-    'J’adore parler voyages skate, on prépare une carte ensemble ?',
-    'Je t’envoie mes spots préférés dès que possible ✨',
-  ],
-};
-
-const defaultFakeReplies = [
-  'Merci pour ton message ! On se coordonne bientôt.',
-  'On se motive pour rider ensemble très vite 🚀',
-  'Toujours partant·e pour échanger sur les sessions !',
-];
 
 interface FeedSectionProps {
   currentUser: Profile | null;
@@ -92,20 +58,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     });
     return initial;
   });
-  const [fakeMessagesMap, setFakeMessagesMap] = useState<Record<string, FakeMessage[]>>(() => {
-    const initial: Record<string, FakeMessage[]> = {};
-    Object.entries(fakeMessagesByProfileId).forEach(([profileId, messages]) => {
-      initial[profileId] = messages.map((message) => ({ ...message }));
-    });
-    return initial;
-  });
   const [activeFakeMessageProfileId, setActiveFakeMessageProfileId] = useState<string | null>(null);
-  const replyTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  useEffect(() => () => {
-    replyTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
-    replyTimeoutsRef.current = [];
-  }, []);
 
   useEffect(() => {
     loadPosts();
@@ -294,80 +247,6 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       );
       return nextMap;
     });
-  };
-
-  const dispatchFakeDirectMessageEvent = useCallback(
-    (profileId: string, message: FakeMessage) => {
-      if (typeof window === 'undefined') {
-        return;
-      }
-
-      const profileDetails = fakeProfilesById[profileId];
-      window.dispatchEvent(
-        new CustomEvent('shredloc:direct-message', {
-          detail: {
-            profileId,
-            profile: profileDetails
-              ? {
-                  id: profileDetails.id,
-                  display_name: profileDetails.display_name,
-                  username: profileDetails.username,
-                  avatar_url: profileDetails.avatar_url,
-                  location: profileDetails.location,
-                }
-              : { id: profileId },
-            message,
-          },
-        }),
-      );
-    },
-    [],
-  );
-
-  const handleSendFakeMessage = (profileId: string, message: string) => {
-    if (!currentUser) {
-      alert('Connectez-vous pour envoyer un message.');
-      return;
-    }
-
-    const userMessage: FakeMessage = {
-      id: `user-${profileId}-${Date.now()}`,
-      sender: 'user',
-      content: message,
-      timestamp: new Date().toISOString(),
-    };
-
-    setFakeMessagesMap((previous) => {
-      const existing = previous[profileId] ?? [];
-      const next = [...existing, userMessage];
-      return { ...previous, [profileId]: next };
-    });
-
-    dispatchFakeDirectMessageEvent(profileId, userMessage);
-
-    const replies = fakeReplyTemplates[profileId] ?? defaultFakeReplies;
-    const replyContent = replies[Math.floor(Math.random() * replies.length)];
-
-    if (typeof window !== 'undefined') {
-      const timeoutId = window.setTimeout(() => {
-        replyTimeoutsRef.current = replyTimeoutsRef.current.filter((id) => id !== timeoutId);
-        const replyMessage: FakeMessage = {
-          id: `fake-${profileId}-${Date.now()}`,
-          sender: 'fake',
-          content: replyContent,
-          timestamp: new Date().toISOString(),
-        };
-
-        setFakeMessagesMap((previous) => {
-          const existing = previous[profileId] ?? [];
-          return { ...previous, [profileId]: [...existing, replyMessage] };
-        });
-
-        dispatchFakeDirectMessageEvent(profileId, replyMessage);
-      }, 900 + Math.random() * 1200);
-
-      replyTimeoutsRef.current.push(timeoutId);
-    }
   };
 
   const toggleFollow = useCallback(async (userId: string): Promise<boolean | null> => {
@@ -1074,10 +953,8 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
       {activeFakeMessageProfile && (
         <FakeDirectMessageModal
           profile={activeFakeMessageProfile}
-          messages={fakeMessagesMap[activeFakeMessageProfile.id] ?? []}
           currentUser={currentUser}
           onClose={() => setActiveFakeMessageProfileId(null)}
-          onSendMessage={(message) => handleSendFakeMessage(activeFakeMessageProfile.id, message)}
         />
       )}
     </div>

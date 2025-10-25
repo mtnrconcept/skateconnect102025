@@ -1,40 +1,107 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Send, X } from 'lucide-react';
 import { getUserDisplayName, getUserInitial } from '../lib/userUtils';
 import type { Profile } from '../types';
-import type { FakeMessage, FakeProfileDetails } from '../data/fakeFeed';
+import type { FakeProfileDetails } from '../data/fakeFeed';
+import { useMessages } from '../hooks/useMessages';
+import { getOrCreateConversation } from '../lib/messages';
+import { supabase } from '../lib/supabase';
 
 interface FakeDirectMessageModalProps {
   profile: FakeProfileDetails;
-  messages: FakeMessage[];
   currentUser: Profile | null;
   onClose: () => void;
-  onSendMessage: (message: string) => void;
 }
 
 export default function FakeDirectMessageModal({
   profile,
-  messages,
   currentUser,
   onClose,
-  onSendMessage,
 }: FakeDirectMessageModalProps) {
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [conversationError, setConversationError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const { messages, sendMessage, loading: messagesLoading } = useMessages({
+    conversationId,
+    viewerId: currentUser?.id ?? null,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!currentUser) {
+      setConversationId(null);
+      setConversationError('Connectez-vous pour démarrer la conversation.');
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    setIsLoadingConversation(true);
+    setConversationError(null);
+
+    getOrCreateConversation(supabase, currentUser.id, profile.id)
+      .then((conversation) => {
+        if (!isMounted) {
+          return;
+        }
+        setConversationId(conversation.id);
+      })
+      .catch((error) => {
+        console.error('Erreur lors de la récupération de la conversation :', error);
+        if (!isMounted) {
+          return;
+        }
+        setConversationId(null);
+        setConversationError('Conversation indisponible pour ce profil.');
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingConversation(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, profile.id]);
+
+  const conversationMessages = useMemo(
+    () =>
+      messages.map((message) => ({
+        id: message.id,
+        sender: message.sender_id === currentUser?.id ? 'user' : 'fake',
+        content: message.content,
+        timestamp: formatTimestamp(message.created_at),
+      })),
+    [currentUser?.id, messages],
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages.length]);
+  }, [conversationMessages.length]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!currentUser || !draft.trim()) {
+    if (!currentUser || !draft.trim() || !conversationId) {
       return;
     }
-    onSendMessage(draft.trim());
-    setDraft('');
+    setSendError(null);
+    const trimmed = draft.trim();
+    sendMessage(trimmed)
+      .then(() => {
+        setDraft('');
+      })
+      .catch((error) => {
+        console.error('Erreur lors de l’envoi du message :', error);
+        setSendError('Impossible d’envoyer le message.');
+      });
   };
 
   const renderAvatar = () => {
@@ -95,29 +162,37 @@ export default function FakeDirectMessageModal({
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 space-y-4 bg-gradient-to-b from-dark-900 to-dark-800">
-          {messages.map((message) => {
-            const isUser = message.sender === 'user';
-            return (
-              <div key={message.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm leading-relaxed shadow-sm ${
-                    isUser
-                      ? 'bg-orange-500 text-white rounded-br-sm'
-                      : 'bg-dark-700/80 text-gray-100 border border-dark-600 rounded-bl-sm'
-                  }`}
-                >
-                  <p>{message.content}</p>
-                  <span className={`mt-1 block text-[11px] ${isUser ? 'text-orange-100/80' : 'text-gray-400'}`}>
-                    {formatTimestamp(message.timestamp)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-          {messages.length === 0 && (
+          {conversationError ? (
+            <div className="text-center text-sm text-red-400">{conversationError}</div>
+          ) : isLoadingConversation ? (
+            <div className="text-center text-sm text-gray-400">Préparation de la conversation…</div>
+          ) : conversationMessages.length === 0 ? (
             <div className="text-center text-sm text-gray-400">
               Démarrez la discussion avec {getUserDisplayName(profile)}.
             </div>
+          ) : (
+            conversationMessages.map((message) => {
+              const isUser = message.sender === 'user';
+              return (
+                <div key={message.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm leading-relaxed shadow-sm ${
+                      isUser
+                        ? 'bg-orange-500 text-white rounded-br-sm'
+                        : 'bg-dark-700/80 text-gray-100 border border-dark-600 rounded-bl-sm'
+                    }`}
+                  >
+                    <p>{message.content}</p>
+                    <span className={`mt-1 block text-[11px] ${isUser ? 'text-orange-100/80' : 'text-gray-400'}`}>
+                      {message.timestamp}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          {messagesLoading && conversationMessages.length > 0 && (
+            <div className="text-center text-[11px] text-gray-500">Synchronisation…</div>
           )}
         </div>
 
@@ -145,12 +220,13 @@ export default function FakeDirectMessageModal({
                 />
                 <button
                   type="submit"
-                  disabled={!draft.trim()}
+                  disabled={!draft.trim() || !conversationId || isLoadingConversation}
                   className="p-2 rounded-full bg-orange-500 text-white hover:bg-orange-600 transition-colors disabled:opacity-50"
                 >
                   <Send size={18} />
                 </button>
               </div>
+              {sendError && <p className="mt-2 text-xs text-red-400">{sendError}</p>}
             </div>
           ) : (
             <p className="text-sm text-gray-400 text-center">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase.js';
 import Auth from './components/Auth';
 import Header from './components/Header';
@@ -37,6 +37,7 @@ import type { Profile, Section, ContentNavigationOptions, ProfileExperienceMode 
 import type { GlobalSearchResult } from './types/search';
 import { buildSponsorExperienceProfile } from './data/sponsorExperience';
 import type { FakeDirectMessagePayload } from './types/messages';
+import { processQueuedDirectMessages, markConversationMessagesAsRead } from './lib/messages.js';
 import { useRouter } from './lib/router';
 import SearchPage from './components/search/SearchPage';
 
@@ -65,6 +66,7 @@ function App() {
   const [challengeFocus, setChallengeFocus] = useState<ContentNavigationOptions | null>(null);
   const [mapFocusSpotId, setMapFocusSpotId] = useState<string | null>(null);
   const [queuedDirectMessages, setQueuedDirectMessages] = useState<FakeDirectMessagePayload[]>([]);
+  const isProcessingQueueRef = useRef(false);
   const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlan>(() => {
     if (typeof window === 'undefined') {
       return DEFAULT_SUBSCRIPTION_PLAN;
@@ -176,6 +178,38 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!profile?.id) {
+      return;
+    }
+
+    if (!queuedDirectMessages.length) {
+      return;
+    }
+
+    if (isProcessingQueueRef.current) {
+      return;
+    }
+
+    isProcessingQueueRef.current = true;
+
+    processQueuedDirectMessages(supabase, queuedDirectMessages, profile.id)
+      .then((processedIds) => {
+        if (processedIds.length === 0) {
+          return;
+        }
+        setQueuedDirectMessages((previous) =>
+          previous.filter((payload) => !processedIds.includes(payload.message.id)),
+        );
+      })
+      .catch((error) => {
+        console.error('Erreur lors du traitement des messages directs en attente :', error);
+      })
+      .finally(() => {
+        isProcessingQueueRef.current = false;
+      });
+  }, [profile?.id, queuedDirectMessages]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -256,15 +290,20 @@ function App() {
     setRestrictionNotice(null);
   };
 
-  const handleQueuedMessagesProcessed = useCallback((messageIds: string[]) => {
-    if (!messageIds.length) {
-      return;
-    }
+  const handleConversationViewed = useCallback(
+    async (conversationId: string) => {
+      if (!profile?.id) {
+        return;
+      }
 
-    setQueuedDirectMessages((previous) =>
-      previous.filter((payload) => !messageIds.includes(payload.message.id)),
-    );
-  }, []);
+      try {
+        await markConversationMessagesAsRead(supabase, conversationId, profile.id);
+      } catch (error) {
+        console.error('Erreur lors de la mise à jour du statut de lecture :', error);
+      }
+    },
+    [profile?.id],
+  );
 
   const handleProfileUpdated = useCallback(
     (updated: Profile) => {
@@ -498,7 +537,9 @@ function App() {
                 {currentSection === 'badges' && <BadgesSection profile={activeProfile} />}
                 {currentSection === 'rewards' && <RewardsSection profile={activeProfile} />}
                 {currentSection === 'leaderboard' && <LeaderboardSection profile={activeProfile} />}
-                {currentSection === 'messages' && <MessagesSection profile={activeProfile} />}
+                {currentSection === 'messages' && (
+                  <MessagesSection profile={activeProfile} onConversationViewed={handleConversationViewed} />
+                )}
                 {currentSection === 'settings' && (
                   <SettingsSection
                     profile={activeProfile}
