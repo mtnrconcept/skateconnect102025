@@ -590,7 +590,7 @@ export default function MapSection({
           className="grid h-full grid-cols-1 gap-6 lg:grid-cols-2"
           style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
         >
-          <div className="relative h-[360px] overflow-hidden border-b border-dark-800 lg:h-full lg:border-b-0 lg:border-r lg:border-dark-800">
+          <div className="relative h-[360px] min-h-0 overflow-hidden border-b border-dark-800 lg:h-full lg:min-h-0 lg:border-b-0 lg:border-r lg:border-dark-800">
             {isMapAvailable ? (
               <>
                 <div ref={mapContainer} className="absolute inset-0" />
@@ -636,10 +636,10 @@ export default function MapSection({
             )}
           </div>
 
-          <div className="relative bg-dark-900/80 lg:border-l lg:border-dark-800">
+          <div className="relative flex h-[360px] min-h-0 flex-col overflow-hidden bg-dark-900/80 lg:h-full lg:min-h-0 lg:border-l lg:border-dark-800">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-dark-900 to-transparent" />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-dark-900 to-transparent" />
-            <div className="relative flex h-full flex-col overflow-hidden">
+            <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
               {loading ? (
                 <div className="flex flex-1 items-center justify-center px-6 py-10 text-gray-400">
                   Chargement des spots...
