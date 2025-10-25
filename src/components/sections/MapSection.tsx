@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { MapPin, Filter, Plus, Navigation, AlertTriangle } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -9,6 +9,12 @@ import type { Spot } from '../../types';
 import SpotGrid from '../SpotGrid';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
+
+const normalizeText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 
 interface MapSectionProps {
   focusSpotId?: string | null;
@@ -29,10 +35,36 @@ export default function MapSection({
   const [spots, setSpots] = useState<Spot[]>([]);
   const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
+
+  const filteredSpots = useMemo(() => {
+    const trimmedQuery = searchTerm.trim();
+    if (trimmedQuery.length === 0) {
+      return spots;
+    }
+
+    const normalizedTokens = trimmedQuery
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => normalizeText(token));
+
+    if (normalizedTokens.length === 0) {
+      return spots;
+    }
+
+    return spots.filter((spot) => {
+      const haystack = normalizeText(
+        `${spot.name} ${spot.address ?? ''} ${spot.description ?? ''} ${spot.spot_type ?? ''} ` +
+          `${spot.creator?.display_name ?? ''} ${spot.creator?.username ?? ''}`,
+      );
+
+      return normalizedTokens.every((token) => haystack.includes(token));
+    });
+  }, [spots, searchTerm]);
 
   useEffect(() => {
     setLoading(true);
@@ -109,8 +141,8 @@ export default function MapSection({
   useEffect(() => {
     if (!isMapAvailable) return;
     if (!map.current || loading) return;
-    updateMarkers();
-  }, [spots, loading, spotCoverPhotos, isMapAvailable]);
+    updateMarkers(filteredSpots);
+  }, [filteredSpots, loading, spotCoverPhotos, isMapAvailable]);
 
   const loadSpots = async () => {
     try {
@@ -163,14 +195,14 @@ export default function MapSection({
     }
   };
 
-  const updateMarkers = () => {
+  const updateMarkers = (spotsToRender: Spot[]) => {
     if (!isMapAvailable) return;
     if (!map.current) return;
 
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
-    spots.forEach((spot) => {
+    spotsToRender.forEach((spot) => {
       const el = document.createElement('div');
       el.className = 'marker';
       el.style.width = '32px';
@@ -455,7 +487,10 @@ export default function MapSection({
   useEffect(() => {
     if (!focusSpotId) {
       lastFocusedSpotRef.current = null;
+      return;
     }
+
+    setSearchTerm('');
   }, [focusSpotId]);
 
   const getUserLocation = () => {
@@ -508,20 +543,22 @@ export default function MapSection({
             <div className="flex items-center gap-3">
               <h2 className="text-3xl font-bold text-white">Spot Map</h2>
               <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase text-orange-200">
-                {spots.length} spots
+                {filteredSpots.length} spots
               </span>
             </div>
             <p className="mt-2 max-w-xl text-sm text-gray-400">
               Découvre les parks, bowls, DIY et transitions autour de toi. La carte reste visible pendant que tu explores les spots détaillés.
             </p>
           </div>
-          <div className="flex w-full flex-col gap-3 lg:w-80 lg:hidden">
+          <div className="flex w-full flex-col gap-3 lg:w-[26rem]">
             <div className="relative">
               <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
               <input
-                type="text"
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Rechercher un spot ou une ville"
-                className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+                className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 transition-colors focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
               />
             </div>
             <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70">
@@ -559,23 +596,6 @@ export default function MapSection({
                 <div ref={mapContainer} className="absolute inset-0" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark-900/70 to-transparent" />
-
-                <div className="absolute inset-x-0 top-6 hidden justify-center px-6 lg:flex">
-                  <div className="flex w-full max-w-2xl items-center gap-3 rounded-2xl border border-dark-700/70 bg-dark-900/90 p-4 shadow-xl shadow-black/30 backdrop-blur">
-                    <div className="relative flex-1">
-                      <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                      <input
-                        type="text"
-                        placeholder="Rechercher un spot ou une ville"
-                        className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-                      />
-                    </div>
-                    <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70">
-                      <Filter size={18} className="text-orange-400" />
-                      Affiner les filtres
-                    </button>
-                  </div>
-                </div>
 
                 <div className="absolute left-4 top-4 flex flex-col gap-3">
                   <button
@@ -624,15 +644,23 @@ export default function MapSection({
                 <div className="flex flex-1 items-center justify-center px-6 py-10 text-gray-400">
                   Chargement des spots...
                 </div>
-              ) : spots.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-gray-400">
+              ) : filteredSpots.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-gray-400 text-center">
                   <MapPin size={48} className="opacity-40" />
-                  <p>Aucun spot trouvé</p>
-                  <p className="text-sm text-gray-500">Ajoute le premier spot dans cette catégorie.</p>
+                  <p>
+                    {searchTerm.trim().length > 0
+                      ? `Aucun spot ne correspond à « ${searchTerm} »`
+                      : 'Aucun spot trouvé'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {searchTerm.trim().length > 0
+                      ? 'Essaie un autre nom, une ville ou réinitialise ta recherche pour voir plus de résultats.'
+                      : 'Ajoute le premier spot dans cette catégorie.'}
+                  </p>
                 </div>
               ) : (
                 <SpotGrid
-                  spots={spots}
+                  spots={filteredSpots}
                   initialCount={3}
                   onSpotClick={flyToSpot}
                   coverPhotos={spotCoverPhotos}

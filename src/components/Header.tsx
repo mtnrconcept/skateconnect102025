@@ -38,18 +38,10 @@ interface HeaderProps {
   onSectionChange?: (section: Section) => boolean | void;
   onNavigateToContent?: (section: Section, options?: ContentNavigationOptions) => boolean | void;
   onSearchFocusChange?: (isActive: boolean) => void;
+  onSearchSubmit?: (query: string, results: GlobalSearchResult[]) => void;
 }
 
-interface SearchResult {
-  key: string;
-  label: string;
-  category: string;
-  description?: string;
-  section?: Section;
-  icon?: LucideIcon;
-  options?: ContentNavigationOptions;
-  onSelect?: () => void;
-}
+type HeaderSearchResult = GlobalSearchResult & { onSelect?: () => void };
 
 const dynamicCategoryMap: Record<SearchContentType, { label: string; icon: LucideIcon }> = {
   riders: { label: 'Riders', icon: UserIcon },
@@ -64,6 +56,7 @@ export default function Header({
   onSectionChange,
   onNavigateToContent,
   onSearchFocusChange,
+  onSearchSubmit,
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -77,7 +70,7 @@ export default function Header({
   const trimmedSearchTerm = searchTerm.trim();
   const hasSearchTerm = trimmedSearchTerm.length > 0;
 
-  const sortResults = (results: SearchResult[]) =>
+  const sortResults = (results: HeaderSearchResult[]) =>
     [...results].sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
 
   useEffect(() => {
@@ -116,7 +109,7 @@ export default function Header({
       icon: item.icon,
     }));
 
-    const eventResults: SearchResult[] = eventsCatalog.map((event) => ({
+    const eventResults: HeaderSearchResult[] = eventsCatalog.map((event) => ({
       key: `event-${event.id}`,
       label: event.title,
       category: 'Événements',
@@ -126,7 +119,7 @@ export default function Header({
       options: { scrollToId: `event-${event.id}` },
     }));
 
-    const fallbackChallengeResults: SearchResult[] = createFallbackChallenges().map((challenge) => ({
+    const fallbackChallengeResults: HeaderSearchResult[] = createFallbackChallenges().map((challenge) => ({
       key: `fallback-challenge-${challenge.id}`,
       label: challenge.title,
       category: 'Défis',
@@ -139,7 +132,7 @@ export default function Header({
       },
     }));
 
-    const fallbackDailyResults: SearchResult[] = createFallbackDailyChallenges().map((challenge) => ({
+    const fallbackDailyResults: HeaderSearchResult[] = createFallbackDailyChallenges().map((challenge) => ({
       key: `fallback-daily-${challenge.id}`,
       label: challenge.title,
       category: 'Défis quotidiens',
@@ -152,7 +145,7 @@ export default function Header({
       },
     }));
 
-    const settingsResults: SearchResult[] = settingsCategories.flatMap((category) =>
+    const settingsResults: HeaderSearchResult[] = settingsCategories.flatMap((category) =>
       category.items.map((item) => ({
         key: `setting-${item.id}`,
         label: item.title,
@@ -164,7 +157,7 @@ export default function Header({
       })),
     );
 
-    const quickLinkResults: SearchResult[] = quickSettingsLinks.map((link) => ({
+    const quickLinkResults: HeaderSearchResult[] = quickSettingsLinks.map((link) => ({
       key: `quick-${link.id}`,
       label: link.title,
       category: 'Documentation',
@@ -280,6 +273,8 @@ export default function Header({
       .slice(0, 20);
   }, [combinedResults, normalizedHighlightTokens]);
 
+  const displayedResults = useMemo(() => matchingResults.slice(0, 20), [matchingResults]);
+
   useEffect(() => {
     if (hasSearchTerm) {
       setShowSearchResults(true);
@@ -335,7 +330,7 @@ export default function Header({
     closeSearch();
   };
 
-  const handleResultSelect = (result: SearchResult) => {
+  const handleResultSelect = (result: HeaderSearchResult) => {
     if (result.onSelect) {
       result.onSelect();
       setSearchTerm('');
@@ -423,8 +418,9 @@ export default function Header({
                     type="search"
                     value={searchTerm}
                     onChange={(event) => {
-                      setSearchTerm(event.target.value);
-                      setShowSearchResults(true);
+                      const value = event.target.value;
+                      setSearchTerm(value);
+                      setShowSearchResults(value.trim().length > 0);
                     }}
                     onFocus={() => {
                       setShowSearchResults(true);
@@ -440,12 +436,12 @@ export default function Header({
                       isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
                     }`}
                   />
-                  {showSearchResults && filteredResults.length > 0 && (
+                  {showSearchResults && matchingResults.length > 0 && (
                     <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
                       <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
-                        {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
+                        {matchingResults.length} résultat{matchingResults.length > 1 ? 's' : ''}
                       </div>
-                      {filteredResults.map((result) => {
+                      {displayedResults.map((result) => {
                         const IconResult = result.icon ?? Search;
                         return (
                           <button
@@ -479,7 +475,7 @@ export default function Header({
                       )}
                     </div>
                   )}
-                  {showSearchResults && filteredResults.length === 0 && (
+                  {showSearchResults && matchingResults.length === 0 && (
                     <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
                       Aucun résultat pour « {searchTerm} »
                     </div>

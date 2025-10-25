@@ -13,6 +13,7 @@ import BadgesSection from './components/sections/BadgesSection';
 import RewardsSection from './components/sections/RewardsSection';
 import LeaderboardSection from './components/sections/LeaderboardSection';
 import PricingSection from './components/sections/PricingSection';
+import SearchResultsSection from './components/sections/SearchResultsSection';
 import SettingsSection from './components/sections/SettingsSection';
 import MessagesSection from './components/sections/MessagesSection';
 import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
@@ -33,6 +34,7 @@ import {
   type SubscriptionPlan,
 } from './lib/subscription';
 import type { Profile, Section, ContentNavigationOptions, ProfileExperienceMode } from './types';
+import type { GlobalSearchResult } from './types/search';
 import { buildSponsorExperienceProfile } from './data/sponsorExperience';
 import type { FakeDirectMessagePayload } from './types/messages';
 import { useRouter } from './lib/router';
@@ -76,6 +78,10 @@ function App() {
     return DEFAULT_SUBSCRIPTION_PLAN;
   });
   const [restrictionNotice, setRestrictionNotice] = useState<RestrictionNotice | null>(null);
+  const [searchState, setSearchState] = useState<{ query: string; results: GlobalSearchResult[] }>(() => ({
+    query: '',
+    results: [],
+  }));
 
   const { location, navigate } = useRouter();
   const isSearchRoute = location.pathname === '/search';
@@ -86,6 +92,7 @@ function App() {
       map: 'la carte',
       events: 'les événements',
       challenges: 'les défis sponsorisés',
+      search: 'les résultats de recherche',
       sponsors: "l’espace sponsor",
       pricing: 'les abonnements',
       profile: 'ton profil avancé',
@@ -446,6 +453,10 @@ function App() {
             onSectionChange={handleNavigateToContent}
             onNavigateToContent={handleNavigateToContent}
             onSearchFocusChange={setIsSearchActive}
+            onSearchSubmit={(query, results) => {
+              setSearchState({ query, results });
+              handleNavigateToContent('search');
+            }}
           />
           <div className={dimmedClass}>
             {!isSearchRoute && (
