@@ -24,6 +24,7 @@ import AchievementNotification from './components/AchievementNotification';
 import SubscriptionUpgradeNotice from './components/subscription/SubscriptionUpgradeNotice';
 import { SubscriptionProvider, type RestrictionNotice } from './contexts/SubscriptionContext';
 import { SponsorProvider } from './contexts/SponsorContext';
+import { RealtimeProvider } from './contexts/RealtimeContext';
 import {
   DEFAULT_SUBSCRIPTION_PLAN,
   SUBSCRIPTION_STORAGE_KEY,
@@ -87,6 +88,7 @@ function App() {
 
   const { location, navigate } = useRouter();
   const isSearchRoute = location.pathname === '/search';
+  const realtimeUserId = profile?.id ?? session?.user?.id ?? null;
 
   const sectionDisplayNames = useMemo<Record<Section, string>>(
     () => ({
@@ -485,10 +487,11 @@ function App() {
   } else {
     content = (
       <SponsorProvider profile={activeProfile}>
-        <div className="min-h-screen bg-dark-900 flex flex-col">
-          <Header
-            profile={activeProfile}
-            currentSection={currentSection}
+        <RealtimeProvider userId={realtimeUserId}>
+          <div className="min-h-screen bg-dark-900 flex flex-col">
+            <Header
+              profile={activeProfile}
+              currentSection={currentSection}
             onSectionChange={handleNavigateToContent}
             onNavigateToContent={handleNavigateToContent}
             onSearchFocusChange={setIsSearchActive}
@@ -555,12 +558,13 @@ function App() {
           </main>
 
           <div className={dimmedClass}>
-            {activeProfile && <AchievementNotification profile={activeProfile} />}
+            {activeProfile && <AchievementNotification />}
           </div>
           <div className={`${dimmedClass} lg:mt-auto`}>
             <Footer onSectionChange={handleNavigateToContent} />
           </div>
-        </div>
+          </div>
+        </RealtimeProvider>
       </SponsorProvider>
     );
   }

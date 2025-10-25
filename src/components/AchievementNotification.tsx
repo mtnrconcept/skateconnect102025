@@ -1,56 +1,33 @@
 import { useState, useEffect } from 'react';
 import { X, Award, Star, Sparkles } from 'lucide-react';
-import { supabase } from '../lib/supabase.js';
-import type { Badge, Profile } from '../types';
-
-interface AchievementNotificationProps {
-  profile: Profile;
-}
+import type { Badge } from '../types';
+import { useRealtime } from '../contexts/RealtimeContext';
 
 interface Achievement {
   badge: Badge;
   timestamp: string;
 }
 
-export default function AchievementNotification({ profile }: AchievementNotificationProps) {
+export default function AchievementNotification() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [isVisible, setIsVisible] = useState(false);
+  const { registerBadgeAwardListener } = useRealtime();
 
   useEffect(() => {
-    const channel = supabase
-      .channel('badge-awards')
-      .on(
-        'postgres_changes',
+    const unsubscribe = registerBadgeAwardListener((badge) => {
+      setAchievements((prev) => [
+        ...prev,
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'user_badges',
-          filter: `user_id=eq.${profile.id}`,
+          badge,
+          timestamp: new Date().toISOString(),
         },
-        async (payload) => {
-          const { data: badgeData } = await supabase
-            .from('badges')
-            .select('*')
-            .eq('id', payload.new.badge_id)
-            .single();
-
-          if (badgeData) {
-            setAchievements((prev) => [
-              ...prev,
-              {
-                badge: badgeData,
-                timestamp: new Date().toISOString(),
-              },
-            ]);
-          }
-        }
-      )
-      .subscribe();
+      ]);
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
-  }, [profile.id]);
+  }, [registerBadgeAwardListener]);
 
   useEffect(() => {
     if (achievements.length > 0 && !isVisible) {

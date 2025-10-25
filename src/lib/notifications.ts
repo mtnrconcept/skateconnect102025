@@ -1,3 +1,4 @@
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase.js';
 import { requestNotificationPermissions, addPushNotificationListeners } from './capacitor';
 
@@ -127,28 +128,179 @@ export const markAllAsRead = async (): Promise<number> => {
   return data || 0;
 };
 
+interface SubscribeOptions {
+  userId?: string;
+  retryDelayMs?: number;
+}
+
+const DEFAULT_RETRY_DELAY = 3000;
+
 export const subscribeToNotifications = (
-  onNotification: (notification: Notification) => void
+  onNotification: (notification: Notification) => void,
+  options: SubscribeOptions = {}
 ) => {
-  const channel = supabase
-    .channel('notifications')
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${supabase.auth.getUser().then(r => r.data.user?.id)}`,
-      },
-      (payload) => {
-        onNotification(payload.new as Notification);
+  let channel: RealtimeChannel | null = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let isActive = true;
+
+  const retryDelay = options.retryDelayMs ?? DEFAULT_RETRY_DELAY;
+
+  const clearChannel = () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+  };
+
+  const scheduleRetry = () => {
+    if (!isActive) {
+      return;
+    }
+
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+    }
+
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      void setupSubscription();
+    }, retryDelay);
+  };
+
+  const setupSubscription = async () => {
+    try {
+      clearChannel();
+
+      const userId = options.userId ?? (await getCurrentUserId());
+
+      if (!userId) {
+        console.warn('subscribeToNotifications: no authenticated user found. Retrying...');
+        scheduleRetry();
+        return;
       }
-    )
-    .subscribe();
+
+      channel = supabase
+        .channel(`notifications-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            onNotification(payload.new as Notification);
+          }
+        )
+        .subscribe((status) => {
+          if (!isActive) {
+            return;
+          }
+
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('Notifications channel disconnected, attempting to reconnect...', status);
+            scheduleRetry();
+          }
+        });
+    } catch (error) {
+      console.error('Failed to subscribe to notifications:', error);
+      scheduleRetry();
+    }
+  };
+
+  const getCurrentUserId = async () => {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      throw error;
+    }
+
+    return user?.id ?? null;
+  };
+
+  void setupSubscription();
 
   return () => {
-    supabase.removeChannel(channel);
+    isActive = false;
+
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+
+    clearChannel();
   };
+};
+
+export type NotificationPreferences = Record<string, boolean>;
+
+export const getNotificationPreferences = async (
+  defaults: NotificationPreferences = {}
+): Promise<NotificationPreferences> => {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    throw authError;
+  }
+
+  if (!user) {
+    return defaults;
+  }
+
+  const { data, error } = await supabase
+    .from('notification_settings')
+    .select('preferences')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.preferences || typeof data.preferences !== 'object') {
+    return defaults;
+  }
+
+  return {
+    ...defaults,
+    ...(data.preferences as NotificationPreferences),
+  };
+};
+
+export const saveNotificationPreferences = async (
+  preferences: NotificationPreferences
+): Promise<void> => {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    throw authError;
+  }
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { error } = await supabase
+    .from('notification_settings')
+    .upsert({
+      user_id: user.id,
+      preferences,
+      updated_at: new Date().toISOString(),
+    });
+
+  if (error) {
+    throw error;
+  }
 };
 
 export const createNotification = async (

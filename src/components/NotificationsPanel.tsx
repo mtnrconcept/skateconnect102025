@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bell, Check, CheckCheck, X } from 'lucide-react';
 import {
   getNotifications,
   getUnreadCount,
   markAsRead,
   markAllAsRead,
-  subscribeToNotifications,
   getNotificationIcon,
   getNotificationColor,
   type Notification,
 } from '../lib/notifications';
+import { useRealtime } from '../contexts/RealtimeContext';
 
 interface NotificationsPanelProps {
   onClose: () => void;
@@ -19,22 +19,9 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { registerNotificationListener } = useRealtime();
 
-  useEffect(() => {
-    loadNotifications();
-    loadUnreadCount();
-
-    const unsubscribe = subscribeToNotifications((notification) => {
-      setNotifications((prev) => [notification, ...prev]);
-      setUnreadCount((prev) => prev + 1);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
       const data = await getNotifications(50);
       setNotifications(data);
@@ -43,16 +30,30 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadUnreadCount = async () => {
+  const loadUnreadCount = useCallback(async () => {
     try {
       const count = await getUnreadCount();
       setUnreadCount(count);
     } catch (error) {
       console.error('Error loading unread count:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadNotifications();
+    void loadUnreadCount();
+
+    const unsubscribe = registerNotificationListener((notification) => {
+      setNotifications((prev) => [notification, ...prev]);
+      setUnreadCount((prev) => prev + 1);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [loadNotifications, loadUnreadCount, registerNotificationListener]);
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
