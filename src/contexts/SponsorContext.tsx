@@ -34,7 +34,6 @@ import {
   createSponsorShopItem,
   fetchSponsorShopItems,
   updateSponsorShopItem,
-  createSponsorShopItem,
   type ShopItemPayload,
 } from '../lib/sponsorShop';
 import {
