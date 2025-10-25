@@ -16,7 +16,10 @@ import type {
   SponsorShopItem,
   SponsorSpotlight,
 } from '../types';
-import { fetchLatestCommunityAnalytics } from '../lib/sponsorAnalytics';
+import {
+  fetchCommunityAnalyticsHistory,
+  fetchLatestCommunityAnalytics,
+} from '../lib/sponsorAnalytics';
 import {
   fetchSponsorSpotlights,
   updateSponsorSpotlight,
@@ -31,6 +34,13 @@ import {
   type CreateSponsorApiKeyParams,
   createSponsorApiKey,
 } from '../lib/sponsorApiKeys';
+import {
+  DEFAULT_ANALYTICS_PERIODS,
+  buildSponsorAnalyticsInsights,
+  type AnalyticsPeriodFilter,
+  type SponsorAnalyticsBreakdowns,
+  type SponsorAnalyticsSeriesPoint,
+} from '../lib/sponsorAnalyticsInsights';
 
 /* ============ Améliorations robustesse ============ */
 
@@ -63,6 +73,10 @@ interface SponsorContextValue {
   contactPhone: string | null;
   permissions: SponsorPermissions;
   analytics: CommunityAnalyticsSnapshot | null;
+  analyticsHistory: CommunityAnalyticsSnapshot[];
+  analyticsSeries: SponsorAnalyticsSeriesPoint[];
+  analyticsBreakdowns: SponsorAnalyticsBreakdowns;
+  analyticsPeriods: AnalyticsPeriodFilter[];
   spotlights: SponsorSpotlight[];
   shopItems: SponsorShopItem[];
   apiKeys: SponsorApiKey[];
@@ -100,6 +114,13 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<CommunityAnalyticsSnapshot | null>(null);
+  const [analyticsHistory, setAnalyticsHistory] = useState<CommunityAnalyticsSnapshot[]>([]);
+  const [analyticsSeries, setAnalyticsSeries] = useState<SponsorAnalyticsSeriesPoint[]>([]);
+  const [analyticsBreakdowns, setAnalyticsBreakdowns] = useState<SponsorAnalyticsBreakdowns>({
+    periods: [],
+    regions: [],
+    hashtags: [],
+  });
   const [spotlights, setSpotlights] = useState<SponsorSpotlight[]>([]);
   const [shopItems, setShopItems] = useState<SponsorShopItem[]>([]);
   const [apiKeys, setApiKeys] = useState<SponsorApiKey[]>([]);
@@ -112,6 +133,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
 
   const resetState = useCallback(() => {
     setAnalytics(null);
+    setAnalyticsHistory([]);
+    setAnalyticsSeries([]);
+    setAnalyticsBreakdowns({ periods: [], regions: [], hashtags: [] });
     setSpotlights([]);
     setShopItems([]);
     setApiKeys([]);
@@ -124,16 +148,31 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
   const refreshAnalytics = useCallback(async () => {
     if (!sponsorId || !permissions.canAccessAnalytics) {
       setAnalytics(null);
+      setAnalyticsHistory([]);
+      setAnalyticsSeries([]);
+      setAnalyticsBreakdowns({ periods: [], regions: [], hashtags: [] });
       return;
     }
     try {
-      const snapshot = await fetchLatestCommunityAnalytics(sponsorId);
+      const [snapshot, history] = await Promise.all([
+        fetchLatestCommunityAnalytics(sponsorId),
+        fetchCommunityAnalyticsHistory(sponsorId),
+      ]);
+
       setAnalytics(snapshot);
+      setAnalyticsHistory(history);
+
+      const insights = buildSponsorAnalyticsInsights(history);
+      setAnalyticsSeries(insights.series);
+      setAnalyticsBreakdowns(insights.breakdowns);
     } catch (cause) {
       if (isSchemaMissing(cause)) {
         // Schéma sponsor non déployé : on reste silencieux, pas d’erreur UX.
         warnSchemaMissing('refreshAnalytics', cause);
         setAnalytics(null);
+        setAnalyticsHistory([]);
+        setAnalyticsSeries([]);
+        setAnalyticsBreakdowns({ periods: [], regions: [], hashtags: [] });
         return;
       }
       console.error('Unable to load community analytics', cause);
@@ -324,6 +363,10 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     contactPhone,
     permissions,
     analytics,
+    analyticsHistory,
+    analyticsSeries,
+    analyticsBreakdowns,
+    analyticsPeriods: DEFAULT_ANALYTICS_PERIODS,
     spotlights,
     shopItems,
     apiKeys,

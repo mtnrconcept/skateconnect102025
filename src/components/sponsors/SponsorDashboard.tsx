@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   BarChart3,
-  Check,
   KeyRound,
   Mail,
   Megaphone,
@@ -13,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useSponsorContext } from '../../contexts/SponsorContext';
+import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
@@ -173,35 +173,7 @@ export default function SponsorDashboard() {
         </div>
       </div>
 
-      {analytics && (analytics.top_regions.length > 0 || analytics.trending_tags.length > 0) && (
-        <div className="grid gap-6 md:grid-cols-2">
-          {analytics.top_regions.length > 0 && (
-            <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6">
-              <h3 className="text-lg font-semibold text-white">Top régions activées</h3>
-              <ul className="mt-4 space-y-2 text-sm text-slate-300">
-                {analytics.top_regions.map((region) => (
-                  <li key={region} className="flex items-center gap-2">
-                    <Check size={16} className="text-emerald-400" />
-                    {region}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {analytics.trending_tags.length > 0 && (
-            <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6">
-              <h3 className="text-lg font-semibold text-white">Hashtags qui performent</h3>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {analytics.trending_tags.map((tag) => (
-                  <span key={tag} className="px-3 py-1 rounded-full bg-slate-800 text-slate-200 text-sm">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <SponsorAnalyticsSection />
     </div>
   );
 
