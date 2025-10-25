@@ -835,7 +835,7 @@ export default function SponsorDashboard() {
   }
 
   return (
-    <>
+    <div>
       <div className="min-h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
         <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
