@@ -116,40 +116,6 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
     markAsRead,
   } = useMessages({ conversationId: selectedId || null, viewerId });
 
-  const conversationPreviews = useMemo<ConversationPreview[]>(
-    () =>
-      conversationItems.map((item) => {
-        const conversationId = item.conversation.id;
-        const participantProfile = item.otherParticipant;
-        const prefs = preferences[conversationId] ?? { isMuted: false, isPinned: false };
-        const lastMessage = item.lastMessage;
-        const lastActivityReference =
-          participantProfile?.updated_at ?? item.conversation.last_message_at ?? item.conversation.created_at;
-
-        return {
-          id: conversationId,
-          participant: {
-            id: participantProfile?.id ?? conversationId,
-            name: getUserDisplayName(participantProfile, 'Membre Shredloc'),
-            avatar: participantProfile?.avatar_url || '/logo2.png',
-            isOnline: false,
-            location: participantProfile?.location || 'Spot à définir',
-            lastActive: formatRelativeTime(lastActivityReference),
-          },
-          lastMessagePreview: lastMessage?.content ?? 'Nouveau message',
-          lastMessageTime: formatRelativeTime(
-            lastMessage?.created_at ?? item.conversation.last_message_at ?? item.conversation.created_at,
-          ),
-          unreadCount: item.unreadCount,
-          mood: undefined,
-          isMuted: prefs.isMuted,
-          isPinned: prefs.isPinned,
-          isGroup: false,
-        };
-      }),
-    [conversationItems, formatRelativeTime, preferences],
-  );
-
   const formatTime = useCallback(
     (date: Date) =>
       date.toLocaleTimeString('fr-FR', {
@@ -200,6 +166,40 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
     }
     return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
   }, []);
+
+  const conversationPreviews = useMemo<ConversationPreview[]>(
+    () =>
+      conversationItems.map((item) => {
+        const conversationId = item.conversation.id;
+        const participantProfile = item.otherParticipant;
+        const prefs = preferences[conversationId] ?? { isMuted: false, isPinned: false };
+        const lastMessage = item.lastMessage;
+        const lastActivityReference =
+          participantProfile?.updated_at ?? item.conversation.last_message_at ?? item.conversation.created_at;
+
+        return {
+          id: conversationId,
+          participant: {
+            id: participantProfile?.id ?? conversationId,
+            name: getUserDisplayName(participantProfile, 'Membre Shredloc'),
+            avatar: participantProfile?.avatar_url || '/logo2.png',
+            isOnline: false,
+            location: participantProfile?.location || 'Spot à définir',
+            lastActive: formatRelativeTime(lastActivityReference),
+          },
+          lastMessagePreview: lastMessage?.content ?? 'Nouveau message',
+          lastMessageTime: formatRelativeTime(
+            lastMessage?.created_at ?? item.conversation.last_message_at ?? item.conversation.created_at,
+          ),
+          unreadCount: item.unreadCount,
+          mood: undefined,
+          isMuted: prefs.isMuted,
+          isPinned: prefs.isPinned,
+          isGroup: false,
+        };
+      }),
+    [conversationItems, formatRelativeTime, preferences],
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
