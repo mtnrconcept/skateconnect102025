@@ -29,6 +29,7 @@ export const demoSponsorPermissions: SponsorPermissions = {
   canManageSpotlights: true,
   canManageShop: true,
   canManageApiKeys: true,
+  canManageOpportunities: true,
 };
 
 export const sponsorModeHighlights = [

@@ -12,6 +12,10 @@ import type {
   Profile,
   SponsorApiKey,
   SponsorBranding,
+  SponsorCallOpportunity,
+  SponsorChallengeOpportunity,
+  SponsorEditableOpportunityType,
+  SponsorEventOpportunity,
   SponsorPermissions,
   SponsorShopItem,
   SponsorSpotlight,
@@ -37,6 +41,14 @@ import {
   createSponsorApiKey,
 } from '../lib/sponsorApiKeys';
 import {
+  deleteSponsorCall,
+  deleteSponsorChallenge,
+  deleteSponsorEvent,
+  emptySponsorOpportunityCollections,
+  fetchSponsorOpportunityCollections,
+  type SponsorOpportunityCollections,
+} from '../lib/sponsorOpportunities';
+import {
   DEFAULT_ANALYTICS_PERIODS,
   buildSponsorAnalyticsInsights,
   type AnalyticsPeriodFilter,
@@ -45,15 +57,6 @@ import {
 } from '../lib/sponsorAnalyticsInsights';
 
 /* ============ Améliorations robustesse ============ */
-
-/** Détecte le cas “table manquante dans le schéma” (PGRST205) sans briser l’UX. */
-function isSchemaMissing(err: unknown): boolean {
-  // Les libs Supabase renvoient souvent { code, message, hint }
-  const e = err as any;
-  const code = e?.code ?? e?.error?.code;
-  const message = (e?.message ?? e?.error?.message ?? '') as string;
-  return code === 'PGRST205' || /Could not find the table/.test(message);
-}
 
 /** Log civilisé pour PGRST205 (avertissement unique, pas d’erreur rouge bruyante). */
 function warnSchemaMissing(context: string, err: unknown) {
@@ -64,7 +67,28 @@ function warnSchemaMissing(context: string, err: unknown) {
   console.warn(`[SponsorContext] ${context}: sponsor schema not available (PGRST205).${hint}`);
 }
 
-export type SponsorDashboardView = 'overview' | 'spotlights' | 'shop' | 'api-keys';
+type PostgrestLikeError = {
+  code?: string;
+  message?: string;
+  hint?: string;
+  error?: {
+    code?: string;
+    message?: string;
+    hint?: string;
+  };
+};
+
+/** Détecte le cas “table manquante dans le schéma” (PGRST205) sans briser l’UX. */
+function isSchemaMissing(err: unknown): boolean {
+  const error = err as PostgrestLikeError | undefined;
+  const code = error?.code ?? error?.error?.code;
+  const message = error?.message ?? error?.error?.message ?? '';
+  return code === 'PGRST205' || /Could not find the table/.test(message);
+}
+
+const extractPostgrestError = (cause: unknown) => (cause as { error?: unknown })?.error ?? cause;
+
+export type SponsorDashboardView = 'overview' | 'opportunities' | 'spotlights' | 'shop' | 'api-keys';
 
 function roundTo(value: number, precision = 2): number {
   const factor = 10 ** precision;
@@ -126,6 +150,7 @@ function attachSpotlightInsights(spotlight: SponsorSpotlight): SponsorSpotlight 
 
 interface SponsorContextValue {
   isSponsor: boolean;
+  sponsorId: string | null;
   loading: boolean;
   error: string | null;
   branding: SponsorBranding | null;
@@ -140,6 +165,7 @@ interface SponsorContextValue {
   spotlights: SponsorSpotlight[];
   shopItems: SponsorShopItem[];
   apiKeys: SponsorApiKey[];
+  opportunities: SponsorOpportunityCollections;
   activeView: SponsorDashboardView;
   setActiveView: (view: SponsorDashboardView) => void;
   refreshAll: () => Promise<void>;
@@ -147,12 +173,18 @@ interface SponsorContextValue {
   refreshSpotlights: () => Promise<void>;
   refreshShop: () => Promise<void>;
   refreshApiKeys: () => Promise<void>;
+  refreshOpportunities: () => Promise<void>;
   updateSpotlightStatus: (spotlightId: string, status: SponsorSpotlight['status']) => Promise<void>;
   updateShopItemAvailability: (shopItemId: string, isActive: boolean) => Promise<void>;
   revokeApiKey: (apiKeyId: string) => Promise<void>;
   createApiKey: (
     params: Omit<CreateSponsorApiKeyParams, 'sponsorId'>,
   ) => Promise<{ key: string; record: SponsorApiKey } | null>;
+  upsertOpportunity: (
+    type: SponsorEditableOpportunityType,
+    record: SponsorChallengeOpportunity | SponsorEventOpportunity | SponsorCallOpportunity,
+  ) => void;
+  deleteOpportunity: (type: SponsorEditableOpportunityType, id: string) => Promise<void>;
 }
 
 const defaultPermissions: SponsorPermissions = {
@@ -160,6 +192,7 @@ const defaultPermissions: SponsorPermissions = {
   canManageSpotlights: false,
   canManageShop: false,
   canManageApiKeys: false,
+  canManageOpportunities: false,
 };
 
 const SponsorContext = createContext<SponsorContextValue | undefined>(undefined);
@@ -184,9 +217,15 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
   const [spotlights, setSpotlights] = useState<SponsorSpotlight[]>([]);
   const [shopItems, setShopItems] = useState<SponsorShopItem[]>([]);
   const [apiKeys, setApiKeys] = useState<SponsorApiKey[]>([]);
+  const [opportunities, setOpportunities] = useState<SponsorOpportunityCollections>(
+    emptySponsorOpportunityCollections(),
+  );
   const [activeView, setActiveView] = useState<SponsorDashboardView>('overview');
 
-  const permissions = profile?.sponsor_permissions ?? defaultPermissions;
+  const permissions = useMemo<SponsorPermissions>(
+    () => ({ ...defaultPermissions, ...(profile?.sponsor_permissions ?? {}) }),
+    [profile?.sponsor_permissions],
+  );
   const branding = profile?.sponsor_branding ?? null;
   const contactEmail = profile?.sponsor_contact?.email ?? null;
   const contactPhone = profile?.sponsor_contact?.phone ?? null;
@@ -199,6 +238,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     setSpotlights([]);
     setShopItems([]);
     setApiKeys([]);
+    setOpportunities(emptySponsorOpportunityCollections());
     setActiveView('overview');
     setError(null);
   }, []);
@@ -297,6 +337,26 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     }
   }, [permissions.canManageApiKeys, sponsorId]);
 
+  const refreshOpportunities = useCallback(async () => {
+    if (!sponsorId || !permissions.canManageOpportunities) {
+      setOpportunities(emptySponsorOpportunityCollections());
+      return;
+    }
+    try {
+      const data = await fetchSponsorOpportunityCollections({ sponsorId, includeNews: false });
+      setOpportunities(data);
+    } catch (cause) {
+      const postgrestError = extractPostgrestError(cause);
+      if (isSchemaMissing(postgrestError)) {
+        warnSchemaMissing('refreshOpportunities', cause);
+        setOpportunities(emptySponsorOpportunityCollections());
+        return;
+      }
+      console.error('Unable to load sponsor opportunities', cause);
+      setError('Impossible de charger les opportunités sponsor.');
+    }
+  }, [permissions.canManageOpportunities, sponsorId]);
+
   const refreshAll = useCallback(async () => {
     if (!sponsorId) {
       resetState();
@@ -309,9 +369,18 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       refreshSpotlights(),
       refreshShop(),
       refreshApiKeys(),
+      refreshOpportunities(),
     ]);
     setLoading(false);
-  }, [refreshAnalytics, refreshSpotlights, refreshShop, refreshApiKeys, resetState, sponsorId]);
+  }, [
+    refreshAnalytics,
+    refreshSpotlights,
+    refreshShop,
+    refreshApiKeys,
+    refreshOpportunities,
+    resetState,
+    sponsorId,
+  ]);
 
   /* ------------ Mutations avec traitement fail-soft PGRST205 ------------ */
 
@@ -401,6 +470,98 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     [permissions.canManageApiKeys, sponsorId],
   );
 
+  const upsertOpportunity = useCallback(
+    (
+      type: SponsorEditableOpportunityType,
+      record: SponsorChallengeOpportunity | SponsorEventOpportunity | SponsorCallOpportunity,
+    ) => {
+      if (!permissions.canManageOpportunities) {
+        return;
+      }
+
+      setOpportunities((current) => {
+        if (!current) {
+          return current;
+        }
+
+        if (type === 'challenge') {
+          const value = record as SponsorChallengeOpportunity;
+          const exists = current.challenges.some((item) => item.id === value.id);
+          return {
+            ...current,
+            challenges: exists
+              ? current.challenges.map((item) => (item.id === value.id ? value : item))
+              : [value, ...current.challenges],
+          };
+        }
+
+        if (type === 'event') {
+          const value = record as SponsorEventOpportunity;
+          const exists = current.events.some((item) => item.id === value.id);
+          return {
+            ...current,
+            events: exists
+              ? current.events.map((item) => (item.id === value.id ? value : item))
+              : [value, ...current.events],
+          };
+        }
+
+        const value = record as SponsorCallOpportunity;
+        const exists = current.calls.some((item) => item.id === value.id);
+        return {
+          ...current,
+          calls: exists
+            ? current.calls.map((item) => (item.id === value.id ? value : item))
+            : [value, ...current.calls],
+        };
+      });
+      setError(null);
+    },
+    [permissions.canManageOpportunities],
+  );
+
+  const deleteOpportunityHandler = useCallback(
+    async (type: SponsorEditableOpportunityType, id: string) => {
+      if (!sponsorId || !permissions.canManageOpportunities) {
+        return;
+      }
+      try {
+        if (type === 'challenge') {
+          await deleteSponsorChallenge(id);
+          setOpportunities((current) => ({
+            ...current,
+            challenges: current.challenges.filter((item) => item.id !== id),
+          }));
+        } else if (type === 'event') {
+          await deleteSponsorEvent(id);
+          setOpportunities((current) => ({
+            ...current,
+            events: current.events.filter((item) => item.id !== id),
+          }));
+        } else {
+          await deleteSponsorCall(id);
+          setOpportunities((current) => ({
+            ...current,
+            calls: current.calls.filter((item) => item.id !== id),
+          }));
+        }
+        setError(null);
+      } catch (cause) {
+        const postgrestError = extractPostgrestError(cause);
+        if (isSchemaMissing(postgrestError)) {
+          warnSchemaMissing('deleteOpportunity', cause);
+          setOpportunities(emptySponsorOpportunityCollections());
+          setError("Fonction opportunités indisponible (schéma sponsor non déployé).");
+        } else {
+          console.error('Unable to delete sponsor opportunity', cause);
+          setError('Impossible de supprimer cette opportunité.');
+        }
+        throw cause;
+      }
+    },
+    [permissions.canManageOpportunities, sponsorId],
+  );
+
   /* ------------ Cycle de vie ------------ */
 
   useEffect(() => {
@@ -416,6 +577,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
 
   const value = useMemo<SponsorContextValue>(() => ({
     isSponsor: Boolean(sponsorId),
+    sponsorId,
     loading,
     error,
     branding,
@@ -430,6 +592,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     spotlights,
     shopItems,
     apiKeys,
+    opportunities,
     activeView,
     setActiveView,
     refreshAll,
@@ -437,10 +600,13 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshSpotlights,
     refreshShop,
     refreshApiKeys,
+    refreshOpportunities,
     updateSpotlightStatus,
     updateShopItemAvailability,
     revokeApiKey: revokeApiKeyHandler,
     createApiKey: createApiKeyHandler,
+    upsertOpportunity,
+    deleteOpportunity: deleteOpportunityHandler,
   }), [
     sponsorId,
     loading,
@@ -450,6 +616,10 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     contactPhone,
     permissions,
     analytics,
+    analyticsHistory,
+    analyticsSeries,
+    analyticsBreakdowns,
+    opportunities,
     spotlights,
     shopItems,
     apiKeys,
@@ -459,10 +629,13 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshSpotlights,
     refreshShop,
     refreshApiKeys,
+    refreshOpportunities,
     updateSpotlightStatus,
     updateShopItemAvailability,
     revokeApiKeyHandler,
     createApiKeyHandler,
+    upsertOpportunity,
+    deleteOpportunityHandler,
   ]);
 
   return <SponsorContext.Provider value={value}>{children}</SponsorContext.Provider>;

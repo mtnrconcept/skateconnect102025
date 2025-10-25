@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ArrowDownRight,
+  ArrowUpRight,
   BarChart3,
   Copy,
   Download,
-  ArrowDownRight,
-  ArrowUpRight,
+  KanbanSquare,
   KeyRound,
   Mail,
   Megaphone,
@@ -17,10 +18,12 @@ import {
 } from 'lucide-react';
 import { useSponsorContext } from '../../contexts/SponsorContext';
 import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
+import SponsorOpportunitiesView from './opportunities/SponsorOpportunitiesView';
 import type { SponsorSpotlight } from '../../types';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
+  { id: 'opportunities' as const, label: 'Opportunités', icon: KanbanSquare },
   { id: 'spotlights' as const, label: 'Spotlight', icon: Megaphone },
   { id: 'shop' as const, label: 'Boutique', icon: Store },
   { id: 'api-keys' as const, label: 'Clés API', icon: KeyRound },
@@ -751,6 +754,7 @@ export default function SponsorDashboard() {
 
         <div className={loading ? 'opacity-60 pointer-events-none' : ''}>
           {activeView === 'overview' && renderOverview()}
+          {activeView === 'opportunities' && <SponsorOpportunitiesView />}
           {activeView === 'spotlights' && renderSpotlights()}
           {activeView === 'shop' && renderShop()}
           {activeView === 'api-keys' && renderApiKeys()}
