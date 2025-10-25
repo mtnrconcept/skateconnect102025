@@ -12,6 +12,7 @@ interface SpotGridProps {
 
 /** Spéc: 1 × 3 => 3 cartes par “page” */
 const PAGE_SIZE = 3;
+const SAFETY_MARGIN = 8;
 
 /** Labels propres pour le badge type de spot */
 const getSpotTypeLabel = (type: string) => {
@@ -57,8 +58,8 @@ export default function SpotGrid({
   const getAvailableHeight = useCallback(() => {
     const parent = sliderRef.current?.parentElement;
     if (!parent) return null;
-    const available = parent.clientHeight - 10;
-    if (Number.isNaN(available)) return null;
+    const available = parent.clientHeight - SAFETY_MARGIN;
+    if (!Number.isFinite(available)) return null;
     return available > 0 ? available : 0;
   }, []);
 
@@ -67,7 +68,7 @@ export default function SpotGrid({
       const available = getAvailableHeight();
       if (available === null) return value;
       if (available <= 0) return 0;
-      return Math.min(value, available);
+      return available;
     },
     [getAvailableHeight]
   );
@@ -312,8 +313,8 @@ export default function SpotGrid({
   };
 
   const sliderStyle: CSSProperties = {
-    marginTop: 5,
-    marginBottom: 5,
+    marginTop: SAFETY_MARGIN / 2,
+    marginBottom: SAFETY_MARGIN / 2,
     height: sliderHeight !== null ? sliderHeight : undefined,
   };
 
