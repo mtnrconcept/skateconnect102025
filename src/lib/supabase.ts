@@ -10,20 +10,24 @@ const processEnv = typeof process !== 'undefined' ? process.env : undefined;
 const envSupabaseUrl = importMetaEnv?.VITE_SUPABASE_URL ?? processEnv?.VITE_SUPABASE_URL;
 const envSupabaseAnonKey =
   importMetaEnv?.VITE_SUPABASE_ANON_KEY ?? processEnv?.VITE_SUPABASE_ANON_KEY;
+const envSupabaseStorageCdnUrl =
+  importMetaEnv?.VITE_SUPABASE_STORAGE_CDN_URL ?? processEnv?.VITE_SUPABASE_STORAGE_CDN_URL;
 
 const hasSupabaseConfig = Boolean(envSupabaseUrl && envSupabaseAnonKey);
 
 const fallbackSupabaseUrl = 'https://stub.supabase.local';
 const fallbackSupabaseAnonKey = 'stub-anon-key';
 
-const supabaseUrl = envSupabaseUrl ?? fallbackSupabaseUrl;
+export const SUPABASE_URL = envSupabaseUrl ?? fallbackSupabaseUrl;
 const supabaseAnonKey = envSupabaseAnonKey ?? fallbackSupabaseAnonKey;
+export const SUPABASE_STORAGE_PUBLIC_URL = `${SUPABASE_URL}/storage/v1/object/public`;
+export const SUPABASE_STORAGE_CDN_URL = envSupabaseStorageCdnUrl ?? null;
 
 if (!hasSupabaseConfig) {
   console.warn('Supabase environment variables are missing. Falling back to local-only mode.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(SUPABASE_URL, supabaseAnonKey, {
   auth: {
     persistSession: false,
     storage: undefined,

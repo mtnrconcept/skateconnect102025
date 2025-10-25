@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, MapPin, Star, Users, Upload, Heart, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { uploadFile } from '../lib/storage.js';
 import LazyImage from './LazyImage';
 import SpotMediaGallery from './SpotMediaGallery';
 import MediaDetailModal from './MediaDetailModal';
@@ -561,23 +562,12 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                   try {
                     for (let i = 0; i < files.length; i++) {
                       const file = files[i];
-                      const fileExt = file.name.split('.').pop();
-                      const fileName = `${currentUser.id}/${Date.now()}-${i}.${fileExt}`;
-
-                      const { error: uploadError } = await supabase.storage
-                        .from('spots')
-                        .upload(fileName, file);
-
-                      if (uploadError) throw uploadError;
-
-                      const { data: { publicUrl } } = supabase.storage
-                        .from('spots')
-                        .getPublicUrl(fileName);
+                      const result = await uploadFile('spots', file, `${spot.id}/${currentUser.id}`);
 
                       const { error: insertError } = await supabase.from('spot_media').insert({
                         spot_id: spot.id,
                         user_id: currentUser.id,
-                        media_url: publicUrl,
+                        media_url: result.url,
                         media_type: file.type.startsWith('video') ? 'video' : 'photo',
                       });
 

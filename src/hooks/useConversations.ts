@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Conversation, Message, Profile } from '../types/index.js';
 import { supabase } from '../lib/supabase.js';
 import { isTableMissingError } from '../lib/supabaseErrors.js';
-import type { PostgrestSingleResponse } from '@supabase/supabase-js';
 
 export interface ConversationListItem {
   conversation: Conversation;
@@ -40,40 +39,46 @@ async function fetchProfileMap(profileIds: string[]): Promise<Map<string, Profil
   return map;
 }
 
-async function fetchLatestMessage(conversationId: string): Promise<Message | null> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('id, conversation_id, sender_id, content, media_url, is_read, created_at')
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: false })
-    .limit(1);
+interface ConversationMetaRow {
+  conversation_id: string;
+  latest_message: Message | null;
+  unread_count: number | null;
+}
+
+async function fetchConversationMeta(
+  conversationIds: string[],
+  viewerId: string,
+): Promise<Map<string, { lastMessage: Message | null; unreadCount: number }>> {
+  if (!conversationIds.length) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase.rpc<ConversationMetaRow[]>(
+    'get_conversation_summaries',
+    {
+      conversation_ids: conversationIds,
+      viewer_id: viewerId,
+    },
+  );
 
   if (error) {
     if (isTableMissingError(error)) {
-      return null;
+      return new Map();
     }
     throw error;
   }
 
-  return (data?.[0] as Message | undefined) ?? null;
-}
+  const metaMap = new Map<string, { lastMessage: Message | null; unreadCount: number }>();
 
-async function fetchUnreadCount(conversationId: string, viewerId: string): Promise<number> {
-  const response = (await supabase
-    .from('messages')
-    .select('id', { count: 'exact', head: true })
-    .eq('conversation_id', conversationId)
-    .eq('is_read', false)
-    .neq('sender_id', viewerId)) as PostgrestSingleResponse<null>;
-
-  if (response.error) {
-    if (isTableMissingError(response.error)) {
-      return 0;
-    }
-    throw response.error;
+  for (const row of data ?? []) {
+    const lastMessage = (row.latest_message ?? null) as Message | null;
+    metaMap.set(row.conversation_id, {
+      lastMessage,
+      unreadCount: row.unread_count ?? 0,
+    });
   }
 
-  return response.count ?? 0;
+  return metaMap;
 }
 
 async function buildConversationItems(
@@ -92,22 +97,23 @@ async function buildConversationItems(
 
   const profileMap = await fetchProfileMap(Array.from(participantIds));
 
-  const [latestMessages, unreadCounts] = await Promise.all([
-    Promise.all(conversations.map((conversation) => fetchLatestMessage(conversation.id))),
-    Promise.all(conversations.map((conversation) => fetchUnreadCount(conversation.id, viewerId))),
-  ]);
+  const metaMap = await fetchConversationMeta(
+    conversations.map((conversation) => conversation.id),
+    viewerId,
+  );
 
-  return conversations.map((conversation, index) => {
+  return conversations.map((conversation) => {
     const otherParticipantId =
       conversation.participant_1_id === viewerId
         ? conversation.participant_2_id
         : conversation.participant_1_id;
+    const meta = metaMap.get(conversation.id);
 
     return {
       conversation,
       otherParticipant: profileMap.get(otherParticipantId) ?? null,
-      lastMessage: latestMessages[index],
-      unreadCount: unreadCounts[index] ?? 0,
+      lastMessage: meta?.lastMessage ?? null,
+      unreadCount: meta?.unreadCount ?? 0,
     };
   });
 }
@@ -164,10 +170,8 @@ async function fetchConversationSummary(
     return null;
   }
 
-  const [latestMessage, unreadCount] = await Promise.all([
-    fetchLatestMessage(conversationId),
-    fetchUnreadCount(conversationId, viewerId),
-  ]);
+  const metaMap = await fetchConversationMeta([conversationId], viewerId);
+  const meta = metaMap.get(conversationId);
 
   const conversation = data as Conversation;
   const otherParticipantId =
@@ -180,8 +184,8 @@ async function fetchConversationSummary(
   return {
     conversation,
     otherParticipant: profileMap.get(otherParticipantId) ?? null,
-    lastMessage: latestMessage,
-    unreadCount,
+    lastMessage: meta?.lastMessage ?? null,
+    unreadCount: meta?.unreadCount ?? 0,
   };
 }
 
