@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Megaphone, Sparkles } from 'lucide-react';
 import type { Profile, ProfileExperienceMode, Section } from '../../types';
 import { settingsCategories, quickSettingsLinks } from '../../data/settingsCatalog';
 import SubscriptionPlanTester from '../subscription/SubscriptionPlanTester';
 import { sponsorModeHighlights } from '../../data/sponsorExperience';
+import { getNotificationPreferences, saveNotificationPreferences } from '../../lib/notifications';
 
 interface SettingsSectionProps {
   profile: Profile | null;
@@ -50,6 +51,10 @@ export default function SettingsSection({ profile, onNavigate, profileMode, onPr
     }
   });
 
+  const [isLoadingRemotePreferences, setIsLoadingRemotePreferences] = useState(false);
+  const [syncState, setSyncState] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -62,13 +67,76 @@ export default function SettingsSection({ profile, onNavigate, profileMode, onPr
     }
   }, [preferences]);
 
+  useEffect(() => {
+    if (!profile?.id) {
+      setIsLoadingRemotePreferences(false);
+      setSyncState('idle');
+      setSyncError(null);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingRemotePreferences(true);
+    setSyncError(null);
+
+    getNotificationPreferences(defaultPreferences)
+      .then((remotePreferences) => {
+        if (!isMounted) {
+          return;
+        }
+        setPreferences(remotePreferences);
+        setSyncState('idle');
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return;
+        }
+        console.error('Impossible de charger les préférences de notification :', error);
+        setSyncState('error');
+        setSyncError("Impossible de charger les préférences de notification.");
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingRemotePreferences(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile?.id, defaultPreferences]);
+
+  const persistPreferences = useCallback(
+    async (nextPreferences: Record<string, boolean>) => {
+      if (!profile?.id) {
+        return;
+      }
+
+      setSyncState('saving');
+      setSyncError(null);
+
+      try {
+        await saveNotificationPreferences(nextPreferences);
+        setSyncState('idle');
+      } catch (error) {
+        console.error('Impossible de sauvegarder les préférences de notification :', error);
+        setSyncState('error');
+        setSyncError("Impossible d'enregistrer les préférences. Réessayez.");
+      }
+    },
+    [profile?.id]
+  );
+
   const togglePreference = (id: string) => {
     setPreferences((previous) => {
       const nextValue = !previous[id];
-      return {
+      const nextPreferences = {
         ...previous,
         [id]: nextValue,
       };
+
+      void persistPreferences(nextPreferences);
+      return nextPreferences;
     });
   };
 
@@ -88,6 +156,8 @@ export default function SettingsSection({ profile, onNavigate, profileMode, onPr
   const handleSponsorModeToggle = () => {
     onProfileModeChange(isSponsorMode ? 'rider' : 'sponsor');
   };
+
+  const isPreferenceInteractionDisabled = isLoadingRemotePreferences || syncState === 'saving';
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
@@ -198,6 +268,37 @@ export default function SettingsSection({ profile, onNavigate, profileMode, onPr
       </div>
 
       <div className="space-y-8">
+        {profile && (
+          <div className="flex flex-col gap-3 rounded-3xl bg-dark-800 border border-dark-700 px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">Synchronisation des notifications</p>
+              <p className="text-xs text-gray-400">Vos préférences sont sauvegardées dans le cloud pour rester cohérentes sur tous vos appareils.</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              {isLoadingRemotePreferences ? (
+                <>
+                  <span className="h-2.5 w-2.5 rounded-full bg-orange-400 animate-pulse" />
+                  <span className="text-orange-200">Chargement des préférences...</span>
+                </>
+              ) : syncState === 'error' ? (
+                <>
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                  <span className="text-red-300">{syncError ?? 'Une erreur est survenue.'}</span>
+                </>
+              ) : syncState === 'saving' ? (
+                <>
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse" />
+                  <span className="text-blue-200">Synchronisation en cours...</span>
+                </>
+              ) : (
+                <>
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  <span className="text-emerald-200">Préférences synchronisées</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         {settingsCategories.map((category) => (
           <section key={category.id} className="bg-dark-800 border border-dark-700 rounded-3xl p-6 md:p-8">
             <header className="mb-6">
@@ -228,8 +329,11 @@ export default function SettingsSection({ profile, onNavigate, profileMode, onPr
 
                     <button
                       onClick={() => togglePreference(item.id)}
+                      disabled={isPreferenceInteractionDisabled}
                       className={`relative w-16 h-8 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500/70 ${
                         enabled ? 'bg-orange-500/80' : 'bg-dark-600'
+                      } ${
+                        isPreferenceInteractionDisabled ? 'opacity-60 cursor-not-allowed' : ''
                       }`}
                       type="button"
                       aria-pressed={enabled}
