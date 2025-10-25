@@ -173,3 +173,12 @@
 .animate-card-enter {
   animation: cards-enter-up 0.3s ease-out forwards;
 }
+
+.spot-card-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 3.75rem;
+}
