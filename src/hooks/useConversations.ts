@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Conversation, Message, Profile } from '../types/index.js';
 import { supabase } from '../lib/supabase.js';
+import { isTableMissingError } from '../lib/supabaseErrors.js';
 import type { PostgrestSingleResponse } from '@supabase/supabase-js';
 
 export interface ConversationListItem {
@@ -48,6 +49,9 @@ async function fetchLatestMessage(conversationId: string): Promise<Message | nul
     .limit(1);
 
   if (error) {
+    if (isTableMissingError(error)) {
+      return null;
+    }
     throw error;
   }
 
@@ -63,6 +67,9 @@ async function fetchUnreadCount(conversationId: string, viewerId: string): Promi
     .neq('sender_id', viewerId)) as PostgrestSingleResponse<null>;
 
   if (response.error) {
+    if (isTableMissingError(response.error)) {
+      return 0;
+    }
     throw response.error;
   }
 
@@ -121,6 +128,9 @@ async function fetchConversationPage(
     .range(from, to);
 
   if (error) {
+    if (isTableMissingError(error)) {
+      return { items: [], hasMore: false };
+    }
     throw error;
   }
 
@@ -144,6 +154,9 @@ async function fetchConversationSummary(
     .maybeSingle();
 
   if (error) {
+    if (isTableMissingError(error)) {
+      return null;
+    }
     throw error;
   }
 
@@ -215,6 +228,15 @@ export function useConversations(viewerId: string | null, pageSize = DEFAULT_PAG
         if (!isMountedRef.current) {
           return;
         }
+
+        if (isTableMissingError(caught)) {
+          currentPageRef.current = 0;
+          setItems([]);
+          setHasMore(false);
+          setError(null);
+          return;
+        }
+
         setError(caught as Error);
       } finally {
         if (isMountedRef.current) {
@@ -284,6 +306,9 @@ export function useConversations(viewerId: string | null, pageSize = DEFAULT_PAG
           return [summary, ...withoutTarget];
         });
       } catch (caught) {
+        if (isTableMissingError(caught)) {
+          return;
+        }
         console.error('Erreur lors du rafraîchissement de la conversation :', caught);
       }
     },

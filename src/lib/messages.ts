@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Conversation, Message } from '../types/index.js';
 import type { FakeDirectMessagePayload } from '../types/messages.js';
+import { isTableMissingError } from './supabaseErrors.js';
 
 async function findConversation(
   supabase: SupabaseClient,
@@ -15,6 +16,9 @@ async function findConversation(
     .maybeSingle();
 
   if (error) {
+    if (isTableMissingError(error)) {
+      return null;
+    }
     throw error;
   }
 
@@ -52,6 +56,9 @@ export async function getOrCreateConversation(
     .single();
 
   if (error) {
+    if (isTableMissingError(error)) {
+      throw new Error("La messagerie n'est pas disponible pour le moment.");
+    }
     throw error;
   }
 
@@ -82,6 +89,9 @@ export async function insertMessage(
     .single();
 
   if (error) {
+    if (isTableMissingError(error)) {
+      throw new Error("La messagerie n'est pas disponible pour le moment.");
+    }
     throw error;
   }
 
@@ -106,6 +116,9 @@ export async function markConversationMessagesAsRead(
     .select('id');
 
   if (error) {
+    if (isTableMissingError(error)) {
+      return { updated: 0 };
+    }
     throw error;
   }
 
@@ -122,6 +135,7 @@ export async function processQueuedDirectMessages(
   }
 
   const processedIds: string[] = [];
+  let messagingUnavailableLogged = false;
 
   for (const payload of queue) {
     try {
@@ -133,6 +147,13 @@ export async function processQueuedDirectMessages(
       await insertMessage(supabase, conversation.id, currentUserId, payload.message.content);
       processedIds.push(payload.message.id);
     } catch (error) {
+      if (isTableMissingError(error)) {
+        if (!messagingUnavailableLogged) {
+          console.warn("La messagerie n'est pas disponible pour le moment. Impossible de traiter les messages directs.");
+          messagingUnavailableLogged = true;
+        }
+        break;
+      }
       console.error('Erreur lors du traitement du message direct :', error);
     }
   }
