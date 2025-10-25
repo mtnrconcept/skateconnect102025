@@ -22,6 +22,7 @@ export interface SponsorPermissions {
   canManageSpotlights: boolean;
   canManageShop: boolean;
   canManageApiKeys: boolean;
+  canManageOpportunities: boolean;
 }
 
 export type ProfileExperienceMode = 'rider' | 'sponsor';

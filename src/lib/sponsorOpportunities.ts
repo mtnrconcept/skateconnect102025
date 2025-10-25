@@ -8,10 +8,147 @@ import type {
   SponsorEventOpportunity,
   SponsorNewsItem,
   SponsorOpportunityRecord,
+  SponsorOpportunityType,
   SponsorProfileSummary,
 } from '../types';
 
+export type SponsorOpportunityStatus =
+  | 'upcoming'
+  | 'active'
+  | 'closing-soon'
+  | 'completed'
+  | 'published';
+
+export type SponsorOpportunityDateFilter = 'all' | 'soon' | 'month' | 'past';
+
+export interface SponsorOpportunityCollections {
+  challenges: SponsorChallengeOpportunity[];
+  events: SponsorEventOpportunity[];
+  calls: SponsorCallOpportunity[];
+  news: SponsorNewsItem[];
+}
+
+export interface FetchSponsorOpportunitiesOptions {
+  sponsorId?: string | null;
+  includeNews?: boolean;
+}
+
+interface FetchSponsorEntityOptions {
+  sponsorId?: string | null;
+}
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+const parseDate = (value: string | null | undefined): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+export const SPONSOR_OPPORTUNITY_TYPE_LABELS: Record<SponsorOpportunityType, string> = {
+  challenge: 'Défi',
+  event: 'Événement',
+  call: 'Appel à projet',
+  news: 'Actualité',
+};
+
+export const SPONSOR_OPPORTUNITY_TYPE_FILTERS: Array<{
+  value: SponsorOpportunityType | 'all';
+  label: string;
+}> = [
+  { value: 'all', label: 'Tout' },
+  { value: 'challenge', label: 'Défis' },
+  { value: 'event', label: 'Événements' },
+  { value: 'call', label: 'Appels à projet' },
+  { value: 'news', label: 'Actu sponsors' },
+];
+
+export const SPONSOR_OPPORTUNITY_DATE_FILTERS: Array<{
+  value: SponsorOpportunityDateFilter;
+  label: string;
+}> = [
+  { value: 'all', label: 'Toutes les dates' },
+  { value: 'soon', label: 'Cette semaine' },
+  { value: 'month', label: 'Ce mois-ci' },
+  { value: 'past', label: 'Événements passés' },
+];
+
+export const SPONSOR_OPPORTUNITY_STATUS_ORDER: SponsorOpportunityStatus[] = [
+  'upcoming',
+  'active',
+  'closing-soon',
+  'completed',
+  'published',
+];
+
+export const SPONSOR_OPPORTUNITY_STATUS_META: Record<
+  SponsorOpportunityStatus,
+  { label: string; description?: string; badgeClass: string }
+> = {
+  upcoming: {
+    label: 'À venir',
+    description: 'Le programme démarre bientôt.',
+    badgeClass: 'bg-sky-900/60 text-sky-100 border border-sky-500/40',
+  },
+  active: {
+    label: 'Actif',
+    description: 'Opportunité ouverte aux riders.',
+    badgeClass: 'bg-emerald-900/70 text-emerald-100 border border-emerald-500/50',
+  },
+  'closing-soon': {
+    label: 'Clôture imminente',
+    description: 'Moins de 7 jours restants.',
+    badgeClass: 'bg-amber-900/70 text-amber-100 border border-amber-500/50',
+  },
+  completed: {
+    label: 'Terminé',
+    description: 'Opportunité clôturée.',
+    badgeClass: 'bg-slate-900/70 text-slate-200 border border-slate-600/70',
+  },
+  published: {
+    label: 'Publié',
+    description: 'Annonce sponsor visible publiquement.',
+    badgeClass: 'bg-indigo-900/70 text-indigo-100 border border-indigo-500/40',
+  },
+};
+
+export const emptySponsorOpportunityCollections = (): SponsorOpportunityCollections => ({
+  challenges: [],
+  events: [],
+  calls: [],
+  news: [],
+});
+
+export const matchesOpportunityDateFilter = (
+  date: Date | null,
+  filter: SponsorOpportunityDateFilter,
+  referenceDate: Date = new Date(),
+): boolean => {
+  if (!date || filter === 'all') {
+    return true;
+  }
+
+  const diff = date.getTime() - referenceDate.getTime();
+
+  switch (filter) {
+    case 'soon':
+      return diff >= 0 && diff <= SEVEN_DAYS_MS;
+    case 'month':
+      return diff >= 0 && diff <= THIRTY_DAYS_MS;
+    case 'past':
+      return diff < 0;
+    default:
+      return true;
+  }
+};
+
 const sponsorProfileSelection = 'id, username, display_name, sponsor_branding';
+
+type RawSponsorRow = Record<string, unknown>;
 
 const normaliseTags = (value: unknown): string[] => {
   if (Array.isArray(value)) {
@@ -41,84 +178,87 @@ const mapSponsorProfile = (row: { sponsor?: SponsorProfileSummary | null }): Spo
   };
 };
 
-const mapSponsorChallenge = (row: any): SponsorChallengeOpportunity => ({
-  id: row.id,
-  sponsor_id: row.sponsor_id,
-  title: row.title,
-  description: row.description,
-  prize: row.prize ?? null,
-  value: row.value ?? null,
-  location: row.location ?? null,
-  cover_image_url: row.cover_image_url ?? null,
+const mapSponsorChallenge = (row: RawSponsorRow): SponsorChallengeOpportunity => ({
+  id: row.id as string,
+  sponsor_id: row.sponsor_id as string,
+  title: row.title as string,
+  description: row.description as string,
+  prize: (row.prize as string | null | undefined) ?? null,
+  value: (row.value as string | null | undefined) ?? null,
+  location: (row.location as string | null | undefined) ?? null,
+  cover_image_url: (row.cover_image_url as string | null | undefined) ?? null,
   tags: normaliseTags(row.tags),
-  start_date: row.start_date ?? null,
-  end_date: row.end_date ?? null,
-  participants_count: typeof row.participants_count === 'number' ? row.participants_count : 0,
-  participants_label: row.participants_label ?? 'Crews inscrites',
-  action_label: row.action_label ?? 'Voir le défi',
-  created_at: row.created_at,
-  updated_at: row.updated_at,
-  sponsor: mapSponsorProfile(row),
+  start_date: (row.start_date as string | null | undefined) ?? null,
+  end_date: (row.end_date as string | null | undefined) ?? null,
+  participants_count: typeof row.participants_count === 'number' ? (row.participants_count as number) : 0,
+  participants_label: (row.participants_label as string | undefined) ?? 'Crews inscrites',
+  action_label: (row.action_label as string | undefined) ?? 'Voir le défi',
+  created_at: row.created_at as string,
+  updated_at: row.updated_at as string,
+  sponsor: mapSponsorProfile(row as { sponsor?: SponsorProfileSummary | null }),
 });
 
-const mapSponsorEvent = (row: any): SponsorEventOpportunity => ({
-  id: row.id,
-  sponsor_id: row.sponsor_id,
-  title: row.title,
-  description: row.description,
-  event_date: row.event_date ?? null,
-  event_time: row.event_time ?? null,
-  location: row.location ?? null,
-  event_type: row.event_type ?? null,
-  attendees: typeof row.attendees === 'number' ? row.attendees : 0,
-  cover_image_url: row.cover_image_url ?? null,
+const mapSponsorEvent = (row: RawSponsorRow): SponsorEventOpportunity => ({
+  id: row.id as string,
+  sponsor_id: row.sponsor_id as string,
+  title: row.title as string,
+  description: row.description as string,
+  event_date: (row.event_date as string | null | undefined) ?? null,
+  event_time: (row.event_time as string | null | undefined) ?? null,
+  location: (row.location as string | null | undefined) ?? null,
+  event_type: (row.event_type as string | null | undefined) ?? null,
+  attendees: typeof row.attendees === 'number' ? (row.attendees as number) : 0,
+  cover_image_url: (row.cover_image_url as string | null | undefined) ?? null,
   tags: normaliseTags(row.tags),
-  action_label: row.action_label ?? 'Réserver',
-  created_at: row.created_at,
-  updated_at: row.updated_at,
-  sponsor: mapSponsorProfile(row),
+  action_label: (row.action_label as string | undefined) ?? 'Réserver',
+  created_at: row.created_at as string,
+  updated_at: row.updated_at as string,
+  sponsor: mapSponsorProfile(row as { sponsor?: SponsorProfileSummary | null }),
 });
 
-const mapSponsorCall = (row: any): SponsorCallOpportunity => ({
-  id: row.id,
-  sponsor_id: row.sponsor_id,
-  title: row.title,
-  summary: row.summary,
-  description: row.description,
-  location: row.location ?? null,
-  deadline: row.deadline ?? null,
-  reward: row.reward ?? null,
-  highlight: row.highlight ?? null,
-  cover_image_url: row.cover_image_url ?? null,
+const mapSponsorCall = (row: RawSponsorRow): SponsorCallOpportunity => ({
+  id: row.id as string,
+  sponsor_id: row.sponsor_id as string,
+  title: row.title as string,
+  summary: row.summary as string,
+  description: row.description as string,
+  location: (row.location as string | null | undefined) ?? null,
+  deadline: (row.deadline as string | null | undefined) ?? null,
+  reward: (row.reward as string | null | undefined) ?? null,
+  highlight: (row.highlight as string | null | undefined) ?? null,
+  cover_image_url: (row.cover_image_url as string | null | undefined) ?? null,
   tags: normaliseTags(row.tags),
-  participants_label: row.participants_label ?? 'Candidatures',
-  participants_count: typeof row.participants_count === 'number' ? row.participants_count : 0,
-  action_label: row.action_label ?? 'Déposer un projet',
-  created_at: row.created_at,
-  updated_at: row.updated_at,
-  sponsor: mapSponsorProfile(row),
+  participants_label: (row.participants_label as string | undefined) ?? 'Candidatures',
+  participants_count: typeof row.participants_count === 'number' ? (row.participants_count as number) : 0,
+  action_label: (row.action_label as string | undefined) ?? 'Déposer un projet',
+  created_at: row.created_at as string,
+  updated_at: row.updated_at as string,
+  sponsor: mapSponsorProfile(row as { sponsor?: SponsorProfileSummary | null }),
 });
 
-const mapSponsorNews = (row: any): SponsorNewsItem => ({
-  id: row.id,
-  sponsor_id: row.sponsor_id,
-  title: row.title,
-  summary: row.summary,
-  body: row.body,
-  location: row.location ?? null,
-  published_at: row.published_at ?? null,
-  highlight: row.highlight ?? null,
-  cover_image_url: row.cover_image_url ?? null,
+const mapSponsorNews = (row: RawSponsorRow): SponsorNewsItem => ({
+  id: row.id as string,
+  sponsor_id: row.sponsor_id as string,
+  title: row.title as string,
+  summary: row.summary as string,
+  body: row.body as string,
+  location: (row.location as string | null | undefined) ?? null,
+  published_at: (row.published_at as string | null | undefined) ?? null,
+  highlight: (row.highlight as string | null | undefined) ?? null,
+  cover_image_url: (row.cover_image_url as string | null | undefined) ?? null,
   tags: normaliseTags(row.tags),
-  action_label: row.action_label ?? 'En savoir plus',
-  participants_label: row.participants_label ?? 'Lecteurs',
-  participants_count: typeof row.participants_count === 'number' ? row.participants_count : 0,
-  created_at: row.created_at,
-  updated_at: row.updated_at,
-  sponsor: mapSponsorProfile(row),
+  action_label: (row.action_label as string | undefined) ?? 'En savoir plus',
+  participants_label: (row.participants_label as string | undefined) ?? 'Lecteurs',
+  participants_count: typeof row.participants_count === 'number' ? (row.participants_count as number) : 0,
+  created_at: row.created_at as string,
+  updated_at: row.updated_at as string,
+  sponsor: mapSponsorProfile(row as { sponsor?: SponsorProfileSummary | null }),
 });
 
-export const mapSponsorOpportunityToRecord = (row: any, type: SponsorOpportunityRecord['type']): SponsorOpportunityRecord => {
+export const mapSponsorOpportunityToRecord = (
+  row: RawSponsorRow,
+  type: SponsorOpportunityRecord['type'],
+): SponsorOpportunityRecord => {
   switch (type) {
     case 'challenge':
       return { type, record: mapSponsorChallenge(row) };
@@ -130,6 +270,101 @@ export const mapSponsorOpportunityToRecord = (row: any, type: SponsorOpportunity
     default:
       return { type: 'news', record: mapSponsorNews(row) };
   }
+};
+
+const getRangeStatus = (
+  start: Date | null,
+  end: Date | null,
+  referenceDate: Date,
+): SponsorOpportunityStatus => {
+  if (start && start.getTime() > referenceDate.getTime()) {
+    return 'upcoming';
+  }
+
+  if (!end) {
+    return 'active';
+  }
+
+  const diff = end.getTime() - referenceDate.getTime();
+
+  if (diff < 0) {
+    return 'completed';
+  }
+
+  if (diff <= SEVEN_DAYS_MS) {
+    return 'closing-soon';
+  }
+
+  return 'active';
+};
+
+export const getSponsorOpportunityDate = (
+  opportunity: SponsorOpportunityRecord,
+): Date | null => {
+  switch (opportunity.type) {
+    case 'challenge':
+      return parseDate(opportunity.record.end_date ?? opportunity.record.start_date);
+    case 'event':
+      return parseDate(opportunity.record.event_date);
+    case 'call':
+      return parseDate(opportunity.record.deadline);
+    case 'news':
+      return parseDate(opportunity.record.published_at ?? opportunity.record.created_at);
+    default:
+      return null;
+  }
+};
+
+export const getSponsorOpportunityStatus = (
+  opportunity: SponsorOpportunityRecord,
+  referenceDate: Date = new Date(),
+): SponsorOpportunityStatus => {
+  switch (opportunity.type) {
+    case 'challenge': {
+      const { start_date: startDate, end_date: endDate } = opportunity.record;
+      return getRangeStatus(parseDate(startDate), parseDate(endDate), referenceDate);
+    }
+    case 'event': {
+      const eventDate = parseDate(opportunity.record.event_date);
+      return getRangeStatus(eventDate, eventDate, referenceDate);
+    }
+    case 'call': {
+      const deadline = parseDate(opportunity.record.deadline);
+      if (!deadline) {
+        return 'active';
+      }
+      const diff = deadline.getTime() - referenceDate.getTime();
+      if (diff < 0) {
+        return 'completed';
+      }
+      if (diff <= SEVEN_DAYS_MS) {
+        return 'closing-soon';
+      }
+      return 'active';
+    }
+    case 'news':
+    default:
+      return 'published';
+  }
+};
+
+export const toOpportunityRecords = (
+  collections: SponsorOpportunityCollections,
+  options: { includeNews?: boolean } = {},
+): SponsorOpportunityRecord[] => {
+  const includeNews = options.includeNews ?? true;
+
+  const records: SponsorOpportunityRecord[] = [
+    ...collections.challenges.map((record) => ({ type: 'challenge', record })),
+    ...collections.events.map((record) => ({ type: 'event', record })),
+    ...collections.calls.map((record) => ({ type: 'call', record })),
+  ];
+
+  if (includeNews) {
+    records.push(...collections.news.map((record) => ({ type: 'news', record })));
+  }
+
+  return records;
 };
 
 function logMissingTable(table: string, error: PostgrestError) {
@@ -205,60 +440,124 @@ const withDefaultTags = <T extends { tags?: string[] }>(payload: T): T => ({
   tags: payload.tags ?? [],
 });
 
-export async function fetchSponsorChallenges(): Promise<SponsorChallengeOpportunity[]> {
-  const rows = await fetchWithSponsorFallback<any[] | null>(
+export async function fetchSponsorChallenges(
+  options: FetchSponsorEntityOptions = {},
+): Promise<SponsorChallengeOpportunity[]> {
+  const { sponsorId } = options;
+  const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_challenges',
-    supabase
-      .from('sponsor_challenges')
-      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-      .order('end_date', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: false }),
-    () => [] as any[],
+    (() => {
+      const query = supabase
+        .from('sponsor_challenges')
+        .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+        .order('end_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      if (sponsorId) {
+        query.eq('sponsor_id', sponsorId);
+      }
+
+      return query;
+    })(),
+    () => [] as RawSponsorRow[],
   );
 
   return (rows ?? []).map(mapSponsorChallenge);
 }
 
-export async function fetchSponsorEvents(): Promise<SponsorEventOpportunity[]> {
-  const rows = await fetchWithSponsorFallback<any[] | null>(
+export async function fetchSponsorEvents(
+  options: FetchSponsorEntityOptions = {},
+): Promise<SponsorEventOpportunity[]> {
+  const { sponsorId } = options;
+  const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_events',
-    supabase
-      .from('sponsor_events')
-      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-      .order('event_date', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: false }),
-    () => [] as any[],
+    (() => {
+      const query = supabase
+        .from('sponsor_events')
+        .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+        .order('event_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      if (sponsorId) {
+        query.eq('sponsor_id', sponsorId);
+      }
+
+      return query;
+    })(),
+    () => [] as RawSponsorRow[],
   );
 
   return (rows ?? []).map(mapSponsorEvent);
 }
 
-export async function fetchSponsorCalls(): Promise<SponsorCallOpportunity[]> {
-  const rows = await fetchWithSponsorFallback<any[] | null>(
+export async function fetchSponsorCalls(
+  options: FetchSponsorEntityOptions = {},
+): Promise<SponsorCallOpportunity[]> {
+  const { sponsorId } = options;
+  const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_calls',
-    supabase
-      .from('sponsor_calls')
-      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-      .order('deadline', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: false }),
-    () => [] as any[],
+    (() => {
+      const query = supabase
+        .from('sponsor_calls')
+        .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+        .order('deadline', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      if (sponsorId) {
+        query.eq('sponsor_id', sponsorId);
+      }
+
+      return query;
+    })(),
+    () => [] as RawSponsorRow[],
   );
 
   return (rows ?? []).map(mapSponsorCall);
 }
 
-export async function fetchSponsorNews(): Promise<SponsorNewsItem[]> {
-  const rows = await fetchWithSponsorFallback<any[] | null>(
+export async function fetchSponsorNews(
+  options: FetchSponsorEntityOptions = {},
+): Promise<SponsorNewsItem[]> {
+  const { sponsorId } = options;
+  const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_news',
-    supabase
-      .from('sponsor_news')
-      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-      .order('published_at', { ascending: false, nullsLast: true })
-      .order('created_at', { ascending: false }),
-    () => [] as any[],
+    (() => {
+      const query = supabase
+        .from('sponsor_news')
+        .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+        .order('published_at', { ascending: false, nullsLast: true })
+        .order('created_at', { ascending: false });
+
+      if (sponsorId) {
+        query.eq('sponsor_id', sponsorId);
+      }
+
+      return query;
+    })(),
+    () => [] as RawSponsorRow[],
   );
 
   return (rows ?? []).map(mapSponsorNews);
+}
+
+export async function fetchSponsorOpportunityCollections(
+  options: FetchSponsorOpportunitiesOptions = {},
+): Promise<SponsorOpportunityCollections> {
+  const { sponsorId, includeNews = true } = options;
+
+  const [challenges, events, calls, news] = await Promise.all([
+    fetchSponsorChallenges({ sponsorId }),
+    fetchSponsorEvents({ sponsorId }),
+    fetchSponsorCalls({ sponsorId }),
+    includeNews ? fetchSponsorNews({ sponsorId }) : Promise.resolve<SponsorNewsItem[]>([]),
+  ]);
+
+  return {
+    challenges,
+    events,
+    calls,
+    news,
+  };
 }
 
 export async function createSponsorChallenge(

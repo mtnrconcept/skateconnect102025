@@ -31,6 +31,7 @@ import type {
   SponsorEditableOpportunityType,
   SponsorEventOpportunity,
   SponsorNewsItem,
+  SponsorOpportunityType,
 } from '../../types';
 import {
   getStoredChallengeRegistrations,
@@ -39,22 +40,24 @@ import {
   registerForEvent,
 } from '../../lib/engagement';
 import {
-  deleteSponsorCall,
-  deleteSponsorChallenge,
-  deleteSponsorEvent,
-  fetchSponsorCalls,
-  fetchSponsorChallenges,
-  fetchSponsorEvents,
-  fetchSponsorNews,
+  SPONSOR_OPPORTUNITY_DATE_FILTERS,
+  SPONSOR_OPPORTUNITY_STATUS_META,
+  SPONSOR_OPPORTUNITY_TYPE_FILTERS,
+  SPONSOR_OPPORTUNITY_TYPE_LABELS,
+  getSponsorOpportunityDate,
+  getSponsorOpportunityStatus,
+  matchesOpportunityDateFilter,
+  type SponsorOpportunityDateFilter,
+  type SponsorOpportunityStatus,
 } from '../../lib/sponsorOpportunities';
-import { isSchemaMissing } from '../../lib/postgrest';
+import { useSponsorOpportunities } from '../../hooks/useSponsorOpportunities';
 import SponsorPostForm from '../sponsors/SponsorPostForm';
 
 interface SponsorsSectionProps {
   profile: Profile | null;
 }
 
-type PostType = 'challenge' | 'event' | 'call' | 'news';
+type PostType = SponsorOpportunityType;
 
 type FeedbackTone = 'success' | 'info' | 'error';
 
@@ -88,6 +91,7 @@ interface SponsorFeedPost {
   participantsCount: number;
   actionLabel: string;
   editable: boolean;
+  status: SponsorOpportunityStatus;
   challenge?: SponsorChallengeOpportunity;
   event?: SponsorEventOpportunity;
   call?: SponsorCallOpportunity;
@@ -138,17 +142,11 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<PostType | 'all'>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'soon' | 'month' | 'past'>('all');
+  const [dateFilter, setDateFilter] = useState<SponsorOpportunityDateFilter>('all');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'participations' | 'participer'>('details');
   const [participationSort, setParticipationSort] = useState<'votes' | 'recent'>('votes');
   const [participations, setParticipations] = useState<Record<string, ParticipationMedia[]>>({});
-  const [challenges, setChallenges] = useState<SponsorChallengeOpportunity[]>([]);
-  const [events, setEvents] = useState<SponsorEventOpportunity[]>([]);
-  const [calls, setCalls] = useState<SponsorCallOpportunity[]>([]);
-  const [news, setNews] = useState<SponsorNewsItem[]>([]);
-  const [loadingOpportunities, setLoadingOpportunities] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [formState, setFormState] = useState<
     | { mode: 'create'; type: SponsorEditableOpportunityType }
     | { mode: 'edit'; type: 'challenge'; record: SponsorChallengeOpportunity }
@@ -164,6 +162,18 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
   const [submissionPreview, setSubmissionPreview] = useState<string | null>(null);
   const isSponsor = profile?.role === 'sponsor';
 
+  const {
+    challenges,
+    events,
+    calls,
+    news,
+    loading: loadingOpportunities,
+    error: loadError,
+    clearError: clearOpportunityError,
+    upsertOpportunity,
+    deleteOpportunity,
+  } = useSponsorOpportunities({ includeNews: true });
+
   useEffect(() => {
     setJoinedChallenges(Array.from(getStoredChallengeRegistrations()));
     setRegisteredEvents(Array.from(getStoredEventRegistrations()));
@@ -177,46 +187,6 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
     };
   }, [submissionPreview]);
 
-  const loadOpportunities = useCallback(async () => {
-    setLoadingOpportunities(true);
-    setLoadError(null);
-
-    try {
-      const [challengeData, eventData, callData, newsData] = await Promise.all([
-        fetchSponsorChallenges(),
-        fetchSponsorEvents(),
-        fetchSponsorCalls(),
-        fetchSponsorNews(),
-      ]);
-
-      setChallenges(challengeData);
-      setEvents(eventData);
-      setCalls(callData);
-      setNews(newsData);
-    } catch (cause) {
-      const postgrestError =
-        (cause as { error?: Parameters<typeof isSchemaMissing>[0] })?.error ??
-        (cause as Parameters<typeof isSchemaMissing>[0]);
-
-      if (isSchemaMissing(postgrestError)) {
-        console.warn('[SponsorsSection] loadOpportunities: sponsor schema not available (PGRST205).');
-        setChallenges([]);
-        setEvents([]);
-        setCalls([]);
-        setNews([]);
-      } else {
-        console.error('Unable to load sponsor opportunities', cause);
-        setLoadError('Impossible de charger les opportunités sponsor pour le moment.');
-      }
-    } finally {
-      setLoadingOpportunities(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadOpportunities();
-  }, [loadOpportunities]);
-
   const joinedChallengeSet = useMemo(() => new Set(joinedChallenges), [joinedChallenges]);
   const registeredEventSet = useMemo(() => new Set(registeredEvents), [registeredEvents]);
 
@@ -225,66 +195,27 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
       type: SponsorEditableOpportunityType,
       record: SponsorChallengeOpportunity | SponsorEventOpportunity | SponsorCallOpportunity,
     ) => {
-      if (type === 'challenge') {
-        const challengeRecord = record as SponsorChallengeOpportunity;
-        setChallenges((current) => {
-          const exists = current.some((item) => item.id === challengeRecord.id);
-          return exists
-            ? current.map((item) => (item.id === challengeRecord.id ? challengeRecord : item))
-            : [challengeRecord, ...current];
-        });
-      } else if (type === 'event') {
-        const eventRecord = record as SponsorEventOpportunity;
-        setEvents((current) => {
-          const exists = current.some((item) => item.id === eventRecord.id);
-          return exists
-            ? current.map((item) => (item.id === eventRecord.id ? eventRecord : item))
-            : [eventRecord, ...current];
-        });
-      } else {
-        const callRecord = record as SponsorCallOpportunity;
-        setCalls((current) => {
-          const exists = current.some((item) => item.id === callRecord.id);
-          return exists
-            ? current.map((item) => (item.id === callRecord.id ? callRecord : item))
-            : [callRecord, ...current];
-        });
-      }
-
-      setLoadError(null);
+      upsertOpportunity(type, record);
+      clearOpportunityError();
       setFormState(null);
     },
-    [],
+    [clearOpportunityError, upsertOpportunity],
   );
 
   const handleOpportunityDeleted = useCallback(
     async (type: SponsorEditableOpportunityType, id: string) => {
-      try {
-        if (type === 'challenge') {
-          await deleteSponsorChallenge(id);
-          setChallenges((current) => current.filter((item) => item.id !== id));
-        } else if (type === 'event') {
-          await deleteSponsorEvent(id);
-          setEvents((current) => current.filter((item) => item.id !== id));
-        } else {
-          await deleteSponsorCall(id);
-          setCalls((current) => current.filter((item) => item.id !== id));
-        }
-
-        setLoadError(null);
-        setFormState(null);
-      } catch (cause) {
-        console.error('Unable to delete sponsor opportunity', cause);
-        setLoadError('Impossible de supprimer cette opportunité. Réessaie plus tard.');
-        throw cause;
-      }
+      await deleteOpportunity(type, id);
+      clearOpportunityError();
+      setFormState(null);
     },
-    [],
+    [clearOpportunityError, deleteOpportunity],
   );
 
   const posts = useMemo(() => {
     const challengePosts: SponsorFeedPost[] = challenges.map((challenge) => {
-      const endDate = challenge.end_date ? new Date(challenge.end_date) : null;
+      const record = { type: 'challenge' as const, record: challenge };
+      const status = getSponsorOpportunityStatus(record);
+      const endDate = getSponsorOpportunityDate(record);
       const challengeTags = Array.isArray(challenge.tags) ? challenge.tags : [];
       return {
         id: challenge.id,
@@ -312,12 +243,15 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
           ? 'Déjà inscrit'
           : challenge.action_label || 'Voir le défi',
         editable: true,
+        status,
         challenge,
       };
     });
 
     const eventPosts: SponsorFeedPost[] = events.map((event) => {
-      const eventDate = event.event_date ? new Date(event.event_date) : null;
+      const record = { type: 'event' as const, record: event };
+      const status = getSponsorOpportunityStatus(record);
+      const eventDate = getSponsorOpportunityDate(record);
       const dateLabel = event.event_date
         ? `${new Date(event.event_date).toLocaleDateString('fr-FR', {
             day: '2-digit',
@@ -347,12 +281,15 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
           ? 'Place réservée'
           : event.action_label || 'Réserver',
         editable: true,
+        status,
         event,
       };
     });
 
     const callPosts: SponsorFeedPost[] = calls.map((call) => {
-      const deadline = call.deadline ? new Date(call.deadline) : null;
+      const record = { type: 'call' as const, record: call };
+      const status = getSponsorOpportunityStatus(record);
+      const deadline = getSponsorOpportunityDate(record);
       const callTags = Array.isArray(call.tags) ? call.tags : [];
       return {
         id: call.id,
@@ -378,12 +315,15 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         participantsCount: call.participants_count ?? 0,
         actionLabel: call.action_label,
         editable: true,
+        status,
         call,
       };
     });
 
     const newsPosts: SponsorFeedPost[] = news.map((item) => {
-      const published = item.published_at ? new Date(item.published_at) : null;
+      const record = { type: 'news' as const, record: item };
+      const status = getSponsorOpportunityStatus(record);
+      const published = getSponsorOpportunityDate(record);
       const newsTags = Array.isArray(item.tags) ? item.tags : [];
       return {
         id: item.id,
@@ -409,6 +349,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         participantsCount: item.participants_count ?? 0,
         actionLabel: item.action_label,
         editable: false,
+        status,
         news: item,
       };
     });
@@ -440,22 +381,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
       const matchesType = typeFilter === 'all' || post.type === typeFilter;
       const matchesLocation = locationFilter === 'all' || post.location === locationFilter;
 
-      const matchesDate = (() => {
-        if (!post.dateValue || dateFilter === 'all') return true;
-
-        const diffDays = Math.round((post.dateValue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-        switch (dateFilter) {
-          case 'soon':
-            return diffDays >= 0 && diffDays <= 7;
-          case 'month':
-            return diffDays >= 0 && diffDays <= 30;
-          case 'past':
-            return diffDays < 0;
-          default:
-            return true;
-        }
-      })();
+      const matchesDate = matchesOpportunityDateFilter(post.dateValue, dateFilter, now);
 
       return matchesSearch && matchesType && matchesLocation && matchesDate;
     });
@@ -523,13 +449,10 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
 
       if (result.success) {
         setJoinedChallenges((prev) => [...prev, challenge.id]);
-        setChallenges((prev) =>
-          prev.map((item) =>
-            item.id === challenge.id
-              ? { ...item, participants_count: item.participants_count + 1 }
-              : item,
-          ),
-        );
+        upsertOpportunity('challenge', {
+          ...challenge,
+          participants_count: challenge.participants_count + 1,
+        });
       }
 
       setFeedback((prev) => ({
@@ -545,7 +468,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         tone: result.success ? 'success' : 'info',
       });
     },
-    [joinedChallengeSet, profile]
+    [joinedChallengeSet, profile, upsertOpportunity]
   );
 
   const handleJoinEvent = useCallback(
@@ -586,11 +509,10 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
 
       if (result.success) {
         setRegisteredEvents((prev) => [...prev, event.id]);
-        setEvents((prev) =>
-          prev.map((item) =>
-            item.id === event.id ? { ...item, attendees: item.attendees + 1 } : item,
-          ),
-        );
+        upsertOpportunity('event', {
+          ...event,
+          attendees: event.attendees + 1,
+        });
       }
 
       setFeedback((prev) => ({
@@ -606,7 +528,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         tone: result.success ? 'success' : 'info',
       });
     },
-    [profile, registeredEventSet]
+    [profile, registeredEventSet, upsertOpportunity]
   );
 
   const handleOpenPost = (postId: string) => {
@@ -809,13 +731,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          {[
-            { value: 'all' as const, label: 'Tout' },
-            { value: 'challenge' as const, label: 'Défis' },
-            { value: 'event' as const, label: 'Événements' },
-            { value: 'call' as const, label: 'Appels à projet' },
-            { value: 'news' as const, label: 'Actu sponsors' },
-          ].map((filterItem) => {
+          {SPONSOR_OPPORTUNITY_TYPE_FILTERS.map((filterItem) => {
             const isActive = typeFilter === filterItem.value;
             return (
               <button
@@ -847,13 +763,14 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
             </select>
             <select
               value={dateFilter}
-              onChange={(event) => setDateFilter(event.target.value as typeof dateFilter)}
+              onChange={(event) => setDateFilter(event.target.value as SponsorOpportunityDateFilter)}
               className="bg-dark-800 border border-dark-700 rounded-xl px-4 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
-              <option value="all">Toutes les dates</option>
-              <option value="soon">Cette semaine</option>
-              <option value="month">Ce mois-ci</option>
-              <option value="past">Événements passés</option>
+              {SPONSOR_OPPORTUNITY_DATE_FILTERS.map((filterItem) => (
+                <option key={filterItem.value} value={filterItem.value}>
+                  {filterItem.label}
+                </option>
+              ))}
             </select>
             {(searchTerm || typeFilter !== 'all' || locationFilter !== 'all' || dateFilter !== 'all') && (
               <button
@@ -882,6 +799,8 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
       <section className="space-y-6">
         {filteredPosts.map((post) => {
           const relativeDate = formatRelativeDate(post.dateValue);
+          const statusMeta = SPONSOR_OPPORTUNITY_STATUS_META[post.status];
+          const typeLabel = SPONSOR_OPPORTUNITY_TYPE_LABELS[post.type];
           const postFeedback = feedback[post.id];
           const isChallenge = post.type === 'challenge' && joinedChallengeSet.has(post.id);
           const isEvent = post.type === 'event' && registeredEventSet.has(post.id);
@@ -941,6 +860,16 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
                 )}
                 <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${statusMeta.badgeClass}`}
+                      >
+                        {statusMeta.label}
+                      </span>
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-black/50 text-gray-200 border border-white/10">
+                        {typeLabel}
+                      </span>
+                    </div>
                     <span className="text-xs uppercase tracking-wide text-orange-300">
                       {post.sponsor}
                     </span>
