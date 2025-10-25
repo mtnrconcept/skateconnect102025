@@ -1,7 +1,18 @@
+import type { PostgrestResponse } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { isColumnMissingError } from './supabaseErrors';
 import type { Section, ContentNavigationOptions } from '../types';
 import type { SubscriptionPlan } from './subscription';
 import { getRequiredPlanForSection } from './subscription';
+
+type RiderSearchRow = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  bio: string | null;
+  role?: string | null;
+  created_at: string | null;
+};
 
 export type SearchContentType = 'riders' | 'spots' | 'challenges' | 'hashtags';
 
@@ -155,29 +166,48 @@ const fetchRiders = async (
   }
 
   try {
-    let queryBuilder = supabase
-      .from('profiles')
-      .select('id, display_name, username, bio, role, created_at', { count: 'exact' })
-      .range(0, Math.max(pagination.fetchLimit - 1, 0));
+    const createQuery = (selectColumns: string) => {
+      let queryBuilder = supabase
+        .from<RiderSearchRow>('profiles')
+        .select(selectColumns, { count: 'exact' })
+        .range(0, Math.max(pagination.fetchLimit - 1, 0));
 
-    if (context.query) {
-      const likeValue = `%${context.query}%`;
-      queryBuilder = queryBuilder.or(
-        ['display_name', 'username', 'bio'].map((column) => `${column}.ilike.${likeValue}`).join(','),
+      if (context.query) {
+        const likeValue = `%${context.query}%`;
+        queryBuilder = queryBuilder.or(
+          ['display_name', 'username', 'bio'].map((column) => `${column}.ilike.${likeValue}`).join(','),
+        );
+      }
+
+      if (context.locationFilter) {
+        queryBuilder = queryBuilder.ilike('bio', `%${context.locationFilter}%`);
+      }
+
+      if (context.sort === 'alphabetical') {
+        queryBuilder = queryBuilder.order('display_name', { ascending: true, nullsFirst: false });
+      } else if (context.sort === 'recent') {
+        queryBuilder = queryBuilder.order('created_at', { ascending: false, nullsLast: true });
+      }
+
+      return queryBuilder;
+    };
+
+    const withRoleColumns = 'id, display_name, username, bio, role, created_at';
+    let fallbackRole = false;
+
+    let result: PostgrestResponse<RiderSearchRow> = await createQuery(withRoleColumns);
+    let { data, count, error } = result;
+
+    if (error && isColumnMissingError(error, 'role')) {
+      fallbackRole = true;
+      console.info(
+        '[search] profiles.role column is missing. Falling back to default rider role for search results.',
       );
+      result = await createQuery('id, display_name, username, bio, created_at');
+      data = result.data;
+      count = result.count;
+      error = result.error;
     }
-
-    if (context.locationFilter) {
-      queryBuilder = queryBuilder.ilike('bio', `%${context.locationFilter}%`);
-    }
-
-    if (context.sort === 'alphabetical') {
-      queryBuilder = queryBuilder.order('display_name', { ascending: true, nullsFirst: false });
-    } else if (context.sort === 'recent') {
-      queryBuilder = queryBuilder.order('created_at', { ascending: false, nullsLast: true });
-    }
-
-    const { data, count, error } = await queryBuilder;
 
     if (error) {
       throw error;
@@ -191,6 +221,10 @@ const fetchRiders = async (
       const score =
         baseScores.riders +
         computeMatchScore([title, description, metadata], normalizedTokens);
+
+      if (fallbackRole) {
+        (profile as { role?: string | null }).role = 'skater';
+      }
 
       return {
         id: profile.id,
