@@ -54,6 +54,84 @@ export default function SpotGrid({
   const [sliderTransform, setSliderTransform] = useState(0);
   const [sliderTransitionEnabled, setSliderTransitionEnabled] = useState(false);
 
+  /** Gestion du dépassement de contenu (description) */
+  const descriptionRefs = useRef(new Map<string, HTMLParagraphElement>());
+  const descriptionObservers = useRef(new Map<string, ResizeObserver>());
+  const [overflowingDescriptions, setOverflowingDescriptions] = useState<Record<string, boolean>>({});
+
+  const updateOverflowingDescriptions = useCallback(() => {
+    const refMap = descriptionRefs.current;
+    const next: Record<string, boolean> = {};
+
+    refMap.forEach((node, spotId) => {
+      if (!node) return;
+      const isOverflowing = node.scrollHeight > node.clientHeight + 1;
+      if (isOverflowing) {
+        next[spotId] = true;
+      }
+    });
+
+    setOverflowingDescriptions((previous) => {
+      const previousKeys = Object.keys(previous);
+      const nextKeys = Object.keys(next);
+
+      if (previousKeys.length === nextKeys.length) {
+        const isSame = previousKeys.every((key) => previous[key] === next[key]);
+        if (isSame) return previous;
+      }
+
+      return next;
+    });
+  }, []);
+
+  const registerDescriptionRef = useCallback(
+    (spotId: string, node: HTMLParagraphElement | null) => {
+      const refMap = descriptionRefs.current;
+      const observerMap = descriptionObservers.current;
+
+      const previousNode = refMap.get(spotId);
+      const existingObserver = observerMap.get(spotId);
+
+      if (!node) {
+        if (existingObserver) {
+          existingObserver.disconnect();
+          observerMap.delete(spotId);
+        }
+        refMap.delete(spotId);
+        updateOverflowingDescriptions();
+        return;
+      }
+
+      refMap.set(spotId, node);
+
+      if (previousNode !== node) {
+        if (existingObserver) {
+          existingObserver.disconnect();
+          observerMap.delete(spotId);
+        }
+
+        if (typeof ResizeObserver !== 'undefined') {
+          const observer = new ResizeObserver(() => {
+            updateOverflowingDescriptions();
+          });
+          observer.observe(node);
+          observerMap.set(spotId, observer);
+        }
+      }
+
+      updateOverflowingDescriptions();
+    },
+    [updateOverflowingDescriptions]
+  );
+
+  useEffect(() => {
+    return () => {
+      descriptionObservers.current.forEach((observer) => observer.disconnect());
+      descriptionObservers.current.clear();
+      descriptionRefs.current.clear();
+    };
+  }, []);
+
   /** Ids/refs */
   const rawId = useId();
   const gridId = `spot-grid-${rawId.replace(/:/g, '')}`;
@@ -128,14 +206,22 @@ export default function SpotGrid({
     measureCurrentPage();
   }, [measureCurrentPage, visibleSpots]);
 
+  useLayoutEffect(() => {
+    const id = requestAnimationFrame(() => {
+      updateOverflowingDescriptions();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [visibleSpots, updateOverflowingDescriptions]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
       measureCurrentPage();
+      updateOverflowingDescriptions();
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [measureCurrentPage]);
+  }, [measureCurrentPage, updateOverflowingDescriptions]);
 
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined') return;
@@ -244,10 +330,12 @@ export default function SpotGrid({
     const coverPhotoUrl = coverPhotos?.[spot.id];
     const mediaUrl = coverPhotoUrl ?? extendedSpot.mediaUrl ?? extendedSpot.media_url;
     const rating = Math.max(0, Math.min(5, extendedSpot.rating ?? extendedSpot.difficulty ?? 0));
+    const hasOverflowingDescription = Boolean(overflowingDescriptions[spot.id]);
 
     return (
       <button
         key={key}
+        type="button"
         onClick={() => onSpotClick?.(spot)}
         className="group relative flex h-full min-h-[320px] w-full flex-col overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
         role="listitem"
@@ -294,7 +382,27 @@ export default function SpotGrid({
             )}
           </div>
 
-          {spot.description && <p className="line-clamp-3 text-sm text-gray-200">{spot.description}</p>}
+          {spot.description && (
+            <div className="flex flex-col gap-2">
+              <p
+                ref={(node) => registerDescriptionRef(spot.id, node)}
+                data-spot-description
+                className="spot-card-description text-sm text-gray-200"
+              >
+                {spot.description}
+              </p>
+              <span
+                aria-hidden={!hasOverflowingDescription}
+                className={
+                  hasOverflowingDescription
+                    ? 'text-xs font-semibold uppercase tracking-widest text-orange-300'
+                    : 'invisible text-xs font-semibold uppercase tracking-widest text-orange-300'
+                }
+              >
+                Afficher plus
+              </span>
+            </div>
+          )}
 
           <div className="mt-auto flex flex-wrap items-center justify-between gap-3 text-xs text-gray-200">
             <div className="flex items-center gap-2">
