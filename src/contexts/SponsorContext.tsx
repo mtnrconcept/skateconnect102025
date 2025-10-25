@@ -31,8 +31,10 @@ import {
   updateSponsorSpotlight,
 } from '../lib/sponsorSpotlights';
 import {
+  createSponsorShopItem,
   fetchSponsorShopItems,
   updateSponsorShopItem,
+  type ShopItemPayload,
 } from '../lib/sponsorShop';
 import {
   fetchSponsorApiKeys,
@@ -83,7 +85,19 @@ function isSchemaMissing(err: unknown): boolean {
   const error = err as PostgrestLikeError | undefined;
   const code = error?.code ?? error?.error?.code;
   const message = error?.message ?? error?.error?.message ?? '';
-  return code === 'PGRST205' || /Could not find the table/.test(message);
+  if (code === 'PGRST205' || /Could not find the table/.test(message)) {
+    return true;
+  }
+
+  if (typeof err === 'string') {
+    return /sponsor_shop_items/.test(err) || /schema not available/i.test(err);
+  }
+
+  if (err instanceof Error) {
+    return /sponsor_shop_items/.test(err.message) || /schema not available/i.test(err.message);
+  }
+
+  return false;
 }
 
 const extractPostgrestError = (cause: unknown) => (cause as { error?: unknown })?.error ?? cause;
@@ -176,6 +190,13 @@ interface SponsorContextValue {
   refreshOpportunities: () => Promise<void>;
   updateSpotlightStatus: (spotlightId: string, status: SponsorSpotlight['status']) => Promise<void>;
   updateShopItemAvailability: (shopItemId: string, isActive: boolean) => Promise<void>;
+  createShopItem: (
+    payload: Omit<ShopItemPayload, 'sponsor_id'>,
+  ) => Promise<SponsorShopItem | null>;
+  editShopItem: (
+    shopItemId: string,
+    updates: Partial<Omit<SponsorShopItem, 'id' | 'sponsor_id' | 'created_at' | 'updated_at'>>,
+  ) => Promise<SponsorShopItem | null>;
   revokeApiKey: (apiKeyId: string) => Promise<void>;
   createApiKey: (
     params: Omit<CreateSponsorApiKeyParams, 'sponsorId'>,
@@ -426,6 +447,65 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     [permissions.canManageShop, sponsorId],
   );
 
+  const createShopItemHandler = useCallback(
+    async (payload: Omit<ShopItemPayload, 'sponsor_id'>) => {
+      if (!sponsorId || !permissions.canManageShop) {
+        return null;
+      }
+
+      try {
+        const record = await createSponsorShopItem({ ...payload, sponsor_id: sponsorId });
+        setShopItems((current) => [record, ...current]);
+        setError(null);
+        return record;
+      } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('createShopItem', cause);
+          const message = 'Fonction boutique indisponible (schéma sponsor non déployé).';
+          setError(message);
+          throw cause instanceof Error ? cause : new Error(message);
+        }
+        console.error('Unable to create shop item', cause);
+        const message = 'Impossible de créer un produit dans la boutique.';
+        setError(message);
+        throw cause instanceof Error ? cause : new Error(message);
+      }
+    },
+    [permissions.canManageShop, sponsorId],
+  );
+
+  const editShopItemHandler = useCallback(
+    async (
+      shopItemId: string,
+      updates: Partial<Omit<SponsorShopItem, 'id' | 'sponsor_id' | 'created_at' | 'updated_at'>>,
+    ) => {
+      if (!sponsorId || !permissions.canManageShop) {
+        return null;
+      }
+
+      try {
+        const record = await updateSponsorShopItem(shopItemId, updates);
+        setShopItems((current) =>
+          current.map((item) => (item.id === record.id ? record : item)),
+        );
+        setError(null);
+        return record;
+      } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('editShopItem', cause);
+          const message = 'Fonction boutique indisponible (schéma sponsor non déployé).';
+          setError(message);
+          throw cause instanceof Error ? cause : new Error(message);
+        }
+        console.error('Unable to edit shop item', cause);
+        const message = 'Impossible de modifier ce produit de la boutique.';
+        setError(message);
+        throw cause instanceof Error ? cause : new Error(message);
+      }
+    },
+    [permissions.canManageShop, sponsorId],
+  );
+
   const revokeApiKeyHandler = useCallback(
     async (apiKeyId: string) => {
       if (!sponsorId || !permissions.canManageApiKeys) return;
@@ -603,6 +683,8 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshOpportunities,
     updateSpotlightStatus,
     updateShopItemAvailability,
+    createShopItem: createShopItemHandler,
+    editShopItem: editShopItemHandler,
     revokeApiKey: revokeApiKeyHandler,
     createApiKey: createApiKeyHandler,
     upsertOpportunity,
@@ -632,6 +714,8 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshOpportunities,
     updateSpotlightStatus,
     updateShopItemAvailability,
+    createShopItemHandler,
+    editShopItemHandler,
     revokeApiKeyHandler,
     createApiKeyHandler,
     upsertOpportunity,

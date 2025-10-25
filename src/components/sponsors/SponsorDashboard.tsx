@@ -9,6 +9,8 @@ import {
   KeyRound,
   Mail,
   Megaphone,
+  Pencil,
+  Plus,
   Phone,
   RefreshCw,
   Store,
@@ -19,7 +21,8 @@ import {
 import { useSponsorContext } from '../../contexts/SponsorContext';
 import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
 import SponsorOpportunitiesView from './opportunities/SponsorOpportunitiesView';
-import type { SponsorSpotlight } from '../../types';
+import type { SponsorShopItem, SponsorSpotlight } from '../../types';
+import SponsorShopItemFormModal from './SponsorShopItemFormModal';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
@@ -164,9 +167,26 @@ export default function SponsorDashboard() {
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [isCreatingKey, setIsCreatingKey] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [shopItemBeingEdited, setShopItemBeingEdited] = useState<SponsorShopItem | null>(null);
 
   const primaryColor = branding?.primary_color ?? '#0ea5e9';
   const secondaryColor = branding?.secondary_color ?? '#1e293b';
+
+  const openCreateShopItemModal = () => {
+    setShopItemBeingEdited(null);
+    setIsShopModalOpen(true);
+  };
+
+  const openEditShopItemModal = (item: SponsorShopItem) => {
+    setShopItemBeingEdited(item);
+    setIsShopModalOpen(true);
+  };
+
+  const closeShopItemModal = () => {
+    setIsShopModalOpen(false);
+    setShopItemBeingEdited(null);
+  };
 
   const overviewCards = useMemo(
     () => [
@@ -548,39 +568,92 @@ export default function SponsorDashboard() {
           La gestion de la boutique n'est pas incluse dans ton pack actuel.
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {shopItems.length === 0 ? (
-            <div className="md:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-slate-300 text-center">
-              Aucun produit listé pour l'instant.
+        <>
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Catalogue boutique</h3>
+              <p className="text-sm text-slate-400">Ajoute de nouveaux produits ou mets à jour ton inventaire.</p>
             </div>
-          ) : (
-            shopItems.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-white">{item.name}</h3>
-                  <span className="text-sm text-slate-400">
-                    {(item.price_cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: item.currency })}
-                  </span>
-                </div>
-                {item.description && <p className="text-sm text-slate-300">{item.description}</p>}
-                <div className="flex items-center justify-between text-sm text-slate-400">
-                  <span>Stock : {item.stock}</span>
-                  <button
-                    type="button"
-                    onClick={() => updateShopItemAvailability(item.id, !item.is_active)}
-                    className={`rounded-full border px-3 py-1 ${
-                      item.is_active
-                        ? 'border-emerald-500/60 text-emerald-200 hover:bg-emerald-500/10'
-                        : 'border-slate-600 text-slate-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    {item.is_active ? 'Mettre en pause' : 'Réactiver'}
-                  </button>
-                </div>
+            <button
+              type="button"
+              onClick={openCreateShopItemModal}
+              className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/20"
+            >
+              <Plus size={16} /> Ajouter un produit
+            </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {shopItems.length === 0 ? (
+              <div className="md:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-center text-slate-300">
+                Aucun produit listé pour l'instant.
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              shopItems.map((item) => (
+                <div key={item.id} className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6">
+                  {item.image_url ? (
+                    <div className="overflow-hidden rounded-xl border border-slate-700/60">
+                      <img src={item.image_url} alt={item.name} className="h-40 w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-700 text-sm text-slate-500">
+                      Aucun visuel pour l'instant
+                    </div>
+                  )}
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">{item.name}</h3>
+                      <p className="text-sm text-slate-400">
+                        {(item.price_cents / 100).toLocaleString('fr-FR', {
+                          style: 'currency',
+                          currency: item.currency,
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openEditShopItemModal(item)}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
+                    >
+                      <Pencil size={14} /> Modifier
+                    </button>
+                  </div>
+
+                  {item.description && <p className="text-sm text-slate-300">{item.description}</p>}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-widest">
+                    <span className="rounded-full border border-slate-700 px-3 py-1 text-slate-400">Stock : {item.stock}</span>
+                    <span
+                      className={`rounded-full px-3 py-1 ${
+                        item.is_active
+                          ? 'border border-emerald-500/60 text-emerald-200'
+                          : 'border border-slate-600 text-slate-400'
+                      }`}
+                    >
+                      {item.is_active ? 'Actif' : 'En pause'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm text-slate-400">
+                    <span>Dernière mise à jour : {new Date(item.updated_at).toLocaleDateString('fr-FR')}</span>
+                    <button
+                      type="button"
+                      onClick={() => updateShopItemAvailability(item.id, !item.is_active)}
+                      className={`rounded-full border px-3 py-1 transition ${
+                        item.is_active
+                          ? 'border-emerald-500/60 text-emerald-200 hover:bg-emerald-500/10'
+                          : 'border-slate-600 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      {item.is_active ? 'Mettre en pause' : 'Réactiver'}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -707,8 +780,9 @@ export default function SponsorDashboard() {
   }
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
+    <>
+      <div className="min-h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+        <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Sponsor cockpit</p>
@@ -759,7 +833,15 @@ export default function SponsorDashboard() {
           {activeView === 'shop' && renderShop()}
           {activeView === 'api-keys' && renderApiKeys()}
         </div>
+        </div>
       </div>
-    </div>
+      {isShopModalOpen && (
+        <SponsorShopItemFormModal
+          mode={shopItemBeingEdited ? 'edit' : 'create'}
+          item={shopItemBeingEdited}
+          onClose={closeShopItemModal}
+        />
+      )}
+    </>
   );
 }
