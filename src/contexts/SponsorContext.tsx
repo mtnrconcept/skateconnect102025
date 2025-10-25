@@ -31,6 +31,7 @@ import {
   updateSponsorSpotlight,
 } from '../lib/sponsorSpotlights';
 import {
+  createSponsorShopItem,
   fetchSponsorShopItems,
   updateSponsorShopItem,
   createSponsorShopItem,
@@ -85,7 +86,19 @@ function isSchemaMissing(err: unknown): boolean {
   const error = err as PostgrestLikeError | undefined;
   const code = error?.code ?? error?.error?.code;
   const message = error?.message ?? error?.error?.message ?? '';
-  return code === 'PGRST205' || /Could not find the table/.test(message);
+  if (code === 'PGRST205' || /Could not find the table/.test(message)) {
+    return true;
+  }
+
+  if (typeof err === 'string') {
+    return /sponsor_shop_items/.test(err) || /schema not available/i.test(err);
+  }
+
+  if (err instanceof Error) {
+    return /sponsor_shop_items/.test(err.message) || /schema not available/i.test(err.message);
+  }
+
+  return false;
 }
 
 const extractPostgrestError = (cause: unknown) => (cause as { error?: unknown })?.error ?? cause;

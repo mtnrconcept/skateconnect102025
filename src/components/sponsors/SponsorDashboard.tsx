@@ -178,6 +178,21 @@ export default function SponsorDashboard() {
   const primaryColor = branding?.primary_color ?? '#0ea5e9';
   const secondaryColor = branding?.secondary_color ?? '#1e293b';
 
+  const openCreateShopItemModal = () => {
+    setShopItemBeingEdited(null);
+    setIsShopModalOpen(true);
+  };
+
+  const openEditShopItemModal = (item: SponsorShopItem) => {
+    setShopItemBeingEdited(item);
+    setIsShopModalOpen(true);
+  };
+
+  const closeShopItemModal = () => {
+    setIsShopModalOpen(false);
+    setShopItemBeingEdited(null);
+  };
+
   const overviewCards = useMemo(
     () => [
       {
@@ -820,8 +835,9 @@ export default function SponsorDashboard() {
   }
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
+    <>
+      <div className="min-h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+        <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Sponsor cockpit</p>
@@ -871,6 +887,7 @@ export default function SponsorDashboard() {
           {activeView === 'spotlights' && renderSpotlights()}
           {activeView === 'shop' && renderShop()}
           {activeView === 'api-keys' && renderApiKeys()}
+        </div>
         </div>
       </div>
       {isShopModalOpen && (
