@@ -17,6 +17,8 @@ import type {
   SponsorEditableOpportunityType,
   SponsorEventOpportunity,
   SponsorPermissions,
+  SponsorShopAnalyticsHistoryPoint,
+  SponsorShopAnalyticsSummary,
   SponsorShopItem,
   SponsorSpotlight,
   SponsorSpotlightPerformance,
@@ -31,8 +33,10 @@ import {
   updateSponsorSpotlight,
 } from '../lib/sponsorSpotlights';
 import {
+  buildShopAnalyticsSummary,
   createSponsorShopItem,
   fetchSponsorShopItems,
+  fetchSponsorShopItemStats,
   updateSponsorShopItem,
   type ShopItemPayload,
 } from '../lib/sponsorShop';
@@ -57,6 +61,7 @@ import {
   type SponsorAnalyticsBreakdowns,
   type SponsorAnalyticsSeriesPoint,
 } from '../lib/sponsorAnalyticsInsights';
+import { supabase, SUPABASE_URL } from '../lib/supabase';
 
 /* ============ Améliorations robustesse ============ */
 
@@ -178,6 +183,9 @@ interface SponsorContextValue {
   analyticsPeriods: AnalyticsPeriodFilter[];
   spotlights: SponsorSpotlight[];
   shopItems: SponsorShopItem[];
+  shopAnalytics: SponsorShopAnalyticsSummary | null;
+  shopAnalyticsHistory: SponsorShopAnalyticsHistoryPoint[];
+  shopAnalyticsExportUrl: string | null;
   apiKeys: SponsorApiKey[];
   opportunities: SponsorOpportunityCollections;
   activeView: SponsorDashboardView;
@@ -186,6 +194,7 @@ interface SponsorContextValue {
   refreshAnalytics: () => Promise<void>;
   refreshSpotlights: () => Promise<void>;
   refreshShop: () => Promise<void>;
+  refreshShopAnalytics: () => Promise<void>;
   refreshApiKeys: () => Promise<void>;
   refreshOpportunities: () => Promise<void>;
   updateSpotlightStatus: (spotlightId: string, status: SponsorSpotlight['status']) => Promise<void>;
@@ -237,6 +246,8 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
   });
   const [spotlights, setSpotlights] = useState<SponsorSpotlight[]>([]);
   const [shopItems, setShopItems] = useState<SponsorShopItem[]>([]);
+  const [shopAnalytics, setShopAnalytics] = useState<SponsorShopAnalyticsSummary | null>(null);
+  const [shopAnalyticsHistory, setShopAnalyticsHistory] = useState<SponsorShopAnalyticsHistoryPoint[]>([]);
   const [apiKeys, setApiKeys] = useState<SponsorApiKey[]>([]);
   const [opportunities, setOpportunities] = useState<SponsorOpportunityCollections>(
     emptySponsorOpportunityCollections(),
@@ -258,6 +269,8 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     setAnalyticsBreakdowns({ periods: [], regions: [], hashtags: [] });
     setSpotlights([]);
     setShopItems([]);
+    setShopAnalytics(null);
+    setShopAnalyticsHistory([]);
     setApiKeys([]);
     setOpportunities(emptySponsorOpportunityCollections());
     setActiveView('overview');
@@ -339,6 +352,29 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     }
   }, [permissions.canManageShop, sponsorId]);
 
+  const refreshShopAnalytics = useCallback(async () => {
+    if (!sponsorId || !permissions.canManageShop) {
+      setShopAnalytics(null);
+      setShopAnalyticsHistory([]);
+      return;
+    }
+    try {
+      const rows = await fetchSponsorShopItemStats(sponsorId);
+      const summary = buildShopAnalyticsSummary(rows);
+      setShopAnalytics(summary);
+      setShopAnalyticsHistory(summary.history);
+    } catch (cause) {
+      if (isSchemaMissing(cause)) {
+        warnSchemaMissing('refreshShopAnalytics', cause);
+        setShopAnalytics(null);
+        setShopAnalyticsHistory([]);
+        return;
+      }
+      console.error('Unable to load sponsor shop analytics', cause);
+      setError('Impossible de charger les analytics boutique.');
+    }
+  }, [permissions.canManageShop, sponsorId]);
+
   const refreshApiKeys = useCallback(async () => {
     if (!sponsorId || !permissions.canManageApiKeys) {
       setApiKeys([]);
@@ -389,6 +425,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       refreshAnalytics(),
       refreshSpotlights(),
       refreshShop(),
+      refreshShopAnalytics(),
       refreshApiKeys(),
       refreshOpportunities(),
     ]);
@@ -397,6 +434,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshAnalytics,
     refreshSpotlights,
     refreshShop,
+    refreshShopAnalytics,
     refreshApiKeys,
     refreshOpportunities,
     resetState,
@@ -456,6 +494,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
         const created = await createSponsorShopItem({ ...payload, sponsor_id: sponsorId });
         setShopItems((current) => [created, ...current]);
         setError(null);
+        void refreshShopAnalytics();
         return created;
       } catch (cause) {
         if (isSchemaMissing(cause)) {
@@ -468,7 +507,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
         return null;
       }
     },
-    [permissions.canManageShop, sponsorId],
+    [permissions.canManageShop, refreshShopAnalytics, sponsorId],
   );
 
   const updateShopItemHandler = useCallback(
@@ -647,6 +686,41 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     void refreshAll();
   }, [refreshAll, resetState, sponsorId]);
 
+  useEffect(() => {
+    if (!sponsorId || !permissions.canManageShop) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`sponsor-shop-analytics:${sponsorId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sponsor_shop_item_stats',
+          filter: `sponsor_id=eq.${sponsorId}`,
+        },
+        () => {
+          void refreshShopAnalytics();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [permissions.canManageShop, refreshShopAnalytics, sponsorId]);
+
+  const shopAnalyticsExportUrl = useMemo(() => {
+    if (!sponsorId) {
+      return null;
+    }
+
+    const selectedColumns = 'item_id,metric_date,views_count,cart_additions,orders_count,units_sold,revenue_cents,updated_at';
+    return `${SUPABASE_URL}/rest/v1/sponsor_shop_item_stats?select=${selectedColumns}&sponsor_id=eq.${sponsorId}`;
+  }, [sponsorId]);
+
   /* ------------ Valeur de contexte ------------ */
 
   const value = useMemo<SponsorContextValue>(() => ({
@@ -665,6 +739,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     analyticsPeriods: DEFAULT_ANALYTICS_PERIODS,
     spotlights,
     shopItems,
+    shopAnalytics,
+    shopAnalyticsHistory,
+    shopAnalyticsExportUrl,
     apiKeys,
     opportunities,
     activeView,
@@ -673,6 +750,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshAnalytics,
     refreshSpotlights,
     refreshShop,
+    refreshShopAnalytics,
     refreshApiKeys,
     refreshOpportunities,
     updateSpotlightStatus,
@@ -698,12 +776,16 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     opportunities,
     spotlights,
     shopItems,
+    shopAnalytics,
+    shopAnalyticsHistory,
+    shopAnalyticsExportUrl,
     apiKeys,
     activeView,
     refreshAll,
     refreshAnalytics,
     refreshSpotlights,
     refreshShop,
+    refreshShopAnalytics,
     refreshApiKeys,
     refreshOpportunities,
     updateSpotlightStatus,

@@ -45,6 +45,7 @@ const availableScopes = [
   { id: 'analytics:read', label: 'Lecture analytics' },
   { id: 'spotlights:write', label: 'Gestion Spotlight' },
   { id: 'shop:write', label: 'Gestion boutique' },
+  { id: 'shop:analytics', label: 'Analytics boutique / export' },
 ];
 
 function renderStatusBadge(status: string) {
@@ -153,12 +154,16 @@ export default function SponsorDashboard() {
     analytics,
     spotlights,
     shopItems,
+    shopAnalytics,
+    shopAnalyticsHistory,
+    shopAnalyticsExportUrl,
     apiKeys,
     loading,
     error,
     activeView,
     setActiveView,
     refreshAll,
+    refreshShopAnalytics,
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItem,
@@ -171,6 +176,7 @@ export default function SponsorDashboard() {
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [isCreatingKey, setIsCreatingKey] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [shopCopyFeedback, setShopCopyFeedback] = useState<string | null>(null);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [shopModalMode, setShopModalMode] = useState<'create' | 'edit'>('create');
   const [shopItemBeingEdited, setShopItemBeingEdited] = useState<SponsorShopItem | null>(null);
@@ -622,6 +628,52 @@ export default function SponsorDashboard() {
     </div>
   );
 
+  const shopTotals = useMemo(
+    () =>
+      shopAnalytics?.totals ?? {
+        views: 0,
+        carts: 0,
+        orders: 0,
+        units: 0,
+        revenueCents: 0,
+        conversionRate: 0,
+      },
+    [shopAnalytics],
+  );
+
+  const shopPrimaryCurrency = useMemo(
+    () => shopItems.find((item) => item.is_active)?.currency ?? shopItems[0]?.currency ?? 'EUR',
+    [shopItems],
+  );
+
+  const shopLastUpdatedLabel = useMemo(() => {
+    if (!shopAnalytics?.updatedAt) {
+      return null;
+    }
+    return new Date(shopAnalytics.updatedAt).toLocaleString('fr-FR', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  }, [shopAnalytics?.updatedAt]);
+
+  const recentShopHistory = useMemo(
+    () =>
+      shopAnalyticsHistory.length === 0
+        ? []
+        : [...shopAnalyticsHistory].slice(-7).reverse(),
+    [shopAnalyticsHistory],
+  );
+
+  const lowStockItems = useMemo(() => shopItems.filter((item) => item.stock <= 5), [shopItems]);
+
+  const perItemAnalytics = shopAnalytics?.perItem ?? {};
+
+  const formatRevenue = useCallback(
+    (value: number, currency: string = shopPrimaryCurrency) =>
+      (value / 100).toLocaleString('fr-FR', { style: 'currency', currency }),
+    [shopPrimaryCurrency],
+  );
+
   const renderShop = () => (
     <div className="space-y-6">
       {!permissions.canManageShop ? (
@@ -637,14 +689,161 @@ export default function SponsorDashboard() {
                 Gère les produits mis à disposition des riders et partenaires. Mets à jour le stock et l'état en un clic.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleOpenCreateShopItem}
-              className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-100 hover:border-sky-400 hover:bg-sky-500/10"
-            >
-              <PlusCircle size={18} /> Ajouter un produit
-            </button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
+              <button
+                type="button"
+                onClick={() => void refreshShopAnalytics()}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
+              >
+                <RefreshCw size={16} /> Rafraîchir analytics
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenCreateShopItem}
+                className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-100 hover:border-sky-400 hover:bg-sky-500/10"
+              >
+                <PlusCircle size={18} /> Ajouter un produit
+              </button>
+            </div>
           </div>
+
+          <div className="space-y-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">Ventes cumulées</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{formatRevenue(shopTotals.revenueCents)}</p>
+                <p className="mt-1 text-xs text-slate-400">{shopTotals.orders} commandes confirmées</p>
+              </div>
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">Taux de conversion</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{shopTotals.conversionRate.toFixed(2)} %</p>
+                <p className="mt-1 text-xs text-slate-400">{shopTotals.views.toLocaleString('fr-FR')} vues produit</p>
+              </div>
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">Ajouts au panier</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{shopTotals.carts.toLocaleString('fr-FR')}</p>
+                <p className="mt-1 text-xs text-slate-400">Suivis des intentions d'achat</p>
+              </div>
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">Unités vendues</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{shopTotals.units.toLocaleString('fr-FR')}</p>
+                <p className="mt-1 text-xs text-slate-400">Stock restant mis à jour en temps réel</p>
+              </div>
+            </div>
+            {shopLastUpdatedLabel && (
+              <p className="text-xs text-slate-500">Dernière synchronisation : {shopLastUpdatedLabel}</p>
+            )}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Historique des performances</h3>
+                <span className="text-[10px] uppercase tracking-wider text-slate-500">7 derniers points</span>
+              </div>
+              <div className="mt-3 overflow-x-auto">
+                {recentShopHistory.length === 0 ? (
+                  <p className="text-sm text-slate-400">Pas encore de données enregistrées sur la boutique.</p>
+                ) : (
+                  <table className="min-w-full text-left text-xs text-slate-300">
+                    <thead className="text-[11px] uppercase tracking-wider text-slate-500">
+                      <tr>
+                        <th className="pb-2 pr-4">Date</th>
+                        <th className="pb-2 pr-4">Vues</th>
+                        <th className="pb-2 pr-4">Paniers</th>
+                        <th className="pb-2 pr-4">Commandes</th>
+                        <th className="pb-2 pr-4">Unités</th>
+                        <th className="pb-2">CA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentShopHistory.map((entry) => (
+                        <tr key={entry.metricDate} className="border-t border-slate-800/60">
+                          <td className="py-2 pr-4 text-slate-200">
+                            {new Date(entry.metricDate).toLocaleDateString('fr-FR')}
+                          </td>
+                          <td className="py-2 pr-4">{entry.views.toLocaleString('fr-FR')}</td>
+                          <td className="py-2 pr-4">{entry.carts.toLocaleString('fr-FR')}</td>
+                          <td className="py-2 pr-4">{entry.orders.toLocaleString('fr-FR')}</td>
+                          <td className="py-2 pr-4">{entry.units.toLocaleString('fr-FR')}</td>
+                          <td className="py-2 text-slate-200">{formatRevenue(entry.revenueCents)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+            <div className="flex h-full flex-col justify-between gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Export & CRM</h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  Utilise tes clés API existantes avec le scope <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs">shop:analytics</code>{' '}
+                  pour synchroniser les KPI vers ton CRM ou outil BI.
+                </p>
+              </div>
+              {shopAnalyticsExportUrl ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-slate-700/60 bg-slate-950/60 p-3">
+                    <pre className="whitespace-pre-wrap text-xs text-slate-300">
+{`curl "${shopAnalyticsExportUrl}" \
+  -H "apikey: VOTRE_CLE_API" \
+  -H "Authorization: Bearer VOTRE_CLE_API"`}
+                    </pre>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(shopAnalyticsExportUrl);
+                          } else {
+                            const textarea = document.createElement('textarea');
+                            textarea.value = shopAnalyticsExportUrl;
+                            textarea.setAttribute('readonly', '');
+                            textarea.style.position = 'absolute';
+                            textarea.style.left = '-9999px';
+                            document.body.appendChild(textarea);
+                            textarea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textarea);
+                          }
+                          setShopCopyFeedback('Endpoint API copié.');
+                        } catch (err) {
+                          console.error('Unable to copy shop analytics endpoint', err);
+                          setShopCopyFeedback('Impossible de copier le lien.');
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
+                    >
+                      <Copy size={16} /> Copier le endpoint
+                    </button>
+                    <span className="text-xs text-slate-500">
+                      Inclure l'en-tête{' '}
+                      <code className="rounded bg-slate-800 px-1 py-0.5">apikey: &lt;clé&gt;</code>
+                    </span>
+                  </div>
+                  {shopCopyFeedback && <p className="text-xs text-emerald-300">{shopCopyFeedback}</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">Connecte-toi avec un compte sponsor pour générer l'endpoint d'export.</p>
+              )}
+            </div>
+          </div>
+
+          {lowStockItems.length > 0 && (
+            <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-100">
+              <h3 className="text-sm font-semibold">Stock critique</h3>
+              <ul className="mt-2 space-y-1 text-sm">
+                {lowStockItems.map((item) => (
+                  <li key={item.id}>
+                    {item.name} — <span className="font-semibold">{item.stock}</span> unités restantes
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2">
             {shopItems.length === 0 ? (
@@ -652,20 +851,28 @@ export default function SponsorDashboard() {
                 Aucun produit listé pour l'instant. Lance ta première offre pour activer la boutique.
               </div>
             ) : (
-              shopItems.map((item) => (
-                <div key={item.id} className="flex flex-col gap-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">{item.name}</h3>
-                        <p className="text-xs uppercase tracking-widest text-slate-500">
-                          {item.is_active ? 'Actif' : 'En pause'}
-                        </p>
-                      </div>
-                      <span className="text-base font-medium text-slate-200">
-                        {(item.price_cents / 100).toLocaleString('fr-FR', {
-                          style: 'currency',
-                          currency: item.currency,
+              shopItems.map((item) => {
+                const analyticsByItem = perItemAnalytics[item.id];
+                const revenue = formatRevenue(analyticsByItem?.revenueCents ?? 0, item.currency);
+                return (
+                  <div key={item.id} className="flex flex-col gap-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">{item.name}</h3>
+                          <p className="text-xs uppercase tracking-widest text-slate-500">
+                            {item.is_active ? 'Actif' : 'En pause'}
+                          </p>
+                          {item.stock <= 5 && (
+                            <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-400/60 px-2 py-0.5 text-[11px] text-amber-200">
+                              <Tag size={12} /> Stock bas
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-base font-medium text-slate-200">
+                          {(item.price_cents / 100).toLocaleString('fr-FR', {
+                            style: 'currency',
+                            currency: item.currency,
                         })}
                       </span>
                     </div>
@@ -682,6 +889,39 @@ export default function SponsorDashboard() {
                           Aperçu visuel
                         </a>
                       )}
+                    </div>
+                    <div className="grid gap-3 rounded-xl border border-slate-800/60 bg-slate-950/40 p-3 text-xs text-slate-300 sm:grid-cols-2">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500">Vues</p>
+                        <p className="text-sm text-white">
+                          {analyticsByItem ? analyticsByItem.views.toLocaleString('fr-FR') : '0'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500">Ajouts panier</p>
+                        <p className="text-sm text-white">
+                          {analyticsByItem ? analyticsByItem.carts.toLocaleString('fr-FR') : '0'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500">Commandes</p>
+                        <p className="text-sm text-white">
+                          {analyticsByItem ? analyticsByItem.orders.toLocaleString('fr-FR') : '0'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500">Conversion</p>
+                        <p className="text-sm text-white">{analyticsByItem ? `${analyticsByItem.conversionRate.toFixed(2)} %` : '0.00 %'}</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500">Chiffre d'affaires</p>
+                        <p className="text-sm text-white">{revenue}</p>
+                        {analyticsByItem?.lastMetricDate && (
+                          <p className="mt-0.5 text-[11px] text-slate-500">
+                            MAJ : {new Date(analyticsByItem.lastMetricDate).toLocaleDateString('fr-FR')}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -704,8 +944,9 @@ export default function SponsorDashboard() {
                       {item.is_active ? 'Mettre en pause' : 'Réactiver'}
                     </button>
                   </div>
-                </div>
-              ))
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -838,7 +1079,7 @@ export default function SponsorDashboard() {
     <div>
       <div className="min-h-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
         <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Sponsor cockpit</p>
             <h1 className="text-3xl font-semibold text-white mt-2">Pilotage des activations</h1>
@@ -881,13 +1122,13 @@ export default function SponsorDashboard() {
           })}
         </nav>
 
-        <div className={loading ? 'opacity-60 pointer-events-none' : ''}>
-          {activeView === 'overview' && renderOverview()}
-          {activeView === 'opportunities' && <SponsorOpportunitiesView />}
-          {activeView === 'spotlights' && renderSpotlights()}
-          {activeView === 'shop' && renderShop()}
-          {activeView === 'api-keys' && renderApiKeys()}
-        </div>
+          <div className={loading ? 'opacity-60 pointer-events-none' : ''}>
+            {activeView === 'overview' && renderOverview()}
+            {activeView === 'opportunities' && <SponsorOpportunitiesView />}
+            {activeView === 'spotlights' && renderSpotlights()}
+            {activeView === 'shop' && renderShop()}
+            {activeView === 'api-keys' && renderApiKeys()}
+          </div>
         </div>
       </div>
       {isShopModalOpen && (
@@ -898,6 +1139,6 @@ export default function SponsorDashboard() {
           onSubmit={handleShopItemSubmit}
         />
       )}
-    </div>
+    </>
   );
 }
