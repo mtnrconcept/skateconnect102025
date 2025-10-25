@@ -1,3 +1,5 @@
+import type { PostgrestError } from '@supabase/supabase-js';
+import { withTableFallback } from './postgrest.js';
 import { supabase } from './supabase.js';
 import type {
   SponsorCallOpportunity,
@@ -130,6 +132,23 @@ export const mapSponsorOpportunityToRecord = (row: any, type: SponsorOpportunity
   }
 };
 
+function logMissingTable(table: string, error: PostgrestError) {
+  const hint = error.hint ? ` hint=${error.hint}` : '';
+  console.info(
+    `[sponsorOpportunities] ${table} table is missing (PGRST205). Returning an empty list.${hint}`,
+  );
+}
+
+async function fetchWithSponsorFallback<T>(
+  table: string,
+  request: PromiseLike<{ data: T; error: PostgrestError | null }>,
+  fallback: () => Promise<T> | T,
+): Promise<T> {
+  return withTableFallback(request, fallback, {
+    onMissing: (error) => logMissingTable(table, error),
+  });
+}
+
 export interface CreateSponsorChallengePayload {
   sponsor_id: string;
   title: string;
@@ -187,59 +206,59 @@ const withDefaultTags = <T extends { tags?: string[] }>(payload: T): T => ({
 });
 
 export async function fetchSponsorChallenges(): Promise<SponsorChallengeOpportunity[]> {
-  const { data, error } = await supabase
-    .from('sponsor_challenges')
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-    .order('end_date', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false });
+  const rows = await fetchWithSponsorFallback<any[] | null>(
+    'sponsor_challenges',
+    supabase
+      .from('sponsor_challenges')
+      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+      .order('end_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false }),
+    () => [] as any[],
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []).map(mapSponsorChallenge);
+  return (rows ?? []).map(mapSponsorChallenge);
 }
 
 export async function fetchSponsorEvents(): Promise<SponsorEventOpportunity[]> {
-  const { data, error } = await supabase
-    .from('sponsor_events')
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-    .order('event_date', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false });
+  const rows = await fetchWithSponsorFallback<any[] | null>(
+    'sponsor_events',
+    supabase
+      .from('sponsor_events')
+      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+      .order('event_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false }),
+    () => [] as any[],
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []).map(mapSponsorEvent);
+  return (rows ?? []).map(mapSponsorEvent);
 }
 
 export async function fetchSponsorCalls(): Promise<SponsorCallOpportunity[]> {
-  const { data, error } = await supabase
-    .from('sponsor_calls')
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-    .order('deadline', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false });
+  const rows = await fetchWithSponsorFallback<any[] | null>(
+    'sponsor_calls',
+    supabase
+      .from('sponsor_calls')
+      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+      .order('deadline', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false }),
+    () => [] as any[],
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []).map(mapSponsorCall);
+  return (rows ?? []).map(mapSponsorCall);
 }
 
 export async function fetchSponsorNews(): Promise<SponsorNewsItem[]> {
-  const { data, error } = await supabase
-    .from('sponsor_news')
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
-    .order('published_at', { ascending: false, nullsLast: true })
-    .order('created_at', { ascending: false });
+  const rows = await fetchWithSponsorFallback<any[] | null>(
+    'sponsor_news',
+    supabase
+      .from('sponsor_news')
+      .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+      .order('published_at', { ascending: false, nullsLast: true })
+      .order('created_at', { ascending: false }),
+    () => [] as any[],
+  );
 
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []).map(mapSponsorNews);
+  return (rows ?? []).map(mapSponsorNews);
 }
 
 export async function createSponsorChallenge(
