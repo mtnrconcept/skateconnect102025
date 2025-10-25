@@ -47,6 +47,7 @@ import {
   fetchSponsorEvents,
   fetchSponsorNews,
 } from '../../lib/sponsorOpportunities';
+import { isSchemaMissing } from '../../lib/postgrest';
 import SponsorPostForm from '../sponsors/SponsorPostForm';
 
 interface SponsorsSectionProps {
@@ -193,8 +194,20 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
       setCalls(callData);
       setNews(newsData);
     } catch (cause) {
-      console.error('Unable to load sponsor opportunities', cause);
-      setLoadError('Impossible de charger les opportunités sponsor pour le moment.');
+      const postgrestError =
+        (cause as { error?: Parameters<typeof isSchemaMissing>[0] })?.error ??
+        (cause as Parameters<typeof isSchemaMissing>[0]);
+
+      if (isSchemaMissing(postgrestError)) {
+        console.warn('[SponsorsSection] loadOpportunities: sponsor schema not available (PGRST205).');
+        setChallenges([]);
+        setEvents([]);
+        setCalls([]);
+        setNews([]);
+      } else {
+        console.error('Unable to load sponsor opportunities', cause);
+        setLoadError('Impossible de charger les opportunités sponsor pour le moment.');
+      }
     } finally {
       setLoadingOpportunities(false);
     }
