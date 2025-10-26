@@ -9,13 +9,15 @@ interface CommentSectionProps {
   currentUser: Profile | null;
   showAll?: boolean;
   onCommentCountChange?: (count: number) => void;
+  onProfileClick?: (profileId: string) => void;
 }
 
 export default function CommentSection({
   postId,
   currentUser,
   showAll = false,
-  onCommentCountChange
+  onCommentCountChange,
+  onProfileClick
 }: CommentSectionProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [displayedComments, setDisplayedComments] = useState<Comment[]>([]);
@@ -132,43 +134,76 @@ export default function CommentSection({
   return (
     <div className="comment-section">
       <div className="space-y-3 mb-4">
-        {displayedComments.map((comment) => (
-          <div key={comment.id} className="flex gap-3">
-            {comment.user?.avatar_url ? (
-              <img
-                src={comment.user.avatar_url}
-                alt={getUserDisplayName(comment.user)}
-                className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                {getUserInitial(comment.user)}
-              </div>
-            )}
-
-            <div className="flex-1 min-w-0">
-              <div className="bg-slate-100 rounded-2xl px-3 py-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-sm text-slate-800">
-                    {getUserDisplayName(comment.user)}
-                  </span>
-                  <span className="text-xs text-slate-500">{formatDate(comment.created_at)}</span>
-                </div>
-                <p className="text-slate-700 text-sm break-words">{comment.content}</p>
-              </div>
-
-              {currentUser?.id === comment.user_id && (
-                <button
-                  onClick={() => handleDelete(comment.id)}
-                  className="mt-1 text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
-                >
-                  <Trash2 size={12} />
-                  Supprimer
-                </button>
-              )}
+        {displayedComments.map((comment) => {
+          const commentUser = comment.user;
+          const canOpenProfile = Boolean(onProfileClick && commentUser?.id);
+          const avatarNode = commentUser?.avatar_url ? (
+            <img
+              src={commentUser.avatar_url}
+              alt={getUserDisplayName(commentUser)}
+              className="w-8 h-8 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold">
+              {getUserInitial(commentUser)}
             </div>
-          </div>
-        ))}
+          );
+
+          const handleProfileOpen = () => {
+            if (canOpenProfile && commentUser?.id) {
+              onProfileClick?.(commentUser.id);
+            }
+          };
+
+          return (
+            <div key={comment.id} className="flex gap-3">
+              {canOpenProfile ? (
+                <button
+                  type="button"
+                  onClick={handleProfileOpen}
+                  className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label={`Voir le profil de ${getUserDisplayName(commentUser)}`}
+                >
+                  {avatarNode}
+                </button>
+              ) : (
+                <div className="flex-shrink-0">{avatarNode}</div>
+              )}
+
+              <div className="flex-1 min-w-0">
+                <div className="bg-slate-100 rounded-2xl px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    {canOpenProfile ? (
+                      <button
+                        type="button"
+                        onClick={handleProfileOpen}
+                        className="font-semibold text-sm text-slate-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        {getUserDisplayName(commentUser)}
+                      </button>
+                    ) : (
+                      <span className="font-semibold text-sm text-slate-800">
+                        {getUserDisplayName(commentUser)}
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-500">{formatDate(comment.created_at)}</span>
+                  </div>
+                  <p className="text-slate-700 text-sm break-words">{comment.content}</p>
+                </div>
+
+                {currentUser?.id === comment.user_id && (
+                  <button
+                    onClick={() => handleDelete(comment.id)}
+                    className="mt-1 text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                  >
+                    <Trash2 size={12} />
+                    Supprimer
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
 
         {hasMoreComments && (
           <button
