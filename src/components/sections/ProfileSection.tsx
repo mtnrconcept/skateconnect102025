@@ -88,8 +88,7 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
             .from('user_badges')
             .select('*, badge:badges(*)')
             .eq('user_id', profileId)
-            .eq('is_displayed', true)
-            .limit(5),
+            .order('earned_at', { ascending: false }),
         ]);
 
         const filteredPosts = filterOutProfileMediaPosts(postsResult.data || []);
