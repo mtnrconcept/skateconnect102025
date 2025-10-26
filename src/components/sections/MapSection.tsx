@@ -340,12 +340,6 @@ export default function MapSection({
     return () => window.cancelAnimationFrame(frame);
   }, [isDesktop, isMapAvailable]);
 
-  useEffect(() => {
-    if (!isMapAvailable) return;
-    if (!map.current || loading) return;
-    updateMarkers(filteredSpots);
-  }, [filteredSpots, loading, isMapAvailable, updateMarkers]);
-
   const markerColors = useMemo(
     () => ({
       street: '#f97316',
@@ -606,6 +600,12 @@ export default function MapSection({
       markersRef.current.push(marker);
     });
   }, [getMarkerColor, isMapAvailable, spotCoverPhotos]);
+
+  useEffect(() => {
+    if (!isMapAvailable) return;
+    if (!map.current || loading) return;
+    updateMarkers(filteredSpots);
+  }, [filteredSpots, loading, isMapAvailable, updateMarkers]);
 
   const flyToSpot = useCallback(
     (spot: Spot) => {
