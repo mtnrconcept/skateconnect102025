@@ -414,5 +414,6 @@ export function useConversations(viewerId: string | null, pageSize = DEFAULT_PAG
     loadMore,
     refresh,
     markConversationReadLocally,
+    ensureConversation: upsertConversation,
   };
 }

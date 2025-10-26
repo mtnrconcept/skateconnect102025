@@ -38,7 +38,11 @@ import type { Profile, Section, ContentNavigationOptions, ProfileExperienceMode 
 import type { GlobalSearchResult } from './types/search';
 import { buildSponsorExperienceProfile } from './data/sponsorExperience';
 import type { FakeDirectMessagePayload } from './types/messages';
-import { processQueuedDirectMessages, markConversationMessagesAsRead } from './lib/messages.js';
+import {
+  processQueuedDirectMessages,
+  markConversationMessagesAsRead,
+  getOrCreateConversation,
+} from './lib/messages.js';
 import { useRouter } from './lib/router';
 import SearchPage from './components/search/SearchPage';
 
@@ -66,6 +70,7 @@ function App() {
   } | null>(null);
   const [challengeFocus, setChallengeFocus] = useState<ContentNavigationOptions | null>(null);
   const [mapFocusSpotId, setMapFocusSpotId] = useState<string | null>(null);
+  const [messagesFocus, setMessagesFocus] = useState<{ conversationId: string } | null>(null);
   const [queuedDirectMessages, setQueuedDirectMessages] = useState<FakeDirectMessagePayload[]>([]);
   const isProcessingQueueRef = useRef(false);
   const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlan>(() => {
@@ -293,6 +298,32 @@ function App() {
     setRestrictionNotice(null);
   };
 
+  const handleOpenConversation = useCallback(
+    async (targetProfileId: string, options?: { synthetic?: boolean }) => {
+      if (!targetProfileId) {
+        return;
+      }
+
+      if (!profile?.id) {
+        handleNavigateToContent('messages');
+        return;
+      }
+
+      if (options?.synthetic) {
+        handleNavigateToContent('messages', { conversationId: `synthetic:${targetProfileId}` });
+        return;
+      }
+
+      try {
+        const conversation = await getOrCreateConversation(supabase, profile.id, targetProfileId);
+        handleNavigateToContent('messages', { conversationId: conversation.id });
+      } catch (error) {
+        console.error("Erreur lors de l’ouverture de la conversation :", error);
+      }
+    },
+    [handleNavigateToContent, profile?.id],
+  );
+
   const handleConversationViewed = useCallback(
     async (conversationId: string) => {
       if (!profile?.id) {
@@ -417,6 +448,14 @@ function App() {
       }
     }
 
+    if (pendingNavigation.section === 'messages') {
+      if (options?.conversationId) {
+        setMessagesFocus({ conversationId: options.conversationId });
+      }
+      setPendingNavigation(null);
+      return;
+    }
+
     if (options?.scrollToId) {
       const timeout = window.setTimeout(() => {
         const element = document.getElementById(options.scrollToId!);
@@ -443,6 +482,9 @@ function App() {
     }
     if (currentSection !== 'map') {
       setMapFocusSpotId(null);
+    }
+    if (currentSection !== 'messages') {
+      setMessagesFocus(null);
     }
   }, [currentSection, isMapAvailable]);
 
@@ -520,7 +562,9 @@ function App() {
                     isMapAvailable={isMapAvailable}
                   />
                 )}
-                {currentSection === 'feed' && <FeedSection currentUser={activeProfile} />}
+                {currentSection === 'feed' && (
+                  <FeedSection currentUser={activeProfile} onOpenConversation={handleOpenConversation} />
+                )}
                 {currentSection === 'events' && <EventsSection profile={activeProfile} />}
                 {currentSection === 'challenges' && (
                   <ChallengesSection
@@ -543,7 +587,12 @@ function App() {
                 {currentSection === 'rewards' && <RewardsSection profile={activeProfile} />}
                 {currentSection === 'leaderboard' && <LeaderboardSection profile={activeProfile} />}
                 {currentSection === 'messages' && (
-                  <MessagesSection profile={activeProfile} onConversationViewed={handleConversationViewed} />
+                  <MessagesSection
+                    profile={activeProfile}
+                    onConversationViewed={handleConversationViewed}
+                    focusConversationId={messagesFocus?.conversationId ?? null}
+                    onFocusHandled={() => setMessagesFocus(null)}
+                  />
                 )}
                 {currentSection === 'settings' && (
                   <SettingsSection

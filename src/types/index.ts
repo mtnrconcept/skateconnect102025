@@ -403,6 +403,7 @@ export interface ContentNavigationOptions {
   scrollToId?: string;
   challengeTab?: 'community' | 'daily';
   spotId?: string;
+  conversationId?: string;
 }
 
 export interface SpotMediaComment {

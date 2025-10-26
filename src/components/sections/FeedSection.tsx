@@ -23,7 +23,6 @@ import CommentSection from '../CommentSection';
 import FakeCommentSection from '../FakeCommentSection';
 import PostMediaViewer from '../PostMediaViewer';
 import FakeProfileModal from '../FakeProfileModal';
-import FakeDirectMessageModal from '../FakeDirectMessageModal';
 import ProfilePreviewModal from '../ProfilePreviewModal';
 import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId, fakeLeaderboardEntries } from '../../data/fakeFeed';
 import { eventsCatalog } from '../../data/eventsCatalog';
@@ -43,9 +42,10 @@ type FeedComment = Comment & {
 
 interface FeedSectionProps {
   currentUser: Profile | null;
+  onOpenConversation?: (profileId: string, options?: { synthetic?: boolean }) => void;
 }
 
-export default function FeedSection({ currentUser }: FeedSectionProps) {
+export default function FeedSection({ currentUser, onOpenConversation }: FeedSectionProps) {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [newPostContent, setNewPostContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -73,7 +73,6 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     });
     return initial;
   });
-  const [activeFakeMessageProfileId, setActiveFakeMessageProfileId] = useState<string | null>(null);
 
   const upcomingEvents = useMemo(() => eventsCatalog.slice(0, 3), []);
   const sponsorChallenges = useMemo(
@@ -526,10 +525,6 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
     return fakeProfilesById[activeFakeProfileId] ?? null;
   }, [activeFakeProfileId]);
 
-  const activeFakeMessageProfile = useMemo(() => {
-    if (!activeFakeMessageProfileId) return null;
-    return fakeProfilesById[activeFakeMessageProfileId] ?? null;
-  }, [activeFakeMessageProfileId]);
 
   const getFakeFollowerCount = useCallback(
     (profileId: string) => {
@@ -882,7 +877,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
                               alert('Connectez-vous pour envoyer un message.');
                               return;
                             }
-                            setActiveFakeMessageProfileId(post.user_id);
+                            onOpenConversation?.(post.user_id, { synthetic: true });
                           }}
                           type="button"
                         >
@@ -1094,7 +1089,7 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
               return;
             }
             setActiveFakeProfileId(null);
-            setActiveFakeMessageProfileId(activeFakeProfile.id);
+            onOpenConversation?.(activeFakeProfile.id, { synthetic: true });
           }}
           followerCount={getFakeFollowerCount(activeFakeProfile.id)}
         />
@@ -1107,13 +1102,6 @@ export default function FeedSection({ currentUser }: FeedSectionProps) {
           onToggleFollow={toggleFollow}
           isFollowing={!!followingMap[activeProfileId]}
           isFollowLoading={!!followLoadingMap[activeProfileId]}
-        />
-      )}
-      {activeFakeMessageProfile && (
-        <FakeDirectMessageModal
-          profile={activeFakeMessageProfile}
-          currentUser={currentUser}
-          onClose={() => setActiveFakeMessageProfileId(null)}
         />
       )}
     </div>
