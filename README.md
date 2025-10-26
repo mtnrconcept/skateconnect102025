@@ -144,6 +144,39 @@ installent du contenu test (spots, profils sponsorisés, interactions sociales).
   [`SPOT_MEDIA_GALLERY_FINAL.md`](./SPOT_MEDIA_GALLERY_FINAL.md) : conception de
   la galerie de spots et guidelines UX.
 
+## Boutique connectée & Stripe Connect
+
+SkateConnect embarque désormais une véritable boutique pour les shops et
+marques partenaires :
+
+- **Front public** : section "Boutique" permettant de parcourir l'inventaire,
+  filtrer par marque et déclencher un checkout Stripe sécurisé.
+- **Back-office sponsor** : tableau de bord enrichi avec le statut Stripe,
+  génération du lien d'onboarding Express et suivi des commandes (analytics,
+  commissions, export API).
+- **Supabase Edge Functions** :
+  - `shop-checkout` crée les sessions Stripe Checkout et pré-enregistre les
+    commandes.
+  - `shop-connect` gère la création des comptes Express et génère les liens
+    d'onboarding.
+  - `shop-webhook` synchronise les événements Stripe (paiements, comptes).
+
+### Variables d'environnement essentielles
+
+| Contexte | Variable | Description |
+| --- | --- | --- |
+| Vite | `VITE_STRIPE_PUBLISHABLE_KEY` | Clé publique Stripe pour charger Stripe.js côté client. |
+| Edge Function | `STRIPE_SECRET_KEY` | Clé secrète Stripe du compte plateforme. |
+| Edge Function | `STRIPE_WEBHOOK_SECRET` | Secret du webhook Stripe pointant vers `shop-webhook`. |
+| Edge Function | `STRIPE_PLATFORM_COMMISSION_PERCENT` | Commission plateforme (ex : `10` pour 10 %). |
+| Edge Function | `SHOP_ALLOWED_ORIGINS` | Origines autorisées pour `shop-checkout` (séparées par des virgules). |
+| Edge Function | `SHOP_PLATFORM_URL` | URL publique de SkateConnect (utilisée dans les comptes Express). |
+| Edge Function | `SHOP_STRIPE_RETURN_URL` / `SHOP_STRIPE_REFRESH_URL` | URLs de retour/rafraîchissement pour l'onboarding Express. |
+
+Publie également le webhook Stripe vers `supabase/functions/shop-webhook` pour
+mettre à jour les commandes (`checkout.session.completed`, `account.updated`,
+etc.).
+
 ## Stratégies de déploiement
 
 ### Web (Vite + Supabase)

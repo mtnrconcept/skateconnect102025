@@ -8,6 +8,7 @@ import MapSection from './components/sections/MapSection';
 import FeedSection from './components/sections/FeedSection';
 import EventsSection from './components/sections/EventsSection';
 import ChallengesSection from './components/sections/ChallengesSection';
+import ShopSection from './components/sections/ShopSection';
 import ProfileSection from './components/sections/ProfileSection';
 import BadgesSection from './components/sections/BadgesSection';
 import RewardsSection from './components/sections/RewardsSection';
@@ -101,6 +102,7 @@ function App() {
       map: 'la carte',
       events: 'les événements',
       challenges: 'les défis sponsorisés',
+      shop: 'la boutique partenaires',
       search: 'les résultats de recherche',
       sponsors: "l’espace sponsor",
       pricing: 'les abonnements',
@@ -573,6 +575,7 @@ function App() {
                     onFocusHandled={() => setChallengeFocus(null)}
                   />
                 )}
+                {currentSection === 'shop' && <ShopSection profile={activeProfile} />}
                 {currentSection === 'sponsors' &&
                   (activeProfile?.role === 'sponsor' ? (
                     <SponsorDashboard />
