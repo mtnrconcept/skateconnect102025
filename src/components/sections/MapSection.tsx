@@ -274,10 +274,6 @@ export default function MapSection({
   }, [loadSpots]);
 
   useEffect(() => {
-    setVisibleSpotCount(DEFAULT_VISIBLE_SPOTS);
-  }, [filter, searchTerm, spots, surfaceFilters, moduleFilters, difficultyFilter, ratingFilter]);
-
-  useEffect(() => {
     if (!showFilterPanel) {
       return;
     }
