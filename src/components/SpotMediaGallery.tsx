@@ -265,7 +265,7 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick, 
           </button>
 
           {showFilterMenu && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 py-2 z-10">
+            <div className="absolute right-0 mt-2 w-56 bg-white text-slate-900 rounded-lg shadow-xl border border-slate-200 py-2 z-10">
               {filters.map((filter) => {
                 const Icon = filter.icon;
                 return (

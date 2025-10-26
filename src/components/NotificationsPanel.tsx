@@ -98,7 +98,7 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto no-scrollbar">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl">
+      <div className="bg-white text-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl">
         <div className="bg-gradient-to-r from-orange-500 via-orange-400 to-orange-600 text-white p-6 sticky top-0 z-10">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">

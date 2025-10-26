@@ -281,7 +281,7 @@ export default function MediaDetailModal({ media, initialIndex, onClose, canSetC
             )}
           </div>
 
-          <div className="w-full lg:w-96 bg-white flex flex-col max-h-[40vh] lg:max-h-full">
+          <div className="w-full lg:w-96 bg-white text-slate-900 flex flex-col max-h-[40vh] lg:max-h-full">
             <div className="p-4 border-b border-slate-200">
               <div className="flex items-center gap-3 mb-3">
                 {currentMedia.user?.avatar_url ? (
