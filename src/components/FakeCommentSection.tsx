@@ -13,6 +13,7 @@ interface FakeCommentSectionProps {
   currentUser: Profile | null;
   onAddComment: (content: string) => void;
   onDeleteComment: (commentId: string) => void;
+  onProfileClick?: (profileId: string) => void;
 }
 
 const INITIAL_DISPLAY_COUNT = 3;
@@ -22,6 +23,7 @@ export default function FakeCommentSection({
   currentUser,
   onAddComment,
   onDeleteComment,
+  onProfileClick,
 }: FakeCommentSectionProps) {
   const [newComment, setNewComment] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -65,23 +67,53 @@ export default function FakeCommentSection({
         {displayedComments.map((comment) => {
           const user = comment.user;
           const canDelete = currentUser?.id === comment.user_id;
+          const canOpenProfile = Boolean(onProfileClick && user?.id);
+          const avatarNode = user?.avatar_url ? (
+            <img
+              src={user.avatar_url}
+              alt={getUserDisplayName(user)}
+              className="w-8 h-8 rounded-full object-cover border border-orange-400/60"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-400/60 flex items-center justify-center text-orange-200 text-sm font-semibold">
+              {getUserInitial(user)}
+            </div>
+          );
+
+          const handleProfileOpen = () => {
+            if (canOpenProfile && user?.id) {
+              onProfileClick?.(user.id);
+            }
+          };
+
           return (
             <div key={comment.id} className="flex gap-3">
-              {user?.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt={getUserDisplayName(user)}
-                  className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-orange-400/60"
-                />
+              {canOpenProfile ? (
+                <button
+                  type="button"
+                  onClick={handleProfileOpen}
+                  className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  aria-label={`Voir le profil de ${getUserDisplayName(user)}`}
+                >
+                  {avatarNode}
+                </button>
               ) : (
-                <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-400/60 flex items-center justify-center text-orange-200 text-sm font-semibold flex-shrink-0">
-                  {getUserInitial(user)}
-                </div>
+                <div className="flex-shrink-0">{avatarNode}</div>
               )}
               <div className="flex-1 min-w-0">
                 <div className="bg-dark-700/60 rounded-2xl px-4 py-2">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold text-sm text-white">{getUserDisplayName(user)}</span>
+                    {canOpenProfile ? (
+                      <button
+                        type="button"
+                        onClick={handleProfileOpen}
+                        className="font-semibold text-sm text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                      >
+                        {getUserDisplayName(user)}
+                      </button>
+                    ) : (
+                      <span className="font-semibold text-sm text-white">{getUserDisplayName(user)}</span>
+                    )}
                     <span className="text-xs text-gray-400">{formatDate(comment.created_at)}</span>
                   </div>
                   <p className="text-sm text-gray-200 break-words leading-relaxed">{comment.content}</p>

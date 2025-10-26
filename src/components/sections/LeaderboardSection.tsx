@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Trophy, TrendingUp, Award, Crown, Medal } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
-import { fakeLeaderboardEntries } from '../../data/fakeFeed';
+import { fakeLeaderboardEntries, fakeProfilesById, fakePostsByProfileId } from '../../data/fakeFeed';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import type { Profile, UserXP } from '../../types';
+import ProfilePreviewModal from '../ProfilePreviewModal';
+import FakeProfileModal from '../FakeProfileModal';
 
 interface LeaderboardEntry extends UserXP {
   profile?: Profile;
@@ -19,6 +21,9 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
   const [userRank, setUserRank] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'global' | 'week' | 'month'>('global');
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [activeFakeProfileId, setActiveFakeProfileId] = useState<string | null>(null);
+  const [fakeFollowingMap, setFakeFollowingMap] = useState<Record<string, boolean>>({});
 
   const buildRankedLeaderboard = (entries: (UserXP & { profile?: Profile })[]): LeaderboardEntry[] => {
     const realEntries = entries.map((entry) => ({ ...entry }));
@@ -108,6 +113,60 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
     { id: 'month' as const, label: 'Mois', icon: Award },
   ];
 
+  const openProfile = (profileId?: string | null) => {
+    if (!profileId) {
+      return;
+    }
+
+    if (profileId.startsWith('fake-')) {
+      if (fakeProfilesById[profileId]) {
+        setActiveProfileId(null);
+        setActiveFakeProfileId(profileId);
+      }
+      return;
+    }
+
+    setActiveFakeProfileId(null);
+    setActiveProfileId(profileId);
+  };
+
+  const toggleFakeFollow = (profileId: string) => {
+    setFakeFollowingMap((prev) => ({
+      ...prev,
+      [profileId]: !prev[profileId],
+    }));
+  };
+
+  const getFakeFollowerCount = (profileId: string) => {
+    const profileDetails = fakeProfilesById[profileId];
+    if (!profileDetails) {
+      return 0;
+    }
+    return profileDetails.followers + (fakeFollowingMap[profileId] ? 1 : 0);
+  };
+
+  const handleFakeMessage = () => {
+    if (!profile) {
+      alert('Connectez-vous pour envoyer un message.');
+      return;
+    }
+    alert('La messagerie des profils fictifs arrive bientôt !');
+  };
+
+  const activeFakeProfile = useMemo(() => {
+    if (!activeFakeProfileId) {
+      return null;
+    }
+    return fakeProfilesById[activeFakeProfileId] ?? null;
+  }, [activeFakeProfileId]);
+
+  const activeFakeProfilePosts = useMemo(() => {
+    if (!activeFakeProfileId) {
+      return [];
+    }
+    return fakePostsByProfileId[activeFakeProfileId] ?? [];
+  }, [activeFakeProfileId]);
+
   if (!profile) {
     return (
       <div className="text-center py-12 text-gray-400">
@@ -150,17 +209,24 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
                   #{userRank.rank}
                 </div>
                 <div className="flex items-center gap-3">
-                  {profile.avatar_url ? (
-                    <img
-                      src={profile.avatar_url}
-                      alt={getUserDisplayName(profile)}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-orange-500"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold">
-                      {getUserInitial(profile)}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => openProfile(profile.id)}
+                    className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                    aria-label="Voir votre profil"
+                  >
+                    {profile.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt={getUserDisplayName(profile)}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-orange-500"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold">
+                        {getUserInitial(profile)}
+                      </div>
+                    )}
+                  </button>
                   <div>
                     <div className="font-bold text-white">Votre position</div>
                     <div className="text-sm text-gray-400">{userRank.level_title}</div>
@@ -199,17 +265,24 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
                           {getRankIcon(entry.rank)}
                         </div>
                         <div className="flex items-center gap-3">
-                          {entry.profile?.avatar_url ? (
-                            <img
-                              src={entry.profile.avatar_url}
-                              alt={getUserDisplayName(entry.profile)}
-                              className="w-12 h-12 rounded-full object-cover border-2 border-orange-500"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold">
-                              {getUserInitial(entry.profile)}
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => openProfile(entry.profile?.id ?? entry.user_id)}
+                            className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                            aria-label={`Voir le profil de ${getUserDisplayName(entry.profile)}`}
+                          >
+                            {entry.profile?.avatar_url ? (
+                              <img
+                                src={entry.profile.avatar_url}
+                                alt={getUserDisplayName(entry.profile)}
+                                className="w-12 h-12 rounded-full object-cover border-2 border-orange-500"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full border-2 border-orange-500 bg-orange-500 flex items-center justify-center text-white font-semibold">
+                                {getUserInitial(entry.profile)}
+                              </div>
+                            )}
+                          </button>
                           <div>
                             <div className="font-bold text-white">
                               {getUserDisplayName(entry.profile)}
@@ -248,21 +321,28 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
                           <span className="text-gray-400 font-semibold">#{entry.rank}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          {entry.profile?.avatar_url ? (
-                            <img
-                              src={entry.profile.avatar_url}
-                              alt={getUserDisplayName(entry.profile)}
-                              className={`w-10 h-10 rounded-full object-cover border-2 ${
-                                entry.user_id === profile?.id ? 'border-orange-500' : 'border-dark-700'
-                              }`}
-                            />
-                          ) : (
-                            <div className={`w-10 h-10 rounded-full border-2 ${
-                              entry.user_id === profile?.id ? 'border-orange-500 bg-orange-500' : 'border-dark-700 bg-dark-700'
-                            } flex items-center justify-center text-white font-semibold text-sm`}>
-                              {getUserInitial(entry.profile)}
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => openProfile(entry.profile?.id ?? entry.user_id)}
+                            className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                            aria-label={`Voir le profil de ${getUserDisplayName(entry.profile)}`}
+                          >
+                            {entry.profile?.avatar_url ? (
+                              <img
+                                src={entry.profile.avatar_url}
+                                alt={getUserDisplayName(entry.profile)}
+                                className={`w-10 h-10 rounded-full object-cover border-2 ${
+                                  entry.user_id === profile?.id ? 'border-orange-500' : 'border-dark-700'
+                                }`}
+                              />
+                            ) : (
+                              <div className={`w-10 h-10 rounded-full border-2 ${
+                                entry.user_id === profile?.id ? 'border-orange-500 bg-orange-500' : 'border-dark-700 bg-dark-700'
+                              } flex items-center justify-center text-white font-semibold text-sm`}>
+                                {getUserInitial(entry.profile)}
+                              </div>
+                            )}
+                          </button>
                           <div>
                             <div className={`font-semibold ${
                               entry.user_id === profile?.id ? 'text-orange-500' : 'text-white'
@@ -321,6 +401,29 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
           </div>
         </div>
       </div>
+
+      {activeFakeProfile && (
+        <FakeProfileModal
+          profile={activeFakeProfile}
+          posts={activeFakeProfilePosts}
+          onClose={() => setActiveFakeProfileId(null)}
+          onPostLike={(postId) => {
+            void postId;
+          }}
+          onToggleFollow={() => toggleFakeFollow(activeFakeProfile.id)}
+          isFollowing={!!fakeFollowingMap[activeFakeProfile.id]}
+          onMessage={handleFakeMessage}
+          followerCount={getFakeFollowerCount(activeFakeProfile.id)}
+        />
+      )}
+
+      {activeProfileId && (
+        <ProfilePreviewModal
+          profileId={activeProfileId}
+          currentUserId={profile.id}
+          onClose={() => setActiveProfileId(null)}
+        />
+      )}
     </div>
   );
 }

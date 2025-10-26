@@ -5,7 +5,7 @@ import { getUserDisplayName, getUserInitial } from '../lib/userUtils';
 import type { Post, Profile } from '../types';
 
 interface PostMediaViewerProps {
-  posts: Post[];
+  posts: (Post & { isFake?: boolean })[];
   initialPostIndex: number;
   initialMediaIndex?: number;
   onClose: () => void;
@@ -13,6 +13,7 @@ interface PostMediaViewerProps {
   currentUser: Profile | null;
   onCommentCountChange: (postId: string, count: number) => void;
   fallbackUser?: Profile | null;
+  onProfileClick?: (profileId: string, options?: { isFake?: boolean }) => void;
 }
 
 const isVideoUrl = (url: string) => {
@@ -33,6 +34,7 @@ export default function PostMediaViewer({
   currentUser,
   onCommentCountChange,
   fallbackUser = null,
+  onProfileClick,
 }: PostMediaViewerProps) {
   const [currentPostIndex, setCurrentPostIndex] = useState(initialPostIndex);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(initialMediaIndex);
@@ -61,6 +63,15 @@ export default function PostMediaViewer({
   const currentMediaUrl = currentPost?.media_urls?.[currentMediaIndex] || '';
   const currentMediaIsVideo = currentMediaUrl ? isVideoUrl(currentMediaUrl) : currentPost?.post_type === 'video';
   const postAuthor = currentPost?.user || fallbackUser;
+  const authorId = postAuthor?.id || currentPost?.user_id;
+  const isFakePost = Boolean((currentPost as Post & { isFake?: boolean })?.isFake);
+
+  const handleAuthorClick = () => {
+    if (!onProfileClick || !authorId) {
+      return;
+    }
+    onProfileClick(authorId, { isFake: isFakePost });
+  };
 
   const handleNext = () => {
     if (!currentPost) return;
@@ -168,7 +179,26 @@ export default function PostMediaViewer({
         <div className="w-full md:w-96 bg-dark-800 flex flex-col border-l border-dark-700">
           <div className="p-4 border-b border-dark-700">
             <div className="flex items-center gap-3 mb-3">
-              {postAuthor?.avatar_url ? (
+              {onProfileClick && authorId ? (
+                <button
+                  type="button"
+                  onClick={handleAuthorClick}
+                  className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  aria-label={`Voir le profil de ${getUserDisplayName(postAuthor)}`}
+                >
+                  {postAuthor?.avatar_url ? (
+                    <img
+                      src={postAuthor.avatar_url}
+                      alt={getUserDisplayName(postAuthor)}
+                      className="w-12 h-12 rounded-full object-cover border-2 border-orange-500"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-orange-500 text-white flex items-center justify-center text-lg font-semibold">
+                      {getUserInitial(postAuthor)}
+                    </div>
+                  )}
+                </button>
+              ) : postAuthor?.avatar_url ? (
                 <img
                   src={postAuthor.avatar_url}
                   alt={getUserDisplayName(postAuthor)}
@@ -180,9 +210,17 @@ export default function PostMediaViewer({
                 </div>
               )}
               <div className="flex-1">
-                <p className="text-white font-semibold leading-tight">
-                  {getUserDisplayName(postAuthor)}
-                </p>
+                {onProfileClick && authorId ? (
+                  <button
+                    type="button"
+                    onClick={handleAuthorClick}
+                    className="text-left text-white font-semibold leading-tight hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  >
+                    {getUserDisplayName(postAuthor)}
+                  </button>
+                ) : (
+                  <p className="text-white font-semibold leading-tight">{getUserDisplayName(postAuthor)}</p>
+                )}
                 <p className="text-xs text-gray-400">
                   {new Date(currentPost.created_at).toLocaleString('fr-FR')}
                 </p>
@@ -222,6 +260,7 @@ export default function PostMediaViewer({
                 currentUser={currentUser}
                 showAll
                 onCommentCountChange={(count) => onCommentCountChange(currentPost.id, count)}
+                onProfileClick={(profileId) => onProfileClick?.(profileId)}
               />
             ) : (
               <div className="text-center text-gray-500 text-sm">

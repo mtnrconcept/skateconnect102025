@@ -547,16 +547,30 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
     return fallback;
   }, [activeFakeProfileId, posts]);
 
-  const handleAvatarClick = (post: FeedPost) => {
-    if (post.isFake) {
-      setActiveProfileId(null);
-      setActiveFakeProfileId(post.user_id);
-      return;
-    }
-    if (post.user_id) {
+  const openProfile = useCallback(
+    (profileId?: string | null, options?: { isFake?: boolean }) => {
+      if (!profileId) {
+        return;
+      }
+
+      const shouldOpenFakeProfile = options?.isFake ?? profileId.startsWith('fake-');
+
+      if (shouldOpenFakeProfile) {
+        if (fakeProfilesById[profileId]) {
+          setActiveProfileId(null);
+          setActiveFakeProfileId(profileId);
+        }
+        return;
+      }
+
       setActiveFakeProfileId(null);
-      setActiveProfileId(post.user_id);
-    }
+      setActiveProfileId(profileId);
+    },
+    [],
+  );
+
+  const handleAvatarClick = (post: FeedPost) => {
+    openProfile(post.user_id, { isFake: post.isFake });
   };
 
   const isVideoUrl = (url: string) => {
@@ -649,7 +663,26 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
             <div className="mt-6 rounded-xl border border-dark-700/60 bg-dark-800/80 p-4 shadow-[0_10px_30px_-24px_rgba(0,0,0,0.8)]">
               <form onSubmit={handleCreatePost}>
                 <div className="flex gap-3">
-                  {currentUser?.avatar_url ? (
+                  {currentUser?.id ? (
+                    <button
+                      type="button"
+                      onClick={() => openProfile(currentUser.id)}
+                      className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                      aria-label="Voir votre profil"
+                    >
+                      {currentUser.avatar_url ? (
+                        <img
+                          src={currentUser.avatar_url}
+                          alt={getUserDisplayName(currentUser)}
+                          className="h-10 w-10 rounded-full border-2 border-orange-500 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-orange-500 bg-orange-500 text-white font-semibold">
+                          {getUserInitial(currentUser)}
+                        </div>
+                      )}
+                    </button>
+                  ) : currentUser?.avatar_url ? (
                     <img
                       src={currentUser.avatar_url}
                       alt={getUserDisplayName(currentUser)}
@@ -698,6 +731,23 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
                     )}
                   </div>
                 </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => void handleMediaSelect(event, 'image')}
+                />
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/webm,video/ogg"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => void handleMediaSelect(event, 'video')}
+                />
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-dark-700 pt-4 text-sm text-gray-400">
                   <div className="flex flex-wrap items-center gap-3">
@@ -918,12 +968,14 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
                             currentUser={currentUser}
                             onAddComment={(content) => handleFakeCommentAdd(post.id, content)}
                             onDeleteComment={(commentId) => handleFakeCommentDelete(post.id, commentId)}
+                            onProfileClick={(profileId) => openProfile(profileId, { isFake: true })}
                           />
                         ) : (
                           <CommentSection
                             postId={post.id}
                             currentUser={currentUser}
                             onCommentCountChange={(count) => handleCommentCountChange(post.id, count)}
+                            onProfileClick={(profileId) => openProfile(profileId)}
                           />
                         )}
                       </div>
@@ -1031,17 +1083,24 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
                       #{index + 1}
                     </div>
                     <div className="flex items-start gap-3">
-                      {entry.profile.avatar_url ? (
-                        <img
-                          src={entry.profile.avatar_url}
-                          alt={getUserDisplayName(entry.profile)}
-                          className="h-10 w-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
-                          {getUserInitial(entry.profile)}
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => openProfile(entry.profile.id, { isFake: entry.user_id.startsWith('fake-') })}
+                        className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                        aria-label={`Voir le profil de ${getUserDisplayName(entry.profile)}`}
+                      >
+                        {entry.profile.avatar_url ? (
+                          <img
+                            src={entry.profile.avatar_url}
+                            alt={getUserDisplayName(entry.profile)}
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
+                            {getUserInitial(entry.profile)}
+                          </div>
+                        )}
+                      </button>
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-white">{getUserDisplayName(entry.profile)}</p>
                         <p className="text-xs text-orange-300">{entry.level_title}</p>
@@ -1073,6 +1132,7 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
           onLike={handleLike}
           currentUser={currentUser}
           onCommentCountChange={handleCommentCountChange}
+          onProfileClick={(profileId, options) => openProfile(profileId, options)}
         />
       )}
       {activeFakeProfile && (
