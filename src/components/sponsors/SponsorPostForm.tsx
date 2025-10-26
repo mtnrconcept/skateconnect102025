@@ -604,7 +604,14 @@ export default function SponsorPostForm({ sponsorId, mode, initial, onCancel, on
       }
     } catch (cause) {
       console.error('Unable to upload sponsor media', cause);
-      setError("Impossible de téléverser le média. Réessaie plus tard.");
+
+      if (cause instanceof Error && cause.message.includes('File size')) {
+        setError('Le fichier dépasse la taille maximale autorisée de 50MB.');
+      } else if (cause instanceof Error && cause.message) {
+        setError(`Impossible de téléverser le média : ${cause.message}`);
+      } else {
+        setError("Impossible de téléverser le média. Réessaie plus tard.");
+      }
     } finally {
       setUploading(false);
       event.target.value = '';
