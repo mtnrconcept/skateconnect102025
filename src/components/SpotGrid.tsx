@@ -5,13 +5,13 @@ import type { Spot } from '../types';
 
 interface SpotGridProps {
   spots: Spot[];
-  initialCount?: number;              // ignoré si < 3 : on force des batches de 3 pour 3 cartes visibles
+  initialCount?: number;              // ignoré si < 4 : on force des batches de 4 pour 4 cartes visibles
   onSpotClick?: (spot: Spot) => void;
   coverPhotos?: Record<string, string>;
 }
 
-/** Spéc: 1 × 3 => 3 cartes par “page” */
-const PAGE_SIZE = 3;
+/** Spéc: 2 × 2 => 4 cartes par “page” */
+const PAGE_SIZE = 4;
 const SAFETY_MARGIN = 8;
 
 /** Labels propres pour le badge type de spot */
@@ -32,7 +32,7 @@ export default function SpotGrid({
   onSpotClick,
   coverPhotos,
 }: SpotGridProps) {
-  /** Toujours >= 3 pour garantir 3 cartes visibles */
+  /** Toujours >= 4 pour garantir 4 cartes visibles */
   const batchSize = Math.max(initialCount ?? PAGE_SIZE, PAGE_SIZE);
 
   /** Index de batch courant et batch à venir (pour l’anim) */
@@ -304,7 +304,7 @@ export default function SpotGrid({
     return () => cancelAnimationFrame(id);
   }, [pendingAnimation, currentBatchIndex]);
 
-  const pageClasses = 'grid h-full min-h-0 grid-cols-1 gap-4 sm:grid-cols-3';
+  const pageClasses = 'grid h-full min-h-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:grid-rows-2';
 
   const pageStyle: CSSProperties = {
     height: '100%',
@@ -334,20 +334,17 @@ export default function SpotGrid({
 
     if (!spot) {
       return (
-        <div
-          key={key}
-          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-dashed border-dark-700/60 bg-dark-800/40 text-left shadow-lg shadow-black/10"
-          role="listitem"
-          aria-hidden="true"
-        >
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900/80 px-6 text-gray-500">
-            <span className="rounded-full border border-dark-600/70 bg-dark-900/70 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
-              Spot à venir
-            </span>
-            <span className="text-[11px] uppercase tracking-[0.4em] text-gray-500/80">SkateConnect</span>
-            <p className="max-w-[14rem] text-center text-[11px] text-gray-500/70">
-              Bientôt disponible — reste à l’affût pour découvrir ce spot.
-            </p>
+        <div key={key} className="flex w-full" role="listitem" aria-hidden="true">
+          <div className="flex w-full aspect-square flex-col overflow-hidden rounded-2xl border border-dashed border-dark-700/60 bg-dark-800/40 text-left shadow-lg shadow-black/10">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900/80 px-6 text-gray-500">
+              <span className="rounded-full border border-dark-600/70 bg-dark-900/70 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                Spot à venir
+              </span>
+              <span className="text-[11px] uppercase tracking-[0.4em] text-gray-500/80">SkateConnect</span>
+              <p className="max-w-[14rem] text-center text-[11px] text-gray-500/70">
+                Bientôt disponible — reste à l’affût pour découvrir ce spot.
+              </p>
+            </div>
           </div>
         </div>
       );
@@ -360,90 +357,90 @@ export default function SpotGrid({
     const hasOverflowingDescription = Boolean(overflowingDescriptions[spot.id]);
 
     return (
-      <button
-        key={key}
-        type="button"
-        onClick={() => onSpotClick?.(spot)}
-        className="group relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
-        role="listitem"
-      >
-        <div className="relative flex-[1] overflow-hidden">
-          {mediaUrl ? (
-            <img
-              src={mediaUrl}
-              alt={spot.name}
-              className="h-full w-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900 text-xs uppercase tracking-widest text-gray-500">
-              Aucun média
-            </div>
-          )}
-
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-dark-900/90 via-dark-900/20 to-transparent transition-opacity duration-500 ease-in-out group-hover:opacity-100" />
-
-          <div className="absolute left-4 top-4 flex items-center gap-2">
-            <span className="rounded-full bg-orange-500/90 px-3 py-1 text-xs font-semibold uppercase text-white">
-              {getSpotTypeLabel((spot as any).spot_type)}
-            </span>
-          </div>
-
-          <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-dark-900/80 px-3 py-1 text-xs font-semibold text-amber-300">
-            {Array.from({ length: 5 }).map((_, starIndex) => (
-              <Star
-                key={starIndex}
-                size={14}
-                className={starIndex < rating ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
+      <div key={key} className="flex w-full" role="listitem">
+        <button
+          type="button"
+          onClick={() => onSpotClick?.(spot)}
+          className="group relative flex w-full aspect-square flex-col overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
+        >
+          <div className="relative flex-1 overflow-hidden">
+            {mediaUrl ? (
+              <img
+                src={mediaUrl}
+                alt={spot.name}
+                className="h-full w-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-105"
               />
-            ))}
-          </div>
-        </div>
-
-        <div className="flex min-h-0 flex-[2] flex-col gap-4 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
-            {(spot as any).creator?.username && (
-              <span className="rounded-full border border-dark-600 bg-dark-900/70 px-3 py-1 text-xs text-gray-300">
-                @{(spot as any).creator?.username}
-              </span>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-dark-700 via-dark-800 to-dark-900 text-xs uppercase tracking-widest text-gray-500">
+                Aucun média
+              </div>
             )}
-          </div>
 
-          {spot.description && (
-            <div className="flex flex-col gap-2 overflow-hidden">
-              <p
-                ref={(node) => registerDescriptionRef(spot.id, node)}
-                data-spot-description
-                className="spot-card-description text-sm text-gray-200"
-              >
-                {spot.description}
-              </p>
-              <span
-                aria-hidden={!hasOverflowingDescription}
-                className={
-                  hasOverflowingDescription
-                    ? 'text-xs font-semibold uppercase tracking-widest text-orange-300'
-                    : 'invisible text-xs font-semibold uppercase tracking-widest text-orange-300'
-                }
-              >
-                Afficher plus
+            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-dark-900/90 via-dark-900/20 to-transparent transition-opacity duration-500 ease-in-out group-hover:opacity-100" />
+
+            <div className="absolute left-4 top-4 flex items-center gap-2">
+              <span className="rounded-full bg-orange-500/90 px-3 py-1 text-xs font-semibold uppercase text-white">
+                {getSpotTypeLabel((spot as any).spot_type)}
               </span>
             </div>
-          )}
 
-          <div className="mt-auto flex flex-wrap items-center justify-between gap-3 text-xs text-gray-200">
-            <div className="flex items-center gap-2">
-              <MapPin size={14} className="text-orange-400" />
-              <span className="max-w-[12rem] truncate sm:max-w-[10rem] xl:max-w-none">
-                {spot.address || 'Adresse non spécifiée'}
+            <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-dark-900/80 px-3 py-1 text-xs font-semibold text-amber-300">
+              {Array.from({ length: 5 }).map((_, starIndex) => (
+                <Star
+                  key={starIndex}
+                  size={14}
+                  className={starIndex < rating ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-lg font-semibold text-white">{spot.name}</h3>
+              {(spot as any).creator?.username && (
+                <span className="rounded-full border border-dark-600 bg-dark-900/70 px-3 py-1 text-xs text-gray-300">
+                  @{(spot as any).creator?.username}
+                </span>
+              )}
+            </div>
+
+            {spot.description && (
+              <div className="flex flex-1 flex-col gap-2 overflow-hidden">
+                <p
+                  ref={(node) => registerDescriptionRef(spot.id, node)}
+                  data-spot-description
+                  className="spot-card-description text-sm text-gray-200"
+                >
+                  {spot.description}
+                </p>
+                <span
+                  aria-hidden={!hasOverflowingDescription}
+                  className={
+                    hasOverflowingDescription
+                      ? 'text-xs font-semibold uppercase tracking-widest text-orange-300'
+                      : 'invisible text-xs font-semibold uppercase tracking-widest text-orange-300'
+                  }
+                >
+                  Afficher plus
+                </span>
+              </div>
+            )}
+
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-3 text-xs text-gray-200">
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-orange-400" />
+                <span className="max-w-[12rem] truncate sm:max-w-[10rem] xl:max-w-none">
+                  {spot.address || 'Adresse non spécifiée'}
+                </span>
+              </div>
+              <span className="rounded-full border border-orange-500/40 bg-orange-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-100">
+                Voir sur la carte
               </span>
             </div>
-            <span className="rounded-full border border-orange-500/40 bg-orange-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-100">
-              Voir sur la carte
-            </span>
           </div>
-        </div>
-      </button>
+        </button>
+      </div>
     );
   };
 
