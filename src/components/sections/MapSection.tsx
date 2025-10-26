@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { MapPin, Filter, Plus, Navigation, AlertTriangle } from 'lucide-react';
+import { MapPin, Filter, Plus, Navigation, AlertTriangle, Star } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase.js';
@@ -47,6 +47,7 @@ export default function MapSection({
   const [surfaceFilters, setSurfaceFilters] = useState<string[]>([]);
   const [moduleFilters, setModuleFilters] = useState<string[]>([]);
   const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
+  const [ratingFilter, setRatingFilter] = useState<'all' | 1 | 2 | 3 | 4 | 5>('all');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
   const filterControlsRef = useRef<HTMLDivElement | null>(null);
@@ -127,7 +128,18 @@ export default function MapSection({
     [],
   );
 
-  const activeFiltersCount = surfaceFilters.length + moduleFilters.length + (difficultyFilter !== 'all' ? 1 : 0);
+  const ratingFilterOptions: { id: 'all' | 1 | 2 | 3 | 4 | 5; label: string }[] = [
+    { id: 'all', label: 'Toutes notes' },
+    { id: 4, label: '4 étoiles et +' },
+    { id: 3, label: '3 étoiles et +' },
+    { id: 2, label: '2 étoiles et +' },
+  ];
+
+  const activeFiltersCount =
+    surfaceFilters.length +
+    moduleFilters.length +
+    (difficultyFilter !== 'all' ? 1 : 0) +
+    (ratingFilter !== 'all' ? 1 : 0);
 
   const filteredSpots = useMemo(() => {
     const trimmedQuery = searchTerm.trim();
@@ -165,6 +177,16 @@ export default function MapSection({
         }
       }
 
+      if (ratingFilter !== 'all') {
+        const ratingValue =
+          typeof spot.rating_average === 'number' && Number.isFinite(spot.rating_average)
+            ? spot.rating_average
+            : 0;
+        if (ratingValue < ratingFilter) {
+          return false;
+        }
+      }
+
       if (normalizedTokens.length > 0) {
         const haystack = normalizeText(
           `${spot.name} ${spot.address ?? ''} ${spot.description ?? ''} ${spot.spot_type ?? ''} ` +
@@ -176,7 +198,7 @@ export default function MapSection({
 
       return true;
     });
-  }, [spots, searchTerm, surfaceFilters, moduleFilters, difficultyFilter, difficultyRanges]);
+  }, [spots, searchTerm, surfaceFilters, moduleFilters, difficultyFilter, difficultyRanges, ratingFilter]);
 
   const loadCoverPhotos = useCallback(async (spotIds: string[]) => {
     try {
@@ -231,6 +253,10 @@ export default function MapSection({
         }
       }
 
+      if (ratingFilter !== 'all') {
+        query = query.gte('rating_average', ratingFilter);
+      }
+
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -244,7 +270,7 @@ export default function MapSection({
     } finally {
       setLoading(false);
     }
-  }, [difficultyFilter, difficultyRanges, filter, loadCoverPhotos, moduleFilters, surfaceFilters]);
+  }, [difficultyFilter, difficultyRanges, filter, loadCoverPhotos, moduleFilters, surfaceFilters, ratingFilter]);
 
   useEffect(() => {
     void loadSpots();
@@ -252,7 +278,7 @@ export default function MapSection({
 
   useEffect(() => {
     setVisibleSpotCount(DEFAULT_VISIBLE_SPOTS);
-  }, [filter, searchTerm, spots, surfaceFilters, moduleFilters, difficultyFilter]);
+  }, [filter, searchTerm, spots, surfaceFilters, moduleFilters, difficultyFilter, ratingFilter]);
 
   useEffect(() => {
     if (!showFilterPanel) {
@@ -842,12 +868,54 @@ export default function MapSection({
                     </div>
                   </div>
 
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-white">Note minimale</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {ratingFilterOptions.map((option) => {
+                        const isActive = ratingFilter === option.id;
+                        const isNumeric = typeof option.id === 'number';
+                        const threshold = isNumeric ? option.id : 0;
+
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => setRatingFilter(option.id)}
+                            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                              isActive
+                                ? 'border border-orange-500/60 bg-orange-500/20 text-orange-100 shadow-[0_0_10px_rgba(255,153,0,0.12)]'
+                                : 'border border-dark-600 bg-dark-800/70 text-gray-300 hover:border-orange-500/40 hover:text-orange-100'
+                            }`}
+                            type="button"
+                          >
+                            {isNumeric ? (
+                              <span className="flex items-center gap-1">
+                                {Array.from({ length: 5 }).map((_, index) => (
+                                  <Star
+                                    key={index}
+                                    size={14}
+                                    className={index < threshold ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
+                                  />
+                                ))}
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-300">
+                                  {`${threshold}★ et +`}
+                                </span>
+                              </span>
+                            ) : (
+                              <span>{option.label}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="mt-5 flex items-center justify-between">
                     <button
                       onClick={() => {
                         setSurfaceFilters([]);
                         setModuleFilters([]);
                         setDifficultyFilter('all');
+                        setRatingFilter('all');
                       }}
                       className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400 hover:text-orange-200"
                       type="button"
