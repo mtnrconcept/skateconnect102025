@@ -181,6 +181,7 @@ export default function SponsorDashboard() {
     activeView,
     setActiveView,
     refreshAll,
+    refreshSpotlights,
     refreshShopAnalytics,
     createStripeOnboardingLink,
     createSpotlight,
