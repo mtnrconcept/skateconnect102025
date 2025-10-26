@@ -18,6 +18,7 @@ import type { Profile } from '../../types';
 import { useConversations } from '../../hooks/useConversations';
 import { useMessages, type MessageWithSender } from '../../hooks/useMessages';
 import { getUserDisplayName } from '../../lib/userUtils';
+import { fakeMessagesByProfileId, fakeProfilesById } from '../../data/fakeFeed';
 
 interface Participant {
   id: string;
@@ -49,11 +50,16 @@ interface ConversationPreview {
   isMuted?: boolean;
   isPinned?: boolean;
   isGroup?: boolean;
+  type: 'real' | 'synthetic';
+  syntheticProfileId?: string | null;
+  lastActivityAt: string;
 }
 
 interface MessagesSectionProps {
   profile: Profile | null;
   onConversationViewed?: (conversationId: string) => void;
+  focusConversationId?: string | null;
+  onFocusHandled?: () => void;
 }
 
 type HeaderAction = 'call' | 'video' | 'info' | 'more' | 'sparkles';
@@ -83,7 +89,12 @@ const composerActionCopy: Record<ComposerAction, { title: string; description: s
 
 const emojiPalette = ['🔥', '🙌', '🎥', '🏆', '🤘', '📍', '💬', '✨'];
 
-export default function MessagesSection({ profile, onConversationViewed }: MessagesSectionProps) {
+export default function MessagesSection({
+  profile,
+  onConversationViewed,
+  focusConversationId,
+  onFocusHandled,
+}: MessagesSectionProps) {
   const viewerId = profile?.id ?? null;
   const {
     conversations: conversationItems,
@@ -92,6 +103,7 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
     hasMore: conversationsHasMore,
     loadMore: loadMoreConversations,
     markConversationReadLocally,
+    ensureConversation,
   } = useConversations(viewerId);
   const [selectedId, setSelectedId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,12 +121,14 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [preferences, setPreferences] = useState<Record<string, { isMuted: boolean; isPinned: boolean }>>({});
   const [systemMessages, setSystemMessages] = useState<Record<string, ConversationMessage[]>>({});
+  const syntheticPrefix = 'synthetic:';
+  const realConversationId = selectedId && selectedId.startsWith(syntheticPrefix) ? null : selectedId || null;
 
   const {
     messages,
     sendMessage,
     markAsRead,
-  } = useMessages({ conversationId: selectedId || null, viewerId });
+  } = useMessages({ conversationId: realConversationId, viewerId });
 
   const formatTime = useCallback(
     (date: Date) =>
@@ -124,6 +138,30 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
       }),
     [],
   );
+
+  const syntheticDefaults = useMemo<Record<string, ConversationMessage[]>>(
+    () => {
+      const entries: Record<string, ConversationMessage[]> = {};
+      Object.entries(fakeMessagesByProfileId).forEach(([profileId, baseMessages]) => {
+        entries[profileId] = baseMessages.map((message) => {
+          const createdAt = message.timestamp;
+          const date = new Date(createdAt);
+          return {
+            id: message.id,
+            sender: message.sender === 'user' ? 'me' : 'other',
+            content: message.content,
+            timestamp: formatTime(date),
+            status: message.sender === 'user' ? 'seen' : undefined,
+            createdAt,
+          };
+        });
+      });
+      return entries;
+    },
+    [formatTime],
+  );
+
+  const [syntheticThreads, setSyntheticThreads] = useState<Record<string, ConversationMessage[]>>({});
 
   const formatDateTime = useCallback(
     (date: Date) =>
@@ -167,39 +205,81 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
     return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
   }, []);
 
-  const conversationPreviews = useMemo<ConversationPreview[]>(
-    () =>
-      conversationItems.map((item) => {
-        const conversationId = item.conversation.id;
-        const participantProfile = item.otherParticipant;
-        const prefs = preferences[conversationId] ?? { isMuted: false, isPinned: false };
-        const lastMessage = item.lastMessage;
-        const lastActivityReference =
-          participantProfile?.updated_at ?? item.conversation.last_message_at ?? item.conversation.created_at;
-
-        return {
-          id: conversationId,
+  const syntheticPreviews = useMemo<ConversationPreview[]>(() => {
+    return Object.entries(syntheticThreads).flatMap(([profileId, thread]) => {
+      const profile = fakeProfilesById[profileId];
+      if (!profile) {
+        return [];
+      }
+      const messagesForProfile = thread.length ? thread : syntheticDefaults[profileId] ?? [];
+      const lastMessage = messagesForProfile[messagesForProfile.length - 1] ?? null;
+      const lastActivityAt = lastMessage?.createdAt ?? new Date().toISOString();
+      const displayName = profile.display_name ?? profile.username ?? 'Crew invité';
+      return [
+        {
+          id: `${syntheticPrefix}${profileId}`,
           participant: {
-            id: participantProfile?.id ?? conversationId,
-            name: getUserDisplayName(participantProfile, 'Membre Shredloc'),
-            avatar: participantProfile?.avatar_url || '/logo2.png',
-            isOnline: false,
-            location: participantProfile?.location || 'Spot à définir',
-            lastActive: formatRelativeTime(lastActivityReference),
+            id: profile.id,
+            name: displayName,
+            avatar: profile.avatar_url || '/logo2.png',
+            isOnline: true,
+            location: profile.location || 'En session',
+            lastActive: formatRelativeTime(lastActivityAt),
           },
-          lastMessagePreview: lastMessage?.content ?? 'Nouveau message',
-          lastMessageTime: formatRelativeTime(
-            lastMessage?.created_at ?? item.conversation.last_message_at ?? item.conversation.created_at,
-          ),
-          unreadCount: item.unreadCount,
+          lastMessagePreview: lastMessage?.content ?? `Écrire à ${displayName}`,
+          lastMessageTime: formatRelativeTime(lastActivityAt),
+          unreadCount: 0,
           mood: undefined,
-          isMuted: prefs.isMuted,
-          isPinned: prefs.isPinned,
+          isMuted: false,
+          isPinned: false,
           isGroup: false,
-        };
-      }),
-    [conversationItems, formatRelativeTime, preferences],
-  );
+          type: 'synthetic' as const,
+          syntheticProfileId: profileId,
+          lastActivityAt,
+        } satisfies ConversationPreview,
+      ];
+    });
+  }, [formatRelativeTime, syntheticDefaults, syntheticPrefix, syntheticThreads]);
+
+  const conversationPreviews = useMemo<ConversationPreview[]>(() => {
+    const realPreviews = conversationItems.map((item) => {
+      const conversationId = item.conversation.id;
+      const participantProfile = item.otherParticipant;
+      const prefs = preferences[conversationId] ?? { isMuted: false, isPinned: false };
+      const lastMessage = item.lastMessage;
+      const lastActivityReference =
+        participantProfile?.updated_at ?? lastMessage?.created_at ?? item.conversation.last_message_at ?? item.conversation.created_at;
+
+      const lastActivityAt = lastActivityReference ?? new Date().toISOString();
+
+      return {
+        id: conversationId,
+        participant: {
+          id: participantProfile?.id ?? conversationId,
+          name: getUserDisplayName(participantProfile, 'Membre Shredloc'),
+          avatar: participantProfile?.avatar_url || '/logo2.png',
+          isOnline: false,
+          location: participantProfile?.location || 'Spot à définir',
+          lastActive: formatRelativeTime(lastActivityAt),
+        },
+        lastMessagePreview: lastMessage?.content ?? 'Nouveau message',
+        lastMessageTime: formatRelativeTime(lastActivityAt),
+        unreadCount: item.unreadCount,
+        mood: undefined,
+        isMuted: prefs.isMuted,
+        isPinned: prefs.isPinned,
+        isGroup: false,
+        type: 'real' as const,
+        syntheticProfileId: null,
+        lastActivityAt,
+      } satisfies ConversationPreview;
+    });
+
+    const combined = [...syntheticPreviews, ...realPreviews];
+    return combined.sort(
+      (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime(),
+    );
+  }, [conversationItems, formatRelativeTime, preferences, syntheticPreviews]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -273,6 +353,17 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
       return [];
     }
 
+    if (selectedConversation?.type === 'synthetic') {
+      const profileId = selectedConversation.syntheticProfileId ?? selectedId.replace(syntheticPrefix, '');
+      const base = profileId
+        ? syntheticThreads[profileId] ?? syntheticDefaults[profileId] ?? []
+        : [];
+      const extras = systemMessages[selectedId] ?? [];
+      const combined = [...base, ...extras];
+      combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      return combined;
+    }
+
     const baseMessages: ConversationMessage[] = messages.map((message: MessageWithSender) => {
       const sender: ConversationSender = message.sender_id === viewerId ? 'me' : 'other';
       const createdAt = message.created_at;
@@ -291,7 +382,18 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
     const combined = [...baseMessages, ...extras];
     combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     return combined;
-  }, [formatTime, messages, selectedId, systemMessages, viewerId]);
+  }, [
+    formatTime,
+    messages,
+    selectedConversation?.syntheticProfileId,
+    selectedConversation?.type,
+    selectedId,
+    syntheticDefaults,
+    syntheticPrefix,
+    syntheticThreads,
+    systemMessages,
+    viewerId,
+  ]);
 
   const messagesLength = conversationMessages.length;
   const isShredlocSelected = selectedConversation?.participant.avatar?.includes('logo2.png');
@@ -508,6 +610,41 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
   }, [toast]);
 
   useEffect(() => {
+    if (!focusConversationId) {
+      return;
+    }
+
+    if (focusConversationId.startsWith(syntheticPrefix)) {
+      const profileId = focusConversationId.slice(syntheticPrefix.length);
+      setSyntheticThreads((previous) => {
+        if (previous[profileId]) {
+          return previous;
+        }
+        const base = syntheticDefaults[profileId] ?? [];
+        return {
+          ...previous,
+          [profileId]: base.map((message) => ({ ...message })),
+        };
+      });
+    } else {
+      void ensureConversation(focusConversationId);
+    }
+
+    setSelectedId(focusConversationId);
+    if (isMobileView) {
+      setMobileConversationOpen(true);
+    }
+    onFocusHandled?.();
+  }, [
+    focusConversationId,
+    ensureConversation,
+    isMobileView,
+    onFocusHandled,
+    syntheticDefaults,
+    syntheticPrefix,
+  ]);
+
+  useEffect(() => {
     if (!conversationPreviews.length) {
       setSelectedId('');
       return;
@@ -524,9 +661,11 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
     }
 
     markConversationReadLocally(selectedId);
-    void markAsRead();
+    if (realConversationId) {
+      void markAsRead();
+    }
     onConversationViewed?.(selectedId);
-  }, [markAsRead, markConversationReadLocally, onConversationViewed, selectedId]);
+  }, [markAsRead, markConversationReadLocally, onConversationViewed, realConversationId, selectedId]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedId(conversationId);
@@ -538,6 +677,58 @@ export default function MessagesSection({ profile, onConversationViewed }: Messa
   const handleSendMessage = async () => {
     const trimmed = messageDraft.trim();
     if (!trimmed || !selectedConversation) return;
+
+    if (selectedConversation.type === 'synthetic') {
+      const profileId = selectedConversation.syntheticProfileId ?? selectedConversation.id.replace(syntheticPrefix, '');
+      if (!profileId) {
+        return;
+      }
+
+      const now = new Date();
+      const outgoing: ConversationMessage = {
+        id: `synthetic-${now.getTime()}`,
+        sender: 'me',
+        content: trimmed,
+        timestamp: formatTime(now),
+        status: 'sent',
+        createdAt: now.toISOString(),
+      };
+
+      setSyntheticThreads((previous) => {
+        const existing = previous[profileId] ?? syntheticDefaults[profileId] ?? [];
+        return {
+          ...previous,
+          [profileId]: [...existing, outgoing],
+        };
+      });
+
+      setMessageDraft('');
+      setActiveComposerAction(null);
+      showToast('Message envoyé.');
+
+      window.setTimeout(() => {
+        const profile = fakeProfilesById[profileId];
+        const responseNow = new Date();
+        const responderName = profile?.display_name?.split(' ')[0] ?? profile?.username ?? 'Crew';
+        const reply: ConversationMessage = {
+          id: `synthetic-reply-${responseNow.getTime()}`,
+          sender: 'other',
+          content: `${responderName} est chaud·e pour rider bientôt !`,
+          timestamp: formatTime(responseNow),
+          createdAt: responseNow.toISOString(),
+        };
+
+        setSyntheticThreads((previous) => {
+          const existing = previous[profileId] ?? syntheticDefaults[profileId] ?? [];
+          return {
+            ...previous,
+            [profileId]: [...existing, reply],
+          };
+        });
+      }, 1400);
+
+      return;
+    }
 
     try {
       await sendMessage(trimmed);
