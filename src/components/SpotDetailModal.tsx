@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, MapPin, Star, Users, Upload, Heart, MessageCircle } from 'lucide-react';
+import { X, MapPin, Star, Users, Upload, Heart, MessageCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { uploadFile } from '../lib/storage.js';
 import LazyImage from './LazyImage';
@@ -10,6 +10,7 @@ import SpotRatingForm from './SpotRatingForm';
 import { buildSummaryFromSpot, SpotRatingSummary } from '../lib/ratings';
 import { getUserDisplayName } from '../lib/userUtils';
 import type { Spot, SpotMedia, SpotRating } from '../types';
+import { fetchSpotRatingsPage } from '../lib/spotRatingsApi.ts';
 
 interface SpotDetailModalProps {
   spot: Spot;
@@ -31,7 +32,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const [userLiked, setUserLiked] = useState(false);
   const [ratingSummary, setRatingSummary] = useState<SpotRatingSummary>(buildSummaryFromSpot(spot));
   const [ratings, setRatings] = useState<SpotRating[]>([]);
-  const [ratingsPage, setRatingsPage] = useState(1);
+  const ratingsPageRef = useRef(1);
   const [ratingsTotal, setRatingsTotal] = useState(0);
   const [ratingsLoading, setRatingsLoading] = useState(false);
 
@@ -43,38 +44,27 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
         const from = (page - 1) * RATINGS_PAGE_SIZE;
         const to = from + RATINGS_PAGE_SIZE - 1;
 
-        const { data, error, count } = await supabase
-          .from('spot_ratings')
-          .select('id, rating, comment, created_at, updated_at, user:profiles(id, username, display_name, avatar_url)', {
-            count: 'exact',
-          })
-          .eq('spot_id', spot.id)
-          .order('created_at', { ascending: false })
-          .range(from, to);
-
-        if (error) throw error;
-
-        const normalized = (data || []).map((item) => ({
-          ...item,
-          comment: item.comment ?? null,
-        })) as SpotRating[];
+        const { ratings: fetchedRatings, total } = await fetchSpotRatingsPage(spot.id, {
+          from,
+          to,
+        });
 
         setRatings((previous) => {
           if (replace) {
-            return normalized;
+            return fetchedRatings;
           }
 
           const existingIds = new Set(previous.map((rating) => rating.id));
-          const merged = normalized.filter((rating) => !existingIds.has(rating.id));
+          const merged = fetchedRatings.filter((rating) => !existingIds.has(rating.id));
           return [...previous, ...merged];
         });
 
         setRatingsTotal((previous) => {
-          if (typeof count === 'number') {
-            return count;
+          if (typeof total === 'number') {
+            return total;
           }
 
-          return replace ? normalized.length : previous + normalized.length;
+          return replace ? fetchedRatings.length : previous + fetchedRatings.length;
         });
       } catch (error) {
         console.error('Error loading spot ratings:', error);
@@ -89,7 +79,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
     setRatingSummary(buildSummaryFromSpot(spot));
     setRatings([]);
     setRatingsTotal(0);
-    setRatingsPage(1);
+    ratingsPageRef.current = 1;
     loadSpotMedia();
     loadCurrentUser();
     loadSpotData();
@@ -125,15 +115,13 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const handleRatingSaved = async () => {
     await loadSpotData();
     await loadSpotRatings(1, true);
-    setRatingsPage(1);
+    ratingsPageRef.current = 1;
   };
 
   const handleLoadMoreRatings = () => {
-    setRatingsPage((previous) => {
-      const nextPage = previous + 1;
-      loadSpotRatings(nextPage, false);
-      return nextPage;
-    });
+    const nextPage = ratingsPageRef.current + 1;
+    ratingsPageRef.current = nextPage;
+    loadSpotRatings(nextPage, false);
   };
 
   const formatReviewDate = (value: string) => {
