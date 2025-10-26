@@ -38,6 +38,9 @@ interface ConversationMessage {
   timestamp: string;
   status?: 'sent' | 'delivered' | 'seen';
   createdAt: string;
+  mediaUrl?: string | null;
+  mediaType?: 'voice-note';
+  durationSeconds?: number;
 }
 
 interface ConversationPreview {
@@ -117,7 +120,8 @@ function parseStoredConversationMessages(
         continue;
       }
 
-      const { id, sender, content, timestamp, createdAt, status } = candidate as Partial<ConversationMessage>;
+      const { id, sender, content, timestamp, createdAt, status, mediaUrl, mediaType, durationSeconds } =
+        candidate as Partial<ConversationMessage>;
 
       if (
         typeof id !== 'string' ||
@@ -143,6 +147,12 @@ function parseStoredConversationMessages(
         timestamp,
         createdAt,
         status: normalizedStatus,
+        mediaUrl: typeof mediaUrl === 'string' ? mediaUrl : null,
+        mediaType: mediaType === 'voice-note' ? 'voice-note' : undefined,
+        durationSeconds:
+          typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds >= 0
+            ? durationSeconds
+            : undefined,
       });
     }
 
@@ -184,6 +194,26 @@ export default function MessagesSection({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [preferences, setPreferences] = useState<Record<string, { isMuted: boolean; isPinned: boolean }>>({});
   const [systemMessages, setSystemMessages] = useState<Record<string, ConversationMessage[]>>({});
+  const [ephemeralMessages, setEphemeralMessages] = useState<Record<string, ConversationMessage[]>>({});
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordingPreviewUrl, setRecordingPreviewUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingBlobRef = useRef<Blob | null>(null);
+  const skipNextPreviewRef = useRef(false);
+  const [isVideoCallModalOpen, setVideoCallModalOpen] = useState(false);
+  const [videoCallStatus, setVideoCallStatus] = useState<'idle' | 'connecting' | 'in-call'>('idle');
+  const [videoCallError, setVideoCallError] = useState<string | null>(null);
+  const [videoCallDuration, setVideoCallDuration] = useState(0);
+  const [videoCallParticipant, setVideoCallParticipant] = useState<Participant | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoCallStreamRef = useRef<MediaStream | null>(null);
+  const videoCallTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoCallConversationIdRef = useRef<string | null>(null);
+  const callStartedAtRef = useRef<number | null>(null);
   const syntheticPrefix = 'synthetic:';
   const realConversationId = selectedId && selectedId.startsWith(syntheticPrefix) ? null : selectedId || null;
 
@@ -422,7 +452,8 @@ export default function MessagesSection({
         ? syntheticThreads[profileId] ?? syntheticDefaults[profileId] ?? []
         : [];
       const extras = systemMessages[selectedId] ?? [];
-      const combined = [...base, ...extras];
+      const ephemeral = ephemeralMessages[selectedId] ?? [];
+      const combined = [...base, ...extras, ...ephemeral];
       combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       return combined;
     }
@@ -442,10 +473,12 @@ export default function MessagesSection({
     });
 
     const extras = systemMessages[selectedId] ?? [];
-    const combined = [...baseMessages, ...extras];
+    const ephemeral = ephemeralMessages[selectedId] ?? [];
+    const combined = [...baseMessages, ...extras, ...ephemeral];
     combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     return combined;
   }, [
+    ephemeralMessages,
     formatTime,
     messages,
     selectedConversation?.syntheticProfileId,
@@ -503,6 +536,309 @@ export default function MessagesSection({
     [formatTime, selectedId],
   );
 
+  const appendEphemeralMessage = useCallback(
+    (conversationId: string, message: ConversationMessage) => {
+      setEphemeralMessages((previous) => {
+        const existing = previous[conversationId] ?? [];
+        return {
+          ...previous,
+          [conversationId]: [...existing, message],
+        };
+      });
+
+      if (conversationId === selectedId && typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
+        });
+      }
+    },
+    [selectedId],
+  );
+
+  const formatDurationLabel = useCallback((totalSeconds: number) => {
+    const safeSeconds = Number.isFinite(totalSeconds) && totalSeconds >= 0 ? Math.round(totalSeconds) : 0;
+    const minutes = Math.floor(safeSeconds / 60);
+    const seconds = safeSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }, []);
+
+  const stopRecordingTimer = useCallback(() => {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }, []);
+
+  const releaseRecordingStream = useCallback(() => {
+    const stream = recordingStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+    }
+  }, []);
+
+  const handleStopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      return;
+    }
+    stopRecordingTimer();
+    recorder.stop();
+    setIsRecording(false);
+  }, [stopRecordingTimer]);
+
+  const handleDiscardRecording = useCallback(
+    (silent = false) => {
+      if (isRecording) {
+        skipNextPreviewRef.current = true;
+        handleStopRecording();
+      } else {
+        skipNextPreviewRef.current = false;
+      }
+
+      stopRecordingTimer();
+      releaseRecordingStream();
+      mediaRecorderRef.current = null;
+      recordingBlobRef.current = null;
+      recordingChunksRef.current = [];
+
+      if (recordingPreviewUrl) {
+        URL.revokeObjectURL(recordingPreviewUrl);
+      }
+
+      setRecordingPreviewUrl(null);
+      setRecordingDuration(0);
+      setIsRecording(false);
+
+      if (!silent) {
+        showToast('Enregistrement supprimé.');
+      }
+    },
+    [handleStopRecording, isRecording, recordingPreviewUrl, releaseRecordingStream, showToast, stopRecordingTimer],
+  );
+
+  const handleStartRecording = useCallback(async () => {
+    if (!selectedConversation) {
+      showToast('Sélectionnez une conversation pour enregistrer un vocal.');
+      return;
+    }
+
+    if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      showToast('L’enregistrement audio n’est pas pris en charge sur cet appareil.');
+      return;
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      showToast('Le navigateur ne permet pas encore les mémos vocaux.');
+      return;
+    }
+
+    handleDiscardRecording(true);
+    skipNextPreviewRef.current = false;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recordingChunksRef.current = [];
+      setRecordingDuration(0);
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data && event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        stopRecordingTimer();
+        releaseRecordingStream();
+
+        if (skipNextPreviewRef.current) {
+          skipNextPreviewRef.current = false;
+          return;
+        }
+
+        const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        recordingBlobRef.current = blob;
+        const previewUrl = URL.createObjectURL(blob);
+        setRecordingPreviewUrl(previewUrl);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      showToast('Enregistrement en cours…');
+
+      stopRecordingTimer();
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDuration((previous) => previous + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Erreur lors du démarrage de l’enregistrement vocal :', error);
+      handleDiscardRecording(true);
+      showToast('Impossible de démarrer l’enregistrement audio.');
+    }
+  }, [handleDiscardRecording, releaseRecordingStream, selectedConversation, showToast, stopRecordingTimer]);
+
+  const handleSendVoiceNote = useCallback(() => {
+    if (!selectedConversation) {
+      showToast('Sélectionnez une conversation pour envoyer un vocal.');
+      return;
+    }
+
+    if (isRecording) {
+      showToast('Terminez l’enregistrement avant d’envoyer.');
+      return;
+    }
+
+    const blob = recordingBlobRef.current;
+    if (!blob) {
+      showToast('Aucun enregistrement disponible.');
+      return;
+    }
+
+    const now = new Date();
+    const message: ConversationMessage = {
+      id: `voice-${now.getTime()}`,
+      sender: 'me',
+      content: 'Note vocale',
+      timestamp: formatTime(now),
+      status: 'sent',
+      createdAt: now.toISOString(),
+      mediaUrl: URL.createObjectURL(blob),
+      mediaType: 'voice-note',
+      durationSeconds: recordingDuration,
+    };
+
+    if (selectedConversation.type === 'synthetic') {
+      const profileId = selectedConversation.syntheticProfileId ?? selectedConversation.id.replace(syntheticPrefix, '');
+      if (!profileId) {
+        showToast('Impossible d’envoyer ce vocal pour cette conversation.');
+        return;
+      }
+
+      setSyntheticThreads((previous) => {
+        const existing = previous[profileId] ?? syntheticDefaults[profileId] ?? [];
+        return {
+          ...previous,
+          [profileId]: [...existing, message],
+        };
+      });
+    } else {
+      appendEphemeralMessage(selectedConversation.id, message);
+    }
+
+    if (recordingPreviewUrl) {
+      URL.revokeObjectURL(recordingPreviewUrl);
+    }
+
+    recordingBlobRef.current = null;
+    recordingChunksRef.current = [];
+    setRecordingPreviewUrl(null);
+    setRecordingDuration(0);
+    setActiveComposerAction(null);
+    showToast('Note vocale envoyée.');
+  }, [
+    appendEphemeralMessage,
+    formatTime,
+    isRecording,
+    recordingDuration,
+    recordingPreviewUrl,
+    selectedConversation,
+    setSyntheticThreads,
+    showToast,
+    syntheticDefaults,
+    syntheticPrefix,
+  ]);
+
+  const startVideoCall = useCallback(async () => {
+    if (!selectedConversation) {
+      showToast('Sélectionnez une conversation pour démarrer une visio.');
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      showToast('La visio n’est pas disponible sur cet appareil.');
+      return;
+    }
+
+    setVideoCallModalOpen(true);
+    setVideoCallStatus('connecting');
+    setVideoCallError(null);
+    setVideoCallDuration(0);
+    videoCallConversationIdRef.current = selectedConversation.id;
+    setVideoCallParticipant(selectedConversation.participant);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      videoCallStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      setVideoCallStatus('in-call');
+      callStartedAtRef.current = Date.now();
+      showToast('Appel vidéo en cours.');
+    } catch (error) {
+      console.error('Impossible de démarrer la visio session :', error);
+      setVideoCallStatus('idle');
+      setVideoCallError("Impossible d’accéder à la caméra ou au micro.");
+      setVideoCallModalOpen(false);
+      setVideoCallParticipant(null);
+      showToast('Impossible de démarrer la visio.');
+    }
+  }, [selectedConversation, showToast]);
+
+  const endVideoCall = useCallback(
+    (reason: 'completed' | 'cancelled') => {
+      if (videoCallTimerRef.current) {
+        window.clearInterval(videoCallTimerRef.current);
+        videoCallTimerRef.current = null;
+      }
+
+      const stream = videoCallStreamRef.current;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        videoCallStreamRef.current = null;
+      }
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+
+      const startedAt = callStartedAtRef.current;
+      const elapsedSeconds = startedAt ? Math.max(Math.round((Date.now() - startedAt) / 1000), videoCallDuration) : videoCallDuration;
+      callStartedAtRef.current = null;
+
+      setVideoCallDuration(0);
+      setVideoCallModalOpen(false);
+      setVideoCallStatus('idle');
+      setVideoCallError(null);
+
+      const conversationId = videoCallConversationIdRef.current;
+      if (conversationId) {
+        const label = formatDurationLabel(elapsedSeconds);
+        const summary = reason === 'completed' ? `🎥 Appel vidéo terminé (${label}).` : `🎥 Appel vidéo annulé (${label}).`;
+        appendSystemMessage(conversationId, summary);
+      }
+
+      videoCallConversationIdRef.current = null;
+      setVideoCallParticipant(null);
+      showToast(reason === 'completed' ? 'Appel vidéo terminé.' : 'Appel vidéo annulé.');
+    },
+    [appendSystemMessage, formatDurationLabel, showToast, videoCallDuration],
+  );
+
+  const handleCancelVideoCall = useCallback(() => {
+    endVideoCall('cancelled');
+  }, [endVideoCall]);
+
   const handleToolbarAction = (action: HeaderAction) => {
     if (!selectedConversation) {
       showToast('Sélectionnez une conversation pour utiliser cette action.');
@@ -517,9 +853,7 @@ export default function MessagesSection({
         break;
       }
       case 'video': {
-        const content = `🎬 Session vidéo prévue avec ${selectedConversation.participant.name} (${formatDateTime(new Date())}).`;
-        appendSystemMessage(selectedConversation.id, content);
-        showToast('Visio session ajoutée à la discussion.');
+        void startVideoCall();
         break;
       }
       case 'info': {
@@ -588,6 +922,55 @@ export default function MessagesSection({
 
     handleToolbarAction(action === 'call' ? 'call' : 'video');
   };
+
+  useEffect(() => {
+    if (isVideoCallModalOpen && videoCallStatus === 'in-call') {
+      if (videoCallTimerRef.current) {
+        window.clearInterval(videoCallTimerRef.current);
+      }
+      videoCallTimerRef.current = window.setInterval(() => {
+        setVideoCallDuration((previous) => previous + 1);
+      }, 1000);
+    } else {
+      if (videoCallTimerRef.current) {
+        window.clearInterval(videoCallTimerRef.current);
+        videoCallTimerRef.current = null;
+      }
+      if (!isVideoCallModalOpen) {
+        setVideoCallDuration(0);
+      }
+    }
+
+    return () => {
+      if (videoCallTimerRef.current) {
+        window.clearInterval(videoCallTimerRef.current);
+        videoCallTimerRef.current = null;
+      }
+    };
+  }, [isVideoCallModalOpen, videoCallStatus]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingPreviewUrl) {
+        URL.revokeObjectURL(recordingPreviewUrl);
+      }
+    };
+  }, [recordingPreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      releaseRecordingStream();
+      const stream = videoCallStreamRef.current;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        videoCallStreamRef.current = null;
+      }
+      if (videoCallTimerRef.current) {
+        window.clearInterval(videoCallTimerRef.current);
+        videoCallTimerRef.current = null;
+      }
+    };
+  }, [releaseRecordingStream]);
 
   const confirmMoreOptions = () => {
     if (!selectedConversation) {
@@ -1164,7 +1547,23 @@ export default function MessagesSection({
                                 : 'bg-dark-800/80 text-gray-100 border-dark-700'
                             }`}
                           >
-                            <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                            {message.content && (
+                              <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                            )}
+                            {message.mediaType === 'voice-note' && message.mediaUrl && (
+                              <div className={`${message.content ? 'mt-2' : ''} space-y-2`}>
+                                <audio
+                                  controls
+                                  src={message.mediaUrl}
+                                  className="w-full max-w-xs rounded-xl border border-black/20 bg-black/20"
+                                />
+                                {typeof message.durationSeconds === 'number' && (
+                                  <span className={`block text-[11px] uppercase tracking-wide ${isMe ? 'text-white/80' : 'text-gray-400'}`}>
+                                    {formatDurationLabel(message.durationSeconds)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                             <div
                               className={`mt-2 text-[11px] flex items-center gap-2 ${
                                 isMe ? 'text-white/80' : 'text-gray-400'
@@ -1283,6 +1682,74 @@ export default function MessagesSection({
                                   {emoji}
                                 </button>
                               ))}
+                            </div>
+                          ) : activeComposerAction === 'mic' ? (
+                            <div className="mt-3 space-y-4">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={isRecording ? handleStopRecording : handleStartRecording}
+                                  className={`px-4 py-2 rounded-full text-xs font-semibold transition-colors border ${
+                                    isRecording
+                                      ? 'bg-red-500/20 border-red-400/60 text-red-200 hover:bg-red-500/30'
+                                      : 'bg-dark-700/80 border-dark-600 text-gray-200 hover:border-orange-400/60 hover:text-orange-200'
+                                  }`}
+                                  aria-pressed={isRecording}
+                                >
+                                  {isRecording ? 'Arrêter' : recordingPreviewUrl ? 'Réenregistrer' : 'Enregistrer'}
+                                </button>
+                                <span className="text-xs text-gray-400">
+                                  {isRecording
+                                    ? `Enregistrement… ${formatDurationLabel(recordingDuration)}`
+                                    : recordingPreviewUrl
+                                      ? `Prêt à envoyer (${formatDurationLabel(recordingDuration)})`
+                                      : 'Prépare ton micro et appuie pour démarrer.'}
+                                </span>
+                              </div>
+                              {recordingPreviewUrl && (
+                                <div className="rounded-2xl border border-dark-700 bg-dark-900/60 p-3 space-y-3">
+                                  <audio
+                                    controls
+                                    src={recordingPreviewUrl}
+                                    className="w-full rounded-xl border border-black/20 bg-black/20"
+                                  />
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={handleSendVoiceNote}
+                                      className="px-3 py-1.5 rounded-full bg-orange-500 text-white text-xs font-medium hover:bg-orange-400 transition-colors"
+                                    >
+                                      Envoyer le vocal
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDiscardRecording()}
+                                      className="px-3 py-1.5 rounded-full border border-dark-600 text-gray-300 hover:border-red-400/60 hover:text-red-300 text-xs"
+                                    >
+                                      Supprimer
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-2">
+                                {composerMetadata.templates?.map((template) => (
+                                  <button
+                                    key={template}
+                                    type="button"
+                                    onClick={() => insertAttachmentTemplate(template)}
+                                    className="px-3 py-1.5 rounded-xl border border-dark-600 bg-dark-700/70 text-xs text-gray-200 hover:border-orange-400/60"
+                                  >
+                                    {template}
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => insertAttachmentTemplate('Note personnelle à compléter :')}
+                                  className="px-3 py-1.5 rounded-xl border border-dark-600 bg-dark-700/70 text-xs text-gray-200 hover:border-orange-400/60"
+                                >
+                                  + Ajouter une note
+                                </button>
+                              </div>
                             </div>
                           ) : (
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -1414,6 +1881,101 @@ export default function MessagesSection({
         </div>
       </div>
     </section>
+
+      {isVideoCallModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Appel vidéo en cours"
+        >
+          <div className="w-full max-w-4xl mx-4 rounded-3xl border border-dark-700 bg-dark-900/95 shadow-2xl overflow-hidden">
+            <div className="flex flex-col md:flex-row">
+              <div className="relative flex-1 bg-black min-h-[220px] md:min-h-[360px]">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="h-full w-full object-cover"
+                />
+                {videoCallStatus !== 'in-call' && (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-300 text-sm">
+                    {videoCallStatus === 'connecting' ? 'Connexion à la caméra…' : 'Caméra inactive'}
+                  </div>
+                )}
+                <div className="absolute top-4 left-4 bg-black/60 text-white text-xs font-medium px-3 py-1 rounded-full">
+                  {formatDurationLabel(videoCallDuration)}
+                </div>
+              </div>
+              <aside className="w-full max-w-xs border-t border-dark-700 bg-dark-900/90 p-6 space-y-6 md:border-t-0 md:border-l">
+                <div className="space-y-2">
+                  <h2 className="text-lg font-semibold text-white">
+                    Visio avec {videoCallParticipant?.name ?? selectedConversation?.participant.name ?? 'ton crew'}
+                  </h2>
+                  {videoCallError ? (
+                    <p className="text-sm text-red-300">{videoCallError}</p>
+                  ) : (
+                    <p className="text-sm text-gray-300">
+                      {videoCallStatus === 'connecting'
+                        ? 'Initialisation de la caméra…'
+                        : 'Partage ton trick en live pendant cet appel !'}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl border border-dark-700 bg-dark-800/70 p-4">
+                  <img
+                    src={videoCallParticipant?.avatar ?? selectedConversation?.participant.avatar ?? '/logo2.png'}
+                    alt={videoCallParticipant?.name ?? selectedConversation?.participant.name ?? 'Participant'}
+                    className="h-12 w-12 rounded-full border border-dark-600 object-cover"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      {videoCallParticipant?.name ?? selectedConversation?.participant.name ?? 'Crew Shredloc'}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {videoCallStatus === 'connecting' ? 'En attente de connexion…' : 'Connecté et prêt à rider.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    {videoCallStatus === 'in-call' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => endVideoCall('completed')}
+                          className="flex-1 rounded-full bg-red-500 text-white text-sm font-semibold py-3 hover:bg-red-400 transition-colors"
+                        >
+                          Terminer l’appel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => endVideoCall('cancelled')}
+                          className="flex-1 rounded-full border border-dark-600 text-gray-200 py-3 hover:border-red-400/60 hover:text-red-300 transition-colors"
+                        >
+                          Annuler
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleCancelVideoCall}
+                        className="flex-1 rounded-full bg-red-500 text-white text-sm font-semibold py-3 hover:bg-red-400 transition-colors"
+                      >
+                        Annuler
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] uppercase tracking-wide text-gray-500">
+                    Conseil : verrouille ton téléphone en mode paysage pour profiter pleinement de la session.
+                  </p>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isInfoDrawerOpen && selectedConversation && (
         <div
