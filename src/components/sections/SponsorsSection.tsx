@@ -50,6 +50,7 @@ import {
   type SponsorOpportunityDateFilter,
   type SponsorOpportunityStatus,
 } from '../../lib/sponsorOpportunities';
+import { getDemoChallengeParticipations } from '../../data/demoSponsorOpportunities';
 import { useSponsorOpportunities } from '../../hooks/useSponsorOpportunities';
 import SponsorPostForm from '../sponsors/SponsorPostForm';
 import { SponsorPlanner } from '../sponsors/planner';
@@ -148,7 +149,29 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
   const [viewMode, setViewMode] = useState<'list' | 'planner'>('list');
   const [activeTab, setActiveTab] = useState<'details' | 'participations' | 'participer'>('details');
   const [participationSort, setParticipationSort] = useState<'votes' | 'recent'>('votes');
+  const demoParticipationMedia = useMemo(() => {
+    const entries = Object.entries(getDemoChallengeParticipations()).map(([challengeId, mediaList]) => [
+      challengeId,
+      mediaList.map((media) => ({ ...media })),
+    ]);
+    return Object.fromEntries(entries) as Record<string, ParticipationMedia[]>;
+  }, []);
   const [participations, setParticipations] = useState<Record<string, ParticipationMedia[]>>({});
+  useEffect(() => {
+    setParticipations((prev) => {
+      const next = { ...prev };
+      let updated = false;
+
+      for (const [challengeId, mediaList] of Object.entries(demoParticipationMedia)) {
+        if (!next[challengeId]) {
+          next[challengeId] = mediaList;
+          updated = true;
+        }
+      }
+
+      return updated ? next : prev;
+    });
+  }, [demoParticipationMedia]);
   const [formState, setFormState] = useState<
     | { mode: 'create'; type: SponsorEditableOpportunityType }
     | { mode: 'edit'; type: 'challenge'; record: SponsorChallengeOpportunity }
