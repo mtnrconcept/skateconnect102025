@@ -89,6 +89,69 @@ const composerActionCopy: Record<ComposerAction, { title: string; description: s
 
 const emojiPalette = ['🔥', '🙌', '🎥', '🏆', '🤘', '📍', '💬', '✨'];
 
+const LOCAL_STORAGE_KEYS = {
+  syntheticThreads: 'skateconnect:messaging:syntheticThreads',
+  systemMessages: 'skateconnect:messaging:systemMessages',
+  selectedConversation: 'skateconnect:messaging:selectedConversation',
+} as const;
+
+function parseStoredConversationMessages(
+  value: unknown,
+): Record<string, ConversationMessage[]> | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  const record: Record<string, ConversationMessage[]> = {};
+
+  for (const [key, messageList] of entries) {
+    if (!Array.isArray(messageList)) {
+      continue;
+    }
+
+    const sanitized: ConversationMessage[] = [];
+
+    for (const candidate of messageList) {
+      if (!candidate || typeof candidate !== 'object') {
+        continue;
+      }
+
+      const { id, sender, content, timestamp, createdAt, status } = candidate as Partial<ConversationMessage>;
+
+      if (
+        typeof id !== 'string' ||
+        (sender !== 'me' && sender !== 'other' && sender !== 'system') ||
+        typeof content !== 'string' ||
+        typeof timestamp !== 'string' ||
+        typeof createdAt !== 'string'
+      ) {
+        continue;
+      }
+
+      const normalizedStatus: ConversationMessage['status'] =
+        sender === 'me' && status && ['sent', 'delivered', 'seen'].includes(status)
+          ? status
+          : sender === 'me'
+            ? 'sent'
+            : undefined;
+
+      sanitized.push({
+        id,
+        sender,
+        content,
+        timestamp,
+        createdAt,
+        status: normalizedStatus,
+      });
+    }
+
+    record[key] = sanitized;
+  }
+
+  return record;
+}
+
 export default function MessagesSection({
   profile,
   onConversationViewed,
@@ -578,6 +641,85 @@ export default function MessagesSection({
   };
 
   const composerMetadata = activeComposerAction ? composerActionCopy[activeComposerAction] : null;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const storedThreadsRaw = window.localStorage.getItem(LOCAL_STORAGE_KEYS.syntheticThreads);
+      if (storedThreadsRaw) {
+        const parsed = parseStoredConversationMessages(JSON.parse(storedThreadsRaw));
+        if (parsed) {
+          setSyntheticThreads(parsed);
+        }
+      }
+    } catch (error) {
+      console.error('Impossible de restaurer les conversations synthétiques :', error);
+    }
+
+    try {
+      const storedSystemRaw = window.localStorage.getItem(LOCAL_STORAGE_KEYS.systemMessages);
+      if (storedSystemRaw) {
+        const parsed = parseStoredConversationMessages(JSON.parse(storedSystemRaw));
+        if (parsed) {
+          setSystemMessages(parsed);
+        }
+      }
+    } catch (error) {
+      console.error('Impossible de restaurer les messages système :', error);
+    }
+
+    try {
+      const storedSelectedId = window.localStorage.getItem(LOCAL_STORAGE_KEYS.selectedConversation);
+      if (storedSelectedId) {
+        setSelectedId(storedSelectedId);
+      }
+    } catch (error) {
+      console.error('Impossible de restaurer la conversation sélectionnée :', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(LOCAL_STORAGE_KEYS.syntheticThreads, JSON.stringify(syntheticThreads));
+    } catch (error) {
+      console.error('Impossible de sauvegarder les conversations synthétiques :', error);
+    }
+  }, [syntheticThreads]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(LOCAL_STORAGE_KEYS.systemMessages, JSON.stringify(systemMessages));
+    } catch (error) {
+      console.error('Impossible de sauvegarder les messages système :', error);
+    }
+  }, [systemMessages]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      if (selectedId) {
+        window.localStorage.setItem(LOCAL_STORAGE_KEYS.selectedConversation, selectedId);
+      } else {
+        window.localStorage.removeItem(LOCAL_STORAGE_KEYS.selectedConversation);
+      }
+    } catch (error) {
+      console.error('Impossible de sauvegarder la conversation sélectionnée :', error);
+    }
+  }, [selectedId]);
 
   useEffect(() => {
     setActiveComposerAction(null);
