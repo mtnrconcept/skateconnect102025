@@ -156,6 +156,8 @@ const buildSearchUrl = (pathname: string, search: string) => {
   return `${pathname}${search.startsWith('?') ? search : `?${search}`}`;
 };
 
+let canSelectProfileRole: boolean | null = null;
+
 const fetchRiders = async (
   context: SearchContext,
   pagination: SearchPagination,
@@ -192,26 +194,39 @@ const fetchRiders = async (
       return queryBuilder;
     };
 
-    const withRoleColumns = 'id, display_name, username, bio, role, created_at';
+    const baseColumns = 'id, display_name, username, bio, created_at';
     let fallbackRole = false;
 
-    let result: PostgrestResponse<RiderSearchRow> = await createQuery(withRoleColumns);
-    let { data, count, error } = result;
+    let result: PostgrestResponse<RiderSearchRow> | null = null;
 
-    if (error && isColumnMissingError(error, 'role')) {
+    if (canSelectProfileRole !== false) {
+      const withRoleResult = await createQuery(`${baseColumns}, role`);
+      if (withRoleResult.error) {
+        if (isColumnMissingError(withRoleResult.error, 'role')) {
+          fallbackRole = true;
+          canSelectProfileRole = false;
+          console.info(
+            '[search] profiles.role column is missing. Falling back to default rider role for search results.',
+          );
+        } else {
+          throw withRoleResult.error;
+        }
+      } else {
+        canSelectProfileRole = true;
+        result = withRoleResult;
+      }
+    }
+
+    if (!result) {
+      const fallbackResult = await createQuery(baseColumns);
+      if (fallbackResult.error) {
+        throw fallbackResult.error;
+      }
+      result = fallbackResult;
       fallbackRole = true;
-      console.info(
-        '[search] profiles.role column is missing. Falling back to default rider role for search results.',
-      );
-      result = await createQuery('id, display_name, username, bio, created_at');
-      data = result.data;
-      count = result.count;
-      error = result.error;
     }
 
-    if (error) {
-      throw error;
-    }
+    const { data, count } = result;
 
     const normalizedTokens = context.normalizedTokens;
     const items: SearchResultItem[] = (data ?? []).map((profile) => {
