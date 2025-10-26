@@ -105,7 +105,36 @@ export const listStorageFiles = async (
     });
 };
 
-export const compressImage = async (file: File, maxWidth: number = 1920): Promise<Blob> => {
+interface CompressedImageResult {
+  blob: Blob;
+  mimeType: string;
+  extension?: string;
+}
+
+interface CompressImageOptions {
+  maxWidth?: number;
+  mimeType?: string;
+  quality?: number;
+  extension?: string;
+}
+
+const MIME_TYPE_EXTENSION_MAP: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+export const compressImage = async (
+  file: File,
+  options: CompressImageOptions = {},
+): Promise<CompressedImageResult> => {
+  const { maxWidth = 1920, mimeType = 'image/jpeg', quality = 0.85, extension } = options;
+  const resolvedExtension = (extension ?? MIME_TYPE_EXTENSION_MAP[mimeType] ?? mimeType.split('/')[1])
+    ?.replace('jpeg', 'jpg')
+    ?.replace(/^\./, '')
+    ?.toLowerCase();
+
   return new Promise((resolve, reject) => {
     const img = new Image();
     const reader = new FileReader();
@@ -138,13 +167,17 @@ export const compressImage = async (file: File, maxWidth: number = 1920): Promis
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            resolve(blob);
+            resolve({
+              blob,
+              mimeType,
+              extension: resolvedExtension,
+            });
           } else {
             reject(new Error('Failed to compress image'));
           }
         },
-        'image/jpeg',
-        0.85
+        mimeType,
+        quality,
       );
     };
 
@@ -168,11 +201,17 @@ export const validateFile = (file: File, type: 'image' | 'video'): boolean => {
   return true;
 };
 
-export const generateUniqueFileName = (originalName: string): string => {
+export const generateUniqueFileName = (
+  originalName: string,
+  options: { extension?: string } = {},
+): string => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 15);
-  const extension = originalName.split('.').pop();
-  return `${timestamp}_${random}.${extension}`;
+  const originalExtension = originalName.includes('.') ? originalName.split('.').pop() ?? '' : '';
+  const normalizedOverride = options.extension?.replace(/^\./, '').toLowerCase();
+  const extension = (normalizedOverride ?? originalExtension)?.toLowerCase();
+  const base = `${timestamp}_${random}`;
+  return extension ? `${base}.${extension}` : base;
 };
 
 export const uploadFile = async (
@@ -181,24 +220,29 @@ export const uploadFile = async (
   path?: string
 ): Promise<UploadResult> => {
   try {
-    const fileName = generateUniqueFileName(file.name);
-    const filePath = path ? `${path}/${fileName}` : fileName;
-
     let fileToUpload: File | Blob = file;
+    let contentType = file.type || undefined;
+    let extensionOverride: string | undefined;
 
     if (file.type.startsWith('image/')) {
       validateFile(file, 'image');
-      fileToUpload = await compressImage(file);
+      const compressed = await compressImage(file);
+      fileToUpload = compressed.blob;
+      contentType = compressed.mimeType;
+      extensionOverride = compressed.extension;
     } else if (file.type.startsWith('video/')) {
       validateFile(file, 'video');
     }
+
+    const fileName = generateUniqueFileName(file.name, extensionOverride ? { extension: extensionOverride } : undefined);
+    const filePath = path ? `${path}/${fileName}` : fileName;
 
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(filePath, fileToUpload, {
         cacheControl: DEFAULT_CACHE_CONTROL,
         upsert: false,
-        contentType: file.type || undefined,
+        contentType,
       });
 
     if (error) throw error;
