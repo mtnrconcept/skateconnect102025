@@ -273,7 +273,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl my-4"
+        className="bg-white text-slate-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl my-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">

@@ -215,7 +215,7 @@ export default function SponsorProfileEditorModal({
       onClick={onClose}
     >
       <div
-        className="flex h-full w-full max-h-[90vh] max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex h-full w-full max-h-[90vh] max-w-6xl flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between bg-gradient-to-r from-orange-500 to-rose-500 px-6 py-5 text-white">
@@ -671,12 +671,12 @@ export default function SponsorProfileEditorModal({
               </div>
 
               {bannerUrl && (
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm">
                   <img src={bannerUrl} alt="Bannière" className="h-32 w-full object-cover" />
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 p-4 shadow-sm">
                 <h4 className="text-sm font-semibold text-slate-700">Contact</h4>
                 <div className="mt-3 space-y-3 text-sm">
                   <div className="flex items-start gap-2 text-slate-600">
@@ -704,7 +704,7 @@ export default function SponsorProfileEditorModal({
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 p-4 shadow-sm">
                 <h4 className="text-sm font-semibold text-slate-700">Couleurs</h4>
                 <div className="mt-3 flex items-center gap-3">
                   <div
@@ -729,7 +729,7 @@ export default function SponsorProfileEditorModal({
               </div>
 
               {Object.keys(sanitizedSocialLinks).length > 0 ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 p-4 shadow-sm">
                   <h4 className="text-sm font-semibold text-slate-700">Réseaux</h4>
                   <ul className="mt-3 space-y-2 text-sm text-slate-600">
                     {Object.entries(sanitizedSocialLinks).map(([key, value]) => (

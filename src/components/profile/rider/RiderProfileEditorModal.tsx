@@ -81,7 +81,7 @@ export default function RiderProfileEditorModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+        className="bg-white text-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white p-6 flex items-center justify-between">
@@ -142,7 +142,7 @@ export default function RiderProfileEditorModal({
 
                 {showCoverUploader && (
                   <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg p-4 w-full max-w-xl">
+                    <div className="bg-white text-slate-900 rounded-lg p-4 w-full max-w-xl">
                       {uploadingCover ? (
                         <div className="flex flex-col items-center gap-2 text-slate-600">
                           <Loader2 className="w-8 h-8 animate-spin" />
