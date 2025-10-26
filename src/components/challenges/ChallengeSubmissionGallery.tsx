@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ThumbsUp, Video, History, GalleryHorizontal, Crown } from 'lucide-react';
+import { ThumbsUp, Video, History, GalleryHorizontal, Crown, Award } from 'lucide-react';
 import type { ChallengeSubmission } from '../../types';
 
 export type SubmissionViewMode = 'gallery' | 'ranking' | 'history';
@@ -51,6 +51,49 @@ export default function ChallengeSubmissionGallery({
         );
     }
   }, [submissions, viewMode]);
+
+  const winners = useMemo(() => {
+    if (submissions.length === 0) {
+      return [];
+    }
+
+    const byVotes = [...submissions].sort((a, b) => {
+      if ((b.votes_count || 0) === (a.votes_count || 0)) {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      return (b.votes_count || 0) - (a.votes_count || 0);
+    });
+
+    const flagged = byVotes.filter((submission) => submission.is_winner).slice(0, 3);
+
+    if (flagged.length >= 3) {
+      return flagged;
+    }
+
+    const remainingSlots = 3 - flagged.length;
+    const additional = byVotes
+      .filter((submission) => !submission.is_winner)
+      .sort((a, b) => {
+        if ((b.votes_count || 0) === (a.votes_count || 0)) {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        }
+        return (b.votes_count || 0) - (a.votes_count || 0);
+      })
+      .slice(0, remainingSlots);
+
+    const combined = [...flagged, ...additional];
+    return combined.slice(0, Math.min(3, combined.length));
+  }, [submissions]);
+
+  const winnerIds = useMemo(() => new Set(winners.map((winner) => winner.id)), [winners]);
+
+  const gallerySubmissions = useMemo(() => {
+    if (viewMode !== 'gallery') {
+      return sortedSubmissions;
+    }
+
+    return sortedSubmissions.filter((submission) => !winnerIds.has(submission.id));
+  }, [sortedSubmissions, winnerIds, viewMode]);
 
   const renderEmptyState = () => {
     if (loading) {
@@ -120,13 +163,86 @@ export default function ChallengeSubmissionGallery({
       ) : submissions.length === 0 ? (
         renderEmptyState()
       ) : viewMode === 'gallery' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedSubmissions.map((submission) => {
-            const voted = submission.voted_by_user === true;
-            const isVoting = votingSubmissionId === submission.id;
-            return (
-              <div
-                key={submission.id}
+        <div className="space-y-6">
+          {winners.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 text-white mb-3">
+                <Award size={18} className="text-orange-400" />
+                <h3 className="text-lg font-semibold">Top 3 des participations</h3>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                {winners.map((submission, index) => {
+                  const voted = submission.voted_by_user === true;
+                  const isVoting = votingSubmissionId === submission.id;
+                  const medal = ['🥇', '🥈', '🥉'][index] ?? '⭐';
+                  const accentColor =
+                    index === 0
+                      ? 'from-amber-500/40 to-yellow-500/10 border-amber-500/40'
+                      : index === 1
+                        ? 'from-slate-300/30 to-slate-500/10 border-slate-400/40'
+                        : 'from-orange-400/30 to-red-400/10 border-orange-400/40';
+
+                  return (
+                    <div
+                      key={submission.id}
+                      className={`relative rounded-2xl border bg-gradient-to-br ${accentColor} overflow-hidden cursor-pointer transition-transform hover:-translate-y-1`}
+                      onClick={() => onSelectSubmission(submission)}
+                    >
+                      <div className="absolute top-3 right-3 text-3xl drop-shadow-lg">{medal}</div>
+                      <div className="relative h-44 bg-black/40">
+                        {submission.media_type === 'video' ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                            <Video size={36} className="text-white/80" />
+                          </div>
+                        ) : (
+                          <img
+                            src={submission.media_url}
+                            alt={submission.caption || 'submission'}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="p-4 space-y-2 bg-black/40 backdrop-blur-sm">
+                        <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/70">
+                          <span>#{index + 1}</span>
+                          <span className="flex items-center gap-1 font-semibold">
+                            <ThumbsUp size={14} className={voted ? 'text-emerald-300' : 'text-white'} />
+                            {submission.votes_count}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-white">
+                          {submission.user?.display_name || submission.user?.username || 'Rider mystère'}
+                        </p>
+                        <p className="text-xs text-gray-200 line-clamp-2">
+                          {submission.caption || 'Pas de description'}
+                        </p>
+                        <button
+                          onClick={(event) => handleVote(submission, event)}
+                          disabled={isVoting}
+                          className={`w-full flex items-center justify-center gap-2 text-sm font-semibold rounded-lg py-1.5 transition-colors ${
+                            voted
+                              ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40'
+                              : 'bg-orange-500/90 text-white hover:bg-orange-600'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          <ThumbsUp size={16} className={voted ? 'text-emerald-200' : 'text-white'} />
+                          <span>{voted ? 'Retirer mon vote' : 'Voter'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {gallerySubmissions.map((submission) => {
+              const voted = submission.voted_by_user === true;
+              const isVoting = votingSubmissionId === submission.id;
+              return (
+                <div
+                  key={submission.id}
                 className="bg-dark-900 border border-dark-700 rounded-xl overflow-hidden hover:border-dark-500 transition-colors cursor-pointer"
                 onClick={() => onSelectSubmission(submission)}
               >
@@ -170,7 +286,8 @@ export default function ChallengeSubmissionGallery({
                 </div>
               </div>
             );
-          })}
+            })}
+          </div>
         </div>
       ) : viewMode === 'ranking' ? (
         <div className="space-y-3">
