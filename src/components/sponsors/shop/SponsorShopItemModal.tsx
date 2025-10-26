@@ -485,13 +485,14 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-10">
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-950">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/60 text-slate-300 hover:border-slate-500 hover:text-white"
-        >
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80">
+      <div className="flex min-h-full items-start justify-center px-4 py-10 md:items-center">
+        <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-950">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/60 text-slate-300 hover:border-slate-500 hover:text-white"
+          >
           <X size={18} />
         </button>
         <form onSubmit={handleSubmit} className="space-y-6 p-8">
@@ -1278,6 +1279,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
           </div>
         </form>
       </div>
+    </div>
     </div>
   );
 }
