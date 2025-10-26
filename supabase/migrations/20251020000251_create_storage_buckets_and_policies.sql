@@ -8,6 +8,7 @@
     - `spots` - Skate spot media (50MB max, images/videos)
     - `challenges` - Challenge submission media (50MB max, images/videos)
     - `messages` - Private message attachments (10MB max, images/videos)
+    - `sponsors` - Sponsor campaigns, shops and opportunities (50MB max, images/videos)
 
   2. Security Policies
     - Public read access for all buckets (social platform requirement)
@@ -30,7 +31,8 @@ VALUES
   ('posts', 'posts', true, 52428800, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm']),
   ('spots', 'spots', true, 52428800, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm']),
   ('challenges', 'challenges', true, 52428800, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm']),
-  ('messages', 'messages', true, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm'])
+  ('messages', 'messages', true, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm']),
+  ('sponsors', 'sponsors', true, 52428800, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm'])
 ON CONFLICT (id) DO NOTHING;
 
 -- Policy: Allow public read access to all storage buckets
@@ -63,6 +65,11 @@ CREATE POLICY "Public read access for messages"
   ON storage.objects FOR SELECT
   TO public
   USING (bucket_id = 'messages');
+
+CREATE POLICY "Public read access for sponsors"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'sponsors');
 
 -- Policy: Authenticated users can upload to avatars
 CREATE POLICY "Authenticated users can upload avatars"
@@ -99,6 +106,11 @@ CREATE POLICY "Authenticated users can upload messages"
   ON storage.objects FOR INSERT
   TO authenticated
   WITH CHECK (bucket_id = 'messages');
+
+CREATE POLICY "Authenticated users can upload sponsors"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (bucket_id = 'sponsors');
 
 -- Policy: Users can update their own uploads in avatars
 CREATE POLICY "Users can update own avatars"
@@ -142,6 +154,12 @@ CREATE POLICY "Users can update own messages"
   USING (bucket_id = 'messages' AND auth.uid()::text = (storage.foldername(name))[1])
   WITH CHECK (bucket_id = 'messages' AND auth.uid()::text = (storage.foldername(name))[1]);
 
+CREATE POLICY "Users can update own sponsors"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (bucket_id = 'sponsors' AND auth.uid()::text = (storage.foldername(name))[1])
+  WITH CHECK (bucket_id = 'sponsors' AND auth.uid()::text = (storage.foldername(name))[1]);
+
 -- Policy: Users can delete their own uploads from avatars
 CREATE POLICY "Users can delete own avatars"
   ON storage.objects FOR DELETE
@@ -177,3 +195,8 @@ CREATE POLICY "Users can delete own messages"
   ON storage.objects FOR DELETE
   TO authenticated
   USING (bucket_id = 'messages' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+CREATE POLICY "Users can delete own sponsors"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (bucket_id = 'sponsors' AND auth.uid()::text = (storage.foldername(name))[1]);
