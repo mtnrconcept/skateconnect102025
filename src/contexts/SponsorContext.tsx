@@ -32,8 +32,10 @@ import {
   fetchLatestCommunityAnalytics,
 } from '../lib/sponsorAnalytics';
 import {
+  createSponsorSpotlight,
   fetchSponsorSpotlights,
   updateSponsorSpotlight,
+  type SpotlightPayload,
 } from '../lib/sponsorSpotlights';
 import {
   buildShopAnalyticsSummary,
@@ -229,6 +231,11 @@ interface SponsorContextValue {
   refreshApiKeys: () => Promise<void>;
   refreshOpportunities: () => Promise<void>;
   createStripeOnboardingLink: (params: { returnUrl?: string; refreshUrl?: string }) => Promise<string | null>;
+  createSpotlight: (payload: Omit<SpotlightPayload, 'sponsor_id'>) => Promise<SponsorSpotlight | null>;
+  editSpotlight: (
+    spotlightId: string,
+    updates: Partial<Omit<SponsorSpotlight, 'id' | 'sponsor_id' | 'created_at' | 'performance'>>,
+  ) => Promise<SponsorSpotlight | null>;
   updateSpotlightStatus: (spotlightId: string, status: SponsorSpotlight['status']) => Promise<void>;
   updateShopItemAvailability: (shopItemId: string, isActive: boolean) => Promise<void>;
   createShopItem: (
@@ -573,6 +580,63 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
         }
         console.error('Unable to update spotlight status', cause);
         setError("Impossible de mettre à jour le statut d'un Spotlight.");
+      }
+    },
+    [permissions.canManageSpotlights, sponsorId],
+  );
+
+  const createSpotlightHandler = useCallback(
+    async (payload: Omit<SpotlightPayload, 'sponsor_id'>) => {
+      if (!sponsorId || !permissions.canManageSpotlights) {
+        return null;
+      }
+
+      try {
+        const created = attachSpotlightInsights(
+          await createSponsorSpotlight({ ...payload, sponsor_id: sponsorId }),
+        );
+        setSpotlights((current) => [created, ...current]);
+        setError(null);
+        return created;
+      } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('createSpotlight', cause);
+          setError("Impossible de créer un Spotlight tant que le schéma sponsor n'est pas disponible.");
+          return null;
+        }
+        console.error('Unable to create sponsor spotlight', cause);
+        setError('Impossible de créer le Spotlight.');
+        return null;
+      }
+    },
+    [permissions.canManageSpotlights, sponsorId],
+  );
+
+  const editSpotlightHandler = useCallback(
+    async (
+      spotlightId: string,
+      updates: Partial<Omit<SponsorSpotlight, 'id' | 'sponsor_id' | 'created_at' | 'performance'>>,
+    ) => {
+      if (!sponsorId || !permissions.canManageSpotlights) {
+        return null;
+      }
+
+      try {
+        const updated = attachSpotlightInsights(await updateSponsorSpotlight(spotlightId, updates));
+        setSpotlights((current) =>
+          current.map((spotlight) => (spotlight.id === spotlightId ? updated : spotlight)),
+        );
+        setError(null);
+        return updated;
+      } catch (cause) {
+        if (isSchemaMissing(cause)) {
+          warnSchemaMissing('editSpotlight', cause);
+          setError('Modification Spotlight indisponible sans schéma sponsor.');
+          return null;
+        }
+        console.error('Unable to update sponsor spotlight', cause);
+        setError('Impossible de modifier le Spotlight.');
+        return null;
       }
     },
     [permissions.canManageSpotlights, sponsorId],
@@ -1093,6 +1157,8 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshApiKeys,
     refreshOpportunities,
     createStripeOnboardingLink,
+    createSpotlight: createSpotlightHandler,
+    editSpotlight: editSpotlightHandler,
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItem: createShopItemHandler,
@@ -1141,6 +1207,8 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshApiKeys,
     refreshOpportunities,
     createStripeOnboardingLink,
+    createSpotlightHandler,
+    editSpotlightHandler,
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItemHandler,
