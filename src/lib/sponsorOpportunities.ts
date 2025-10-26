@@ -7,8 +7,10 @@ import type {
   SponsorEditableOpportunityType,
   SponsorEventOpportunity,
   SponsorNewsItem,
+  SponsorOpportunityOwnerSummary,
   SponsorOpportunityRecord,
   SponsorOpportunityType,
+  SponsorPlannerStatus,
   SponsorProfileSummary,
 } from '../types';
 
@@ -147,6 +149,9 @@ export const matchesOpportunityDateFilter = (
 };
 
 const sponsorProfileSelection = 'id, username, display_name, sponsor_branding';
+const ownerProfileSelection = 'id, username, display_name, avatar_url';
+
+const plannerStatusFallback: SponsorPlannerStatus = 'idea';
 
 type RawSponsorRow = Record<string, unknown>;
 
@@ -178,6 +183,21 @@ const mapSponsorProfile = (row: { sponsor?: SponsorProfileSummary | null }): Spo
   };
 };
 
+const mapOwnerProfile = (row: { owner?: SponsorOpportunityOwnerSummary | null }):
+  | SponsorOpportunityOwnerSummary
+  | null => {
+  if (!row?.owner) {
+    return null;
+  }
+
+  return {
+    id: row.owner.id,
+    username: row.owner.username,
+    display_name: row.owner.display_name,
+    avatar_url: row.owner.avatar_url ?? null,
+  } satisfies SponsorOpportunityOwnerSummary;
+};
+
 const mapSponsorChallenge = (row: RawSponsorRow): SponsorChallengeOpportunity => ({
   id: row.id as string,
   sponsor_id: row.sponsor_id as string,
@@ -196,6 +216,9 @@ const mapSponsorChallenge = (row: RawSponsorRow): SponsorChallengeOpportunity =>
   created_at: row.created_at as string,
   updated_at: row.updated_at as string,
   sponsor: mapSponsorProfile(row as { sponsor?: SponsorProfileSummary | null }),
+  status: ((row.status as SponsorPlannerStatus | null | undefined) ?? plannerStatusFallback) as SponsorPlannerStatus,
+  owner_id: (row.owner_id as string | null | undefined) ?? null,
+  owner: mapOwnerProfile(row as { owner?: SponsorOpportunityOwnerSummary | null }),
 });
 
 const mapSponsorEvent = (row: RawSponsorRow): SponsorEventOpportunity => ({
@@ -214,6 +237,9 @@ const mapSponsorEvent = (row: RawSponsorRow): SponsorEventOpportunity => ({
   created_at: row.created_at as string,
   updated_at: row.updated_at as string,
   sponsor: mapSponsorProfile(row as { sponsor?: SponsorProfileSummary | null }),
+  status: ((row.status as SponsorPlannerStatus | null | undefined) ?? plannerStatusFallback) as SponsorPlannerStatus,
+  owner_id: (row.owner_id as string | null | undefined) ?? null,
+  owner: mapOwnerProfile(row as { owner?: SponsorOpportunityOwnerSummary | null }),
 });
 
 const mapSponsorCall = (row: RawSponsorRow): SponsorCallOpportunity => ({
@@ -234,6 +260,9 @@ const mapSponsorCall = (row: RawSponsorRow): SponsorCallOpportunity => ({
   created_at: row.created_at as string,
   updated_at: row.updated_at as string,
   sponsor: mapSponsorProfile(row as { sponsor?: SponsorProfileSummary | null }),
+  status: ((row.status as SponsorPlannerStatus | null | undefined) ?? plannerStatusFallback) as SponsorPlannerStatus,
+  owner_id: (row.owner_id as string | null | undefined) ?? null,
+  owner: mapOwnerProfile(row as { owner?: SponsorOpportunityOwnerSummary | null }),
 });
 
 const mapSponsorNews = (row: RawSponsorRow): SponsorNewsItem => ({
@@ -315,10 +344,45 @@ export const getSponsorOpportunityDate = (
   }
 };
 
+const plannerToOpportunityStatus: Partial<Record<SponsorPlannerStatus, SponsorOpportunityStatus>> = {
+  idea: 'upcoming',
+  briefing: 'upcoming',
+  production: 'active',
+  promotion: 'active',
+  live: 'active',
+  archived: 'completed',
+};
+
 export const getSponsorOpportunityStatus = (
   opportunity: SponsorOpportunityRecord,
   referenceDate: Date = new Date(),
 ): SponsorOpportunityStatus => {
+  if (opportunity.type !== 'news') {
+    const plannerStatus = plannerToOpportunityStatus[opportunity.record.status];
+    if (plannerStatus) {
+      if (plannerStatus === 'active' && opportunity.record.status === 'promotion') {
+        const deadline =
+          opportunity.type === 'call'
+            ? parseDate(opportunity.record.deadline)
+            : parseDate(
+                opportunity.type === 'event'
+                  ? opportunity.record.event_date
+                  : opportunity.record.end_date ?? opportunity.record.start_date,
+              );
+        if (deadline) {
+          const diff = deadline.getTime() - referenceDate.getTime();
+          if (diff <= SEVEN_DAYS_MS && diff >= 0) {
+            return 'closing-soon';
+          }
+          if (diff < 0) {
+            return 'completed';
+          }
+        }
+      }
+      return plannerStatus;
+    }
+  }
+
   switch (opportunity.type) {
     case 'challenge': {
       const { start_date: startDate, end_date: endDate } = opportunity.record;
@@ -397,9 +461,11 @@ export interface CreateSponsorChallengePayload {
   end_date?: string | null;
   participants_label?: string;
   action_label?: string;
+  status?: SponsorPlannerStatus;
+  owner_id?: string | null;
 }
 
-export type UpdateSponsorChallengePayload = Omit<CreateSponsorChallengePayload, 'sponsor_id'>;
+export type UpdateSponsorChallengePayload = Partial<Omit<CreateSponsorChallengePayload, 'sponsor_id'>>;
 
 export interface CreateSponsorEventPayload {
   sponsor_id: string;
@@ -413,9 +479,11 @@ export interface CreateSponsorEventPayload {
   cover_image_url?: string | null;
   tags?: string[];
   action_label?: string;
+  status?: SponsorPlannerStatus;
+  owner_id?: string | null;
 }
 
-export type UpdateSponsorEventPayload = Omit<CreateSponsorEventPayload, 'sponsor_id'>;
+export type UpdateSponsorEventPayload = Partial<Omit<CreateSponsorEventPayload, 'sponsor_id'>>;
 
 export interface CreateSponsorCallPayload {
   sponsor_id: string;
@@ -431,14 +499,21 @@ export interface CreateSponsorCallPayload {
   participants_label?: string;
   participants_count?: number;
   action_label?: string;
+  status?: SponsorPlannerStatus;
+  owner_id?: string | null;
 }
 
-export type UpdateSponsorCallPayload = Omit<CreateSponsorCallPayload, 'sponsor_id'>;
+export type UpdateSponsorCallPayload = Partial<Omit<CreateSponsorCallPayload, 'sponsor_id'>>;
 
 const withDefaultTags = <T extends { tags?: string[] }>(payload: T): T => ({
   ...payload,
   tags: payload.tags ?? [],
 });
+
+const sanitizeUpdatePayload = <T extends Record<string, unknown>>(payload: T): Partial<T> => {
+  const entries = Object.entries(payload).filter(([, value]) => value !== undefined);
+  return Object.fromEntries(entries) as Partial<T>;
+};
 
 export async function fetchSponsorChallenges(
   options: FetchSponsorEntityOptions = {},
@@ -449,7 +524,7 @@ export async function fetchSponsorChallenges(
     (() => {
       const query = supabase
         .from('sponsor_challenges')
-        .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+        .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
         .order('end_date', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false });
 
@@ -474,7 +549,7 @@ export async function fetchSponsorEvents(
     (() => {
       const query = supabase
         .from('sponsor_events')
-        .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+        .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
         .order('event_date', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false });
 
@@ -499,7 +574,7 @@ export async function fetchSponsorCalls(
     (() => {
       const query = supabase
         .from('sponsor_calls')
-        .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+        .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
         .order('deadline', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false });
 
@@ -566,7 +641,7 @@ export async function createSponsorChallenge(
   const { data, error } = await supabase
     .from('sponsor_challenges')
     .insert(withDefaultTags(payload))
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+    .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
     .single();
 
   if (error) {
@@ -582,9 +657,9 @@ export async function updateSponsorChallenge(
 ): Promise<SponsorChallengeOpportunity> {
   const { data, error } = await supabase
     .from('sponsor_challenges')
-    .update(withDefaultTags(payload))
+    .update(sanitizeUpdatePayload(payload))
     .eq('id', id)
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+    .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
     .single();
 
   if (error) {
@@ -606,7 +681,7 @@ export async function createSponsorEvent(payload: CreateSponsorEventPayload): Pr
   const { data, error } = await supabase
     .from('sponsor_events')
     .insert(withDefaultTags(payload))
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+    .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
     .single();
 
   if (error) {
@@ -622,9 +697,9 @@ export async function updateSponsorEvent(
 ): Promise<SponsorEventOpportunity> {
   const { data, error } = await supabase
     .from('sponsor_events')
-    .update(withDefaultTags(payload))
+    .update(sanitizeUpdatePayload(payload))
     .eq('id', id)
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+    .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
     .single();
 
   if (error) {
@@ -646,7 +721,7 @@ export async function createSponsorCall(payload: CreateSponsorCallPayload): Prom
   const { data, error } = await supabase
     .from('sponsor_calls')
     .insert(withDefaultTags(payload))
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+    .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
     .single();
 
   if (error) {
@@ -662,9 +737,9 @@ export async function updateSponsorCall(
 ): Promise<SponsorCallOpportunity> {
   const { data, error } = await supabase
     .from('sponsor_calls')
-    .update(withDefaultTags(payload))
+    .update(sanitizeUpdatePayload(payload))
     .eq('id', id)
-    .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
+    .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
     .single();
 
   if (error) {
