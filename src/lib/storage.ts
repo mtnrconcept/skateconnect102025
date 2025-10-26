@@ -28,6 +28,82 @@ const withCdn = (publicUrl: string): string => {
   return publicUrl;
 };
 
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif']);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
+
+const detectAssetType = (path: string): 'image' | 'video' | 'file' => {
+  const extension = path.split('.').pop()?.toLowerCase() ?? '';
+  if (IMAGE_EXTENSIONS.has(extension)) {
+    return 'image';
+  }
+  if (VIDEO_EXTENSIONS.has(extension)) {
+    return 'video';
+  }
+  return 'file';
+};
+
+export interface StorageObjectInfo {
+  id: string;
+  name: string;
+  path: string;
+  url: string;
+  type: 'image' | 'video' | 'file';
+  size: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface ListStorageFilesOptions {
+  path?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const getPublicFileUrl = (bucket: StorageBucket, path: string): string => {
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return withCdn(data.publicUrl);
+};
+
+export const listStorageFiles = async (
+  bucket: StorageBucket,
+  options: ListStorageFilesOptions = {},
+): Promise<StorageObjectInfo[]> => {
+  const { path = '', limit = 100, offset = 0 } = options;
+
+  const { data, error } = await supabase.storage.from(bucket).list(path, {
+    limit,
+    offset,
+    sortBy: { column: 'created_at', order: 'desc' },
+  });
+
+  if (error) {
+    console.error('Error listing storage files:', error);
+    throw error;
+  }
+
+  if (!data) {
+    return [];
+  }
+
+  return data
+    .filter((item) => Boolean(item.id))
+    .map((item) => {
+      const filePath = path ? `${path}/${item.name}` : item.name;
+      return {
+        id: item.id as string,
+        name: item.name,
+        path: filePath,
+        url: getPublicFileUrl(bucket, filePath),
+        type: detectAssetType(item.name),
+        size: (item.metadata as { size?: number } | null)?.size ?? null,
+        created_at: item.created_at ?? null,
+        updated_at: item.updated_at ?? null,
+        metadata: (item.metadata as Record<string, unknown> | null) ?? null,
+      } satisfies StorageObjectInfo;
+    });
+};
+
 export const compressImage = async (file: File, maxWidth: number = 1920): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
