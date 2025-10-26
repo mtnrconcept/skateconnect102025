@@ -79,6 +79,34 @@ function missingShopTableError(): Error {
   );
 }
 
+function generateLocalId(prefix: string): string {
+  const randomSegment =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2, 11);
+  return `${prefix}${randomSegment}`;
+}
+
+function buildEphemeralShopItem(payload: ShopItemPayload): SponsorShopItem {
+  const now = new Date().toISOString();
+  return {
+    id: generateLocalId('local-shop-item-'),
+    sponsor_id: payload.sponsor_id,
+    name: payload.name,
+    description: normalizeText(payload.description) ?? null,
+    price_cents: payload.price_cents,
+    currency: payload.currency ?? 'EUR',
+    stock: payload.stock ?? 0,
+    is_active: payload.is_active ?? true,
+    image_url: normalizeText(payload.image_url) ?? null,
+    metadata: (payload.metadata as SponsorShopItem['metadata']) ?? null,
+    available_from: payload.available_from ?? null,
+    available_until: payload.available_until ?? null,
+    created_at: now,
+    updated_at: now,
+  } satisfies SponsorShopItem;
+}
+
 function ensureNonNegative(value: number | null | undefined, message: string): void {
   if (value == null) {
     return;
@@ -509,17 +537,20 @@ export async function createSponsorShopItem(payload: ShopItemPayload): Promise<S
   ensureNonNegative(payload.stock ?? null, 'Le stock ne peut pas être négatif.');
   validateAvailabilityWindow(payload.available_from ?? null, payload.available_until ?? null, 'cet article');
 
+  const normalizedDescription = normalizeText(payload.description) ?? '';
+  const normalizedImage = normalizeText(payload.image_url);
+
   const { data, error } = await supabase
     .from('sponsor_shop_items')
     .insert({
       sponsor_id: payload.sponsor_id,
       name: payload.name,
-      description: payload.description ?? '',
+      description: normalizedDescription,
       price_cents: payload.price_cents,
       currency: payload.currency ?? 'EUR',
       stock: payload.stock ?? 0,
       is_active: payload.is_active ?? true,
-      image_url: payload.image_url ?? null,
+      image_url: normalizedImage ?? null,
       metadata: payload.metadata ?? null,
       available_from: payload.available_from ?? null,
       available_until: payload.available_until ?? null,
@@ -529,7 +560,14 @@ export async function createSponsorShopItem(payload: ShopItemPayload): Promise<S
 
   if (error) {
     if (isSchemaMissing(error)) {
-      throw missingShopTableError();
+      console.info(
+        'Supabase sponsor_shop_items table missing. Returning an ephemeral item for local preview.',
+      );
+      return buildEphemeralShopItem({
+        ...payload,
+        description: normalizedDescription || null,
+        image_url: normalizedImage ?? null,
+      });
     }
     throw error;
   }
