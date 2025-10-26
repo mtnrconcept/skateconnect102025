@@ -47,18 +47,65 @@ export default function AddSpotModal({ onClose, onSpotAdded }: AddSpotModalProps
     'curbs',
   ];
 
+  type MapboxGeocodingFeature = {
+    place_name?: string;
+  };
+
+  type MapboxGeocodingResponse = {
+    features?: MapboxGeocodingFeature[];
+  };
+
+  const updateAddressFromCoordinates = async (lat: number, lon: number) => {
+    const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+    if (!mapboxToken) {
+      console.warn('VITE_MAPBOX_TOKEN is not configured. Skipping reverse geocoding.');
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        access_token: mapboxToken,
+        language: 'fr',
+        types: 'address,place,locality,neighborhood,poi',
+      });
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Mapbox reverse geocoding failed with status ${response.status}`);
+      }
+
+      const data = (await response.json()) as MapboxGeocodingResponse;
+      const bestMatch = data.features?.[0]?.place_name;
+      if (bestMatch) {
+        setAddress(bestMatch);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération de l'adresse via Mapbox:", error);
+    }
+  };
+
   const getUserLocation = () => {
     if ('geolocation' in navigator) {
+      const handleSuccess = async (position: GeolocationPosition) => {
+        const { latitude: lat, longitude: lon } = position.coords;
+        setLatitude(lat.toString());
+        setLongitude(lon.toString());
+        await updateAddressFromCoordinates(lat, lon);
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLatitude(position.coords.latitude.toString());
-          setLongitude(position.coords.longitude.toString());
+          void handleSuccess(position);
         },
         (error) => {
           console.error('Geolocation error:', error);
           alert('Impossible d\'obtenir votre position');
         }
       );
+    } else {
+      alert('La géolocalisation n\'est pas supportée sur cet appareil');
     }
   };
 
