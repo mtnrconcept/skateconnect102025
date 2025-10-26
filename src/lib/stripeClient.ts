@@ -1,5 +1,8 @@
 let stripePromise: Promise<StripeClient | null> | null = null;
 
+const FALLBACK_STRIPE_PUBLISHABLE_KEY =
+  'pk_test_51SHGJ2GTQigE34suvg0kiCn1Kmb6cTh53oT2M88aB6OO76eaqMxv6GJgxFYXuEQ2WecbRViy6L8WU1HjeGToCCwX00xdRrQVWr';
+
 interface StripeClient {
   redirectToCheckout(options: { sessionId: string }): Promise<{ error?: { message?: string } } | void>;
 }
@@ -51,7 +54,7 @@ export const isStripeEnabled = () => {
     return typeof envKey === 'string' && envKey.trim().length > 0;
   }
 
-  return false;
+  return FALLBACK_STRIPE_PUBLISHABLE_KEY.trim().length > 0;
 };
 
 function getPublishableKey(): string | null {
@@ -66,6 +69,11 @@ function getPublishableKey(): string | null {
     if (nodeKey && nodeKey.trim().length > 0) {
       return nodeKey;
     }
+  }
+
+  if (FALLBACK_STRIPE_PUBLISHABLE_KEY.trim().length > 0) {
+    console.info('Using fallback Stripe publishable key for demo checkout experience.');
+    return FALLBACK_STRIPE_PUBLISHABLE_KEY;
   }
 
   return null;

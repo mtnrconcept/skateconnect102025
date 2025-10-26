@@ -1,6 +1,11 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { isSchemaMissing } from './postgrest';
 import type { ShopFrontItem, ShopFrontSponsor, ShopFrontVariant } from '../types';
+import {
+  getFallbackCatalog,
+  getFallbackShopItem,
+  getFallbackVariantCheckoutUrl,
+} from '../data/shopCatalog';
 
 interface RawSponsorBranding {
   brand_name?: string;
@@ -81,12 +86,13 @@ function mapVariant(raw: RawShopItem['variants'][number]): ShopFrontVariant {
 
 export async function fetchPublicShopCatalog(): Promise<ShopFrontItem[]> {
   if (!isSupabaseConfigured()) {
-    return [];
+    return getFallbackCatalog();
   }
 
-  const { data, error } = await supabase
-    .from('sponsor_shop_items')
-    .select(`
+  try {
+    const { data, error } = await supabase
+      .from('sponsor_shop_items')
+      .select(`
       id,
       sponsor_id,
       name,
@@ -119,56 +125,67 @@ export async function fetchPublicShopCatalog(): Promise<ShopFrontItem[]> {
       )
     `)
     .eq('is_active', true)
-    .order('updated_at', { ascending: false });
+      .order('updated_at', { ascending: false });
 
-  if (error) {
-    if (isSchemaMissing(error)) {
-      console.info('[shopfront] sponsor shop tables unavailable – returning empty catalog');
-      return [];
-    }
-    throw error;
-  }
-
-  const now = new Date();
-
-  return (data ?? [])
-    .map((raw) => raw as RawShopItem)
-    .filter((raw) => isWithinWindow(now, raw.available_from, raw.available_until))
-    .map((raw) => {
-      const variants = (raw.variants ?? [])
-        .filter((variant) => variant.is_active && isWithinWindow(now, variant.availability_start, variant.availability_end))
-        .map(mapVariant);
-
-      const stock = typeof raw.stock === 'number' ? raw.stock : null;
-      const hasVariantStock = variants.some((variant) => (variant.stock ?? 0) > 0);
-      const isSellable = (stock ?? 0) > 0 || hasVariantStock;
-      if (!isSellable) {
-        return null;
+    if (error) {
+      if (isSchemaMissing(error)) {
+        console.info('[shopfront] sponsor shop tables unavailable – returning fallback catalog');
+        return getFallbackCatalog();
       }
+      throw error;
+    }
 
-      return {
-        id: raw.id,
-        sponsorId: raw.sponsor_id,
-        name: raw.name,
-        description: raw.description ?? null,
-        priceCents: raw.price_cents,
-        currency: raw.currency,
-        stock,
-        imageUrl: raw.image_url ?? null,
-        availableFrom: raw.available_from ?? null,
-        availableUntil: raw.available_until ?? null,
-        metadata: raw.metadata ?? null,
-        sponsor: mapSponsor(raw.sponsor),
-        variants,
-      } satisfies ShopFrontItem;
-    })
-    .filter((item): item is ShopFrontItem => Boolean(item));
+    const now = new Date();
+
+    const mapped = (data ?? [])
+      .map((raw) => raw as RawShopItem)
+      .filter((raw) => isWithinWindow(now, raw.available_from, raw.available_until))
+      .map((raw) => {
+        const variants = (raw.variants ?? [])
+          .filter((variant) => variant.is_active && isWithinWindow(now, variant.availability_start, variant.availability_end))
+          .map(mapVariant);
+
+        const stock = typeof raw.stock === 'number' ? raw.stock : null;
+        const hasVariantStock = variants.some((variant) => (variant.stock ?? 0) > 0);
+        const isSellable = (stock ?? 0) > 0 || hasVariantStock;
+        if (!isSellable) {
+          return null;
+        }
+
+        return {
+          id: raw.id,
+          sponsorId: raw.sponsor_id,
+          name: raw.name,
+          description: raw.description ?? null,
+          priceCents: raw.price_cents,
+          currency: raw.currency,
+          stock,
+          imageUrl: raw.image_url ?? null,
+          availableFrom: raw.available_from ?? null,
+          availableUntil: raw.available_until ?? null,
+          metadata: raw.metadata ?? null,
+          sponsor: mapSponsor(raw.sponsor),
+          variants,
+        } satisfies ShopFrontItem;
+      })
+      .filter((item): item is ShopFrontItem => Boolean(item));
+
+    if (mapped.length === 0) {
+      return getFallbackCatalog();
+    }
+
+    return mapped;
+  } catch (cause) {
+    console.error('[shopfront] Unable to load catalog from Supabase, using fallback data', cause);
+    return getFallbackCatalog();
+  }
 }
 
 interface CheckoutResponse {
   sessionId: string;
   url: string | null;
   orderId: string | null;
+  mode: 'stripe' | 'external';
 }
 
 interface CheckoutInput {
@@ -180,18 +197,45 @@ interface CheckoutInput {
   cancelUrl?: string;
 }
 
+function buildFallbackCheckoutResponse(payload: CheckoutInput): CheckoutResponse {
+  const fallbackItem = getFallbackShopItem(payload.itemId);
+  if (!fallbackItem) {
+    throw new Error('Item not found in fallback catalog');
+  }
+
+  const checkoutUrl = getFallbackVariantCheckoutUrl(fallbackItem, payload.variantId);
+
+  return {
+    sessionId: `fallback-${fallbackItem.id}`,
+    url: checkoutUrl,
+    orderId: null,
+    mode: 'external',
+  } satisfies CheckoutResponse;
+}
+
 export async function createShopCheckoutSession(payload: CheckoutInput): Promise<CheckoutResponse> {
   if (!isSupabaseConfigured()) {
-    throw new Error('Supabase is not configured');
+    return buildFallbackCheckoutResponse(payload);
   }
 
-  const { data, error } = await supabase.functions.invoke('shop-checkout', {
-    body: payload,
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke('shop-checkout', {
+      body: payload,
+    });
 
-  if (error) {
-    throw new Error(error.message ?? 'Unable to start checkout');
+    if (error) {
+      throw new Error(error.message ?? 'Unable to start checkout');
+    }
+
+    const response = (data ?? { sessionId: '', url: null, orderId: null }) as {
+      sessionId: string;
+      url: string | null;
+      orderId: string | null;
+      mode?: 'stripe' | 'external';
+    };
+    return { ...response, mode: 'stripe' } satisfies CheckoutResponse;
+  } catch (cause) {
+    console.error('[shopfront] Falling back to Amazon checkout redirect', cause);
+    return buildFallbackCheckoutResponse(payload);
   }
-
-  return (data ?? { sessionId: '', url: null, orderId: null }) as CheckoutResponse;
 }
