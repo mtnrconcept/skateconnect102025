@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Star, Loader2, Trash2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { deleteSpotRating, fetchUserSpotRating, saveSpotRating } from '../lib/spotRatingsApi.ts';
 import { MAX_RATING_COMMENT_LENGTH } from '../lib/ratings';
 
 interface SpotRatingFormProps {
@@ -33,19 +33,12 @@ export default function SpotRatingForm({ spotId, currentUser, onRatingSaved }: S
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('spot_ratings')
-        .select('id, rating, comment')
-        .eq('spot_id', spotId)
-        .eq('user_id', currentUser.id)
-        .maybeSingle();
+      const rating = await fetchUserSpotRating(spotId, currentUser.id);
 
-      if (fetchError) throw fetchError;
-
-      if (data) {
-        setExistingRatingId(data.id);
-        setSelectedRating(data.rating);
-        setComment(data.comment ?? '');
+      if (rating) {
+        setExistingRatingId(rating.id);
+        setSelectedRating(rating.rating);
+        setComment(rating.comment ?? '');
       } else {
         resetForm();
       }
@@ -81,30 +74,14 @@ export default function SpotRatingForm({ spotId, currentUser, onRatingSaved }: S
     setIsSubmitting(true);
     setError(null);
 
-    const payload = {
-      rating: selectedRating,
-      comment: comment.trim() ? comment.trim() : null,
-    };
-
     try {
-      if (existingRatingId) {
-        const { error: updateError } = await supabase
-          .from('spot_ratings')
-          .update(payload)
-          .eq('id', existingRatingId);
-
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from('spot_ratings')
-          .insert({
-            spot_id: spotId,
-            user_id: currentUser.id,
-            ...payload,
-          });
-
-        if (insertError) throw insertError;
-      }
+      await saveSpotRating({
+        spotId,
+        userId: currentUser.id,
+        rating: selectedRating,
+        comment: comment.trim() ? comment.trim() : null,
+        existingRatingId,
+      });
 
       await loadExistingRating();
 
@@ -127,12 +104,7 @@ export default function SpotRatingForm({ spotId, currentUser, onRatingSaved }: S
     setError(null);
 
     try {
-      const { error: deleteError } = await supabase
-        .from('spot_ratings')
-        .delete()
-        .eq('id', existingRatingId);
-
-      if (deleteError) throw deleteError;
+      await deleteSpotRating(existingRatingId);
 
       resetForm();
 
