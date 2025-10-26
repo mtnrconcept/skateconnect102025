@@ -33,6 +33,9 @@ import SponsorShopItemModal, {
   type SponsorShopItemFormValues,
 } from './shop/SponsorShopItemModal';
 import type { ShopItemPayload } from '../../lib/sponsorShop';
+import SponsorSpotlightModal, {
+  type SponsorSpotlightFormValues,
+} from './spotlights/SponsorSpotlightModal';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
@@ -180,6 +183,8 @@ export default function SponsorDashboard() {
     refreshAll,
     refreshShopAnalytics,
     createStripeOnboardingLink,
+    createSpotlight,
+    editSpotlight,
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItem,
@@ -200,6 +205,13 @@ export default function SponsorDashboard() {
   const [isCreatingKey, setIsCreatingKey] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [shopCopyFeedback, setShopCopyFeedback] = useState<string | null>(null);
+  const [spotlightFeedback, setSpotlightFeedback] = useState<
+    | { type: 'success' | 'error'; message: string }
+    | null
+  >(null);
+  const [isSpotlightModalOpen, setIsSpotlightModalOpen] = useState(false);
+  const [spotlightModalMode, setSpotlightModalMode] = useState<'create' | 'edit'>('create');
+  const [spotlightBeingEdited, setSpotlightBeingEdited] = useState<SponsorSpotlight | null>(null);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [shopModalMode, setShopModalMode] = useState<'create' | 'edit'>('create');
   const [shopItemBeingEdited, setShopItemBeingEdited] = useState<SponsorShopItem | null>(null);
@@ -209,6 +221,23 @@ export default function SponsorDashboard() {
   const primaryColor = branding?.primary_color ?? '#0ea5e9';
   const secondaryColor = branding?.secondary_color ?? '#1e293b';
   const shopItemsById = useMemo(() => new Map(shopItems.map((entry) => [entry.id, entry])), [shopItems]);
+
+  const openCreateSpotlightModal = () => {
+    setSpotlightModalMode('create');
+    setSpotlightBeingEdited(null);
+    setIsSpotlightModalOpen(true);
+  };
+
+  const openEditSpotlightModal = (spotlight: SponsorSpotlight) => {
+    setSpotlightModalMode('edit');
+    setSpotlightBeingEdited(spotlight);
+    setIsSpotlightModalOpen(true);
+  };
+
+  const closeSpotlightModal = () => {
+    setIsSpotlightModalOpen(false);
+    setSpotlightBeingEdited(null);
+  };
 
   const openCreateShopItemModal = () => {
     setShopItemBeingEdited(null);
@@ -309,6 +338,68 @@ export default function SponsorDashboard() {
     const timer = window.setTimeout(() => setCopyFeedback(null), 2500);
     return () => window.clearTimeout(timer);
   }, [copyFeedback]);
+
+  useEffect(() => {
+    if (!spotlightFeedback) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setSpotlightFeedback(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [spotlightFeedback]);
+
+  const handleSpotlightSubmit = useCallback(
+    async (values: SponsorSpotlightFormValues) => {
+      const sanitizedDescription = values.description.trim();
+      const sanitizedCta = values.callToAction.trim();
+      const sanitizedCtaUrl = values.callToActionUrl.trim();
+
+      const payload: Parameters<typeof createSpotlight>[0] = {
+        title: values.title.trim(),
+        description: sanitizedDescription || null,
+        call_to_action: sanitizedCta || null,
+        call_to_action_url: sanitizedCtaUrl || null,
+        status: values.status,
+        start_date: values.startDate,
+        end_date: values.endDate,
+        media_url: values.mediaUrl,
+      };
+
+      try {
+        if (spotlightModalMode === 'create') {
+          const created = await createSpotlight(payload);
+          if (!created) {
+            throw new Error('create-spotlight-failed');
+          }
+          setSpotlightFeedback({ type: 'success', message: 'Spotlight créé avec succès.' });
+        } else {
+          if (!spotlightBeingEdited) {
+            throw new Error('missing-spotlight-reference');
+          }
+          const updates: Parameters<typeof editSpotlight>[1] = { ...payload };
+          const updated = await editSpotlight(spotlightBeingEdited.id, updates);
+          if (!updated) {
+            throw new Error('update-spotlight-failed');
+          }
+          setSpotlightFeedback({ type: 'success', message: 'Spotlight mis à jour.' });
+        }
+
+        await refreshSpotlights();
+      } catch (cause) {
+        setSpotlightFeedback({
+          type: 'error',
+          message: "Impossible d'enregistrer le Spotlight. Réessaie dans quelques instants.",
+        });
+        throw cause;
+      }
+    },
+    [
+      createSpotlight,
+      editSpotlight,
+      refreshSpotlights,
+      spotlightBeingEdited,
+      spotlightModalMode,
+    ],
+  );
 
   const closeShopModal = useCallback(() => {
     setIsShopModalOpen(false);
@@ -609,6 +700,13 @@ export default function SponsorDashboard() {
               </button>
               <button
                 type="button"
+                onClick={openCreateSpotlightModal}
+                className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-100 hover:border-sky-400 hover:bg-sky-500/10"
+              >
+                <PlusCircle size={16} /> Nouveau Spotlight
+              </button>
+              <button
+                type="button"
                 onClick={refreshAll}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
               >
@@ -616,6 +714,15 @@ export default function SponsorDashboard() {
               </button>
             </div>
           </div>
+          {spotlightFeedback && (
+            <p
+              className={`text-xs ${
+                spotlightFeedback.type === 'success' ? 'text-emerald-300' : 'text-rose-300'
+              }`}
+            >
+              {spotlightFeedback.message}
+            </p>
+          )}
           {copyFeedback && <p className="text-xs text-emerald-300">{copyFeedback}</p>}
           <div className="grid gap-4">
             {spotlights.length === 0 ? (
@@ -650,6 +757,13 @@ export default function SponsorDashboard() {
                       )}
                     </div>
                     <div className="flex items-center gap-3 self-start">
+                      <button
+                        type="button"
+                        onClick={() => openEditSpotlightModal(spotlight)}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:border-slate-400 hover:text-white"
+                      >
+                        <Pencil size={16} /> Modifier
+                      </button>
                       {spotlight.status !== 'active' && (
                         <button
                           type="button"
@@ -1476,6 +1590,14 @@ export default function SponsorDashboard() {
           </div>
         </div>
       </div>
+      {isSpotlightModalOpen && (
+        <SponsorSpotlightModal
+          mode={spotlightModalMode}
+          spotlight={spotlightBeingEdited ?? undefined}
+          onClose={closeSpotlightModal}
+          onSubmit={handleSpotlightSubmit}
+        />
+      )}
       {isShopModalOpen && (
         <SponsorShopItemModal
           mode={shopModalMode}
