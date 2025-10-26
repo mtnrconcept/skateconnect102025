@@ -536,6 +536,72 @@ export interface SponsorShopItem {
   is_active: boolean;
   image_url: string | null;
   metadata: Record<string, string | number> | null;
+  available_from: string | null;
+  available_until: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SponsorShopItemVariant {
+  id: string;
+  sponsor_id: string;
+  item_id: string;
+  name: string;
+  size: string | null;
+  color: string | null;
+  sku: string | null;
+  price_cents: number | null;
+  stock: number;
+  is_active: boolean;
+  image_url: string | null;
+  metadata: Record<string, string | number> | null;
+  availability_start: string | null;
+  availability_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SponsorShopBundleItem {
+  bundle_id: string;
+  item_id: string;
+  sponsor_id: string;
+  quantity: number;
+}
+
+export interface SponsorShopBundle {
+  id: string;
+  sponsor_id: string;
+  primary_item_id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  currency: string;
+  is_active: boolean;
+  metadata: Record<string, string | number> | null;
+  available_from: string | null;
+  available_until: string | null;
+  created_at: string;
+  updated_at: string;
+  items: SponsorShopBundleItem[];
+}
+
+export type SponsorShopCouponDiscountType = 'percentage' | 'fixed';
+
+export interface SponsorShopCoupon {
+  id: string;
+  sponsor_id: string;
+  item_id: string;
+  code: string;
+  description: string | null;
+  discount_type: SponsorShopCouponDiscountType;
+  discount_value: number;
+  max_uses: number | null;
+  usage_count: number;
+  minimum_quantity: number;
+  is_active: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+  metadata: Record<string, string | number> | null;
   created_at: string;
   updated_at: string;
 }

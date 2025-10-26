@@ -32,6 +32,7 @@ import type {
 import SponsorShopItemModal, {
   type SponsorShopItemFormValues,
 } from './shop/SponsorShopItemModal';
+import type { ShopItemPayload } from '../../lib/sponsorShop';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
@@ -162,6 +163,9 @@ export default function SponsorDashboard() {
     analytics,
     spotlights,
     shopItems,
+    shopVariants,
+    shopBundles,
+    shopCoupons,
     shopAnalytics,
     shopAnalyticsHistory,
     shopAnalyticsExportUrl,
@@ -176,6 +180,9 @@ export default function SponsorDashboard() {
     updateShopItemAvailability,
     createShopItem,
     updateShopItem,
+    syncShopItemVariants,
+    syncShopItemCoupons,
+    syncShopItemBundles,
     revokeApiKey,
     createApiKey,
     profile,
@@ -195,6 +202,7 @@ export default function SponsorDashboard() {
 
   const primaryColor = branding?.primary_color ?? '#0ea5e9';
   const secondaryColor = branding?.secondary_color ?? '#1e293b';
+  const shopItemsById = useMemo(() => new Map(shopItems.map((entry) => [entry.id, entry])), [shopItems]);
 
   const openCreateShopItemModal = () => {
     setShopItemBeingEdited(null);
@@ -315,27 +323,7 @@ export default function SponsorDashboard() {
 
   const handleShopItemSubmit = useCallback(
     async (values: SponsorShopItemFormValues) => {
-      if (shopModalMode === 'create') {
-        const created = await createShopItem({
-          name: values.name.trim(),
-          description: values.description.trim(),
-          price_cents: values.priceCents,
-          currency: values.currency,
-          stock: values.stock,
-          is_active: values.isActive,
-          image_url: values.imageUrl,
-        });
-        if (!created) {
-          throw new Error('Unable to create shop item');
-        }
-        return;
-      }
-
-      if (!shopItemBeingEdited) {
-        throw new Error('Missing shop item reference');
-      }
-
-      const updated = await updateShopItem(shopItemBeingEdited.id, {
+      const basePayload = {
         name: values.name.trim(),
         description: values.description.trim(),
         price_cents: values.priceCents,
@@ -343,13 +331,45 @@ export default function SponsorDashboard() {
         stock: values.stock,
         is_active: values.isActive,
         image_url: values.imageUrl,
-      });
+        available_from: values.availableFrom,
+        available_until: values.availableUntil,
+      } satisfies Omit<ShopItemPayload, 'sponsor_id'>;
 
-      if (!updated) {
-        throw new Error('Unable to update shop item');
+      let targetItemId: string;
+
+      if (shopModalMode === 'create') {
+        const created = await createShopItem(basePayload);
+        if (!created) {
+          throw new Error('Unable to create shop item');
+        }
+        targetItemId = created.id;
+      } else {
+        if (!shopItemBeingEdited) {
+          throw new Error('Missing shop item reference');
+        }
+
+        const updated = await updateShopItem(shopItemBeingEdited.id, basePayload);
+
+        if (!updated) {
+          throw new Error('Unable to update shop item');
+        }
+
+        targetItemId = updated.id;
       }
+
+      await syncShopItemVariants(targetItemId, values.variants);
+      await syncShopItemCoupons(targetItemId, values.coupons);
+      await syncShopItemBundles(targetItemId, values.bundles);
     },
-    [createShopItem, shopItemBeingEdited, shopModalMode, updateShopItem],
+    [
+      createShopItem,
+      shopItemBeingEdited,
+      shopModalMode,
+      syncShopItemBundles,
+      syncShopItemCoupons,
+      syncShopItemVariants,
+      updateShopItem,
+    ],
   );
 
   const serializeSpotlightForExport = useCallback((spotlight: SponsorSpotlight) => {
@@ -722,6 +742,17 @@ export default function SponsorDashboard() {
     [shopPrimaryCurrency],
   );
 
+  const formatDateTime = useCallback((value: string | null) => {
+    if (!value) {
+      return '—';
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
+    return date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  }, []);
+
   const renderShop = () => (
     <div className="space-y-6">
       {!permissions.canManageShop ? (
@@ -902,6 +933,9 @@ export default function SponsorDashboard() {
               shopItems.map((item) => {
                 const analyticsByItem = perItemAnalytics[item.id];
                 const revenue = formatRevenue(analyticsByItem?.revenueCents ?? 0, item.currency);
+                const variantsForItem = shopVariants.filter((variant) => variant.item_id === item.id);
+                const couponsForItem = shopCoupons.filter((coupon) => coupon.item_id === item.id);
+                const bundlesForItem = shopBundles.filter((bundle) => bundle.primary_item_id === item.id);
                 return (
                   <div key={item.id} className="flex flex-col gap-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6">
                     <div className="flex flex-col gap-2">
@@ -971,6 +1005,156 @@ export default function SponsorDashboard() {
                         )}
                       </div>
                     </div>
+
+                    <div className="space-y-2">
+                      <details className="rounded-xl border border-slate-800 bg-slate-950/40" open={variantsForItem.length > 0}>
+                        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-2 text-sm text-slate-200">
+                          <span>Variantes ({variantsForItem.length})</span>
+                          <span className="text-xs text-slate-500">Stocks dédiés et tarifs différenciés</span>
+                        </summary>
+                        <div className="overflow-x-auto px-4 py-3">
+                          {variantsForItem.length === 0 ? (
+                            <p className="text-xs text-slate-500">Aucune variante pour ce produit.</p>
+                          ) : (
+                            <table className="min-w-full text-left text-xs text-slate-300">
+                              <thead className="text-[11px] uppercase tracking-wider text-slate-500">
+                                <tr>
+                                  <th className="pb-2 pr-3">Nom</th>
+                                  <th className="pb-2 pr-3">SKU</th>
+                                  <th className="pb-2 pr-3">Stock</th>
+                                  <th className="pb-2 pr-3">Prix</th>
+                                  <th className="pb-2 pr-3">Fenêtre</th>
+                                  <th className="pb-2">Statut</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {variantsForItem.map((variant) => (
+                                  <tr key={variant.id} className="border-t border-slate-800/60">
+                                    <td className="py-2 pr-3 text-slate-200">
+                                      <div className="flex flex-col">
+                                        <span>{variant.name}</span>
+                                        <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                                          {[variant.size, variant.color].filter(Boolean).join(' · ') || '—'}
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 pr-3">{variant.sku ?? '—'}</td>
+                                    <td className="py-2 pr-3">{variant.stock}</td>
+                                    <td className="py-2 pr-3">
+                                      {variant.price_cents != null
+                                        ? formatRevenue(variant.price_cents, item.currency)
+                                        : '—'}
+                                    </td>
+                                    <td className="py-2 pr-3">
+                                      {variant.availability_start || variant.availability_end
+                                        ? `${formatDateTime(variant.availability_start)} → ${formatDateTime(variant.availability_end)}`
+                                        : '—'}
+                                    </td>
+                                    <td className="py-2 text-slate-200">
+                                      {variant.is_active ? 'Active' : 'En pause'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </details>
+
+                      <details className="rounded-xl border border-slate-800 bg-slate-950/40" open={couponsForItem.length > 0}>
+                        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-2 text-sm text-slate-200">
+                          <span>Codes promo ({couponsForItem.length})</span>
+                          <span className="text-xs text-slate-500">Suivi des remises actives</span>
+                        </summary>
+                        <div className="overflow-x-auto px-4 py-3">
+                          {couponsForItem.length === 0 ? (
+                            <p className="text-xs text-slate-500">Aucun code promotionnel configuré.</p>
+                          ) : (
+                            <table className="min-w-full text-left text-xs text-slate-300">
+                              <thead className="text-[11px] uppercase tracking-wider text-slate-500">
+                                <tr>
+                                  <th className="pb-2 pr-3">Code</th>
+                                  <th className="pb-2 pr-3">Type</th>
+                                  <th className="pb-2 pr-3">Valeur</th>
+                                  <th className="pb-2 pr-3">Min.</th>
+                                  <th className="pb-2 pr-3">Max</th>
+                                  <th className="pb-2 pr-3">Utilisations</th>
+                                  <th className="pb-2 pr-3">Fenêtre</th>
+                                  <th className="pb-2">Statut</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {couponsForItem.map((coupon) => (
+                                  <tr key={coupon.id} className="border-t border-slate-800/60">
+                                    <td className="py-2 pr-3 text-slate-200">{coupon.code}</td>
+                                    <td className="py-2 pr-3">{coupon.discount_type === 'percentage' ? '% remise' : 'Montant fixe'}</td>
+                                    <td className="py-2 pr-3">
+                                      {coupon.discount_type === 'percentage'
+                                        ? `${coupon.discount_value}%`
+                                        : formatRevenue(coupon.discount_value, item.currency)}
+                                    </td>
+                                    <td className="py-2 pr-3">{coupon.minimum_quantity}</td>
+                                    <td className="py-2 pr-3">{coupon.max_uses ?? '∞'}</td>
+                                    <td className="py-2 pr-3">{coupon.usage_count}</td>
+                                    <td className="py-2 pr-3">
+                                      {coupon.starts_at || coupon.expires_at
+                                        ? `${formatDateTime(coupon.starts_at)} → ${formatDateTime(coupon.expires_at)}`
+                                        : '—'}
+                                    </td>
+                                    <td className="py-2 text-slate-200">{coupon.is_active ? 'Actif' : 'Archivé'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </details>
+
+                      <details className="rounded-xl border border-slate-800 bg-slate-950/40" open={bundlesForItem.length > 0}>
+                        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-2 text-sm text-slate-200">
+                          <span>Bundles ({bundlesForItem.length})</span>
+                          <span className="text-xs text-slate-500">Packs incluant ce produit</span>
+                        </summary>
+                        <div className="overflow-x-auto px-4 py-3">
+                          {bundlesForItem.length === 0 ? (
+                            <p className="text-xs text-slate-500">Aucun bundle n'inclut ce produit.</p>
+                          ) : (
+                            <table className="min-w-full text-left text-xs text-slate-300">
+                              <thead className="text-[11px] uppercase tracking-wider text-slate-500">
+                                <tr>
+                                  <th className="pb-2 pr-3">Nom</th>
+                                  <th className="pb-2 pr-3">Prix</th>
+                                  <th className="pb-2 pr-3">Produits</th>
+                                  <th className="pb-2 pr-3">Fenêtre</th>
+                                  <th className="pb-2">Statut</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {bundlesForItem.map((bundle) => {
+                                  const productsLabel = bundle.items
+                                    .map((bundleItem) => shopItemsById.get(bundleItem.item_id)?.name ?? 'Produit inconnu')
+                                    .join(', ');
+                                  return (
+                                    <tr key={bundle.id} className="border-t border-slate-800/60">
+                                      <td className="py-2 pr-3 text-slate-200">{bundle.name}</td>
+                                      <td className="py-2 pr-3">{formatRevenue(bundle.price_cents, bundle.currency)}</td>
+                                      <td className="py-2 pr-3 text-slate-200">{productsLabel || '—'}</td>
+                                      <td className="py-2 pr-3">
+                                        {bundle.available_from || bundle.available_until
+                                          ? `${formatDateTime(bundle.available_from)} → ${formatDateTime(bundle.available_until)}`
+                                          : '—'}
+                                      </td>
+                                      <td className="py-2 text-slate-200">{bundle.is_active ? 'Actif' : 'En pause'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </details>
+                    </div>
+
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <button
