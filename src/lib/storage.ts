@@ -1,4 +1,9 @@
-import { supabase, SUPABASE_STORAGE_CDN_URL, SUPABASE_STORAGE_PUBLIC_URL } from './supabase.js';
+import {
+  supabase,
+  SUPABASE_STORAGE_CDN_URL,
+  SUPABASE_STORAGE_PUBLIC_URL,
+  isSupabaseConfigured,
+} from './supabase.js';
 import { isNative, capturePhoto, pickPhoto } from './capacitor';
 
 export type StorageBucket = 'avatars' | 'covers' | 'posts' | 'spots' | 'challenges' | 'messages' | 'sponsors';
@@ -43,6 +48,197 @@ const detectAssetType = (path: string): 'image' | 'video' | 'file' => {
   return 'file';
 };
 
+interface FallbackStoredFile {
+  id: string;
+  name: string;
+  path: string;
+  url: string;
+  type: 'image' | 'video' | 'file';
+  size: number;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+const fallbackBuckets = new Map<StorageBucket, Map<string, FallbackStoredFile>>();
+
+const ensureFallbackBucket = (bucket: StorageBucket): Map<string, FallbackStoredFile> => {
+  if (!fallbackBuckets.has(bucket)) {
+    fallbackBuckets.set(bucket, new Map());
+  }
+  return fallbackBuckets.get(bucket)!;
+};
+
+const matchesPrefix = (filePath: string, prefix: string): boolean => {
+  if (!prefix) {
+    return true;
+  }
+
+  return filePath === prefix || filePath.startsWith(`${prefix}/`);
+};
+
+const readBlobAsDataUrl = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    if (typeof FileReader === 'undefined') {
+      reject(new Error('FileReader API is unavailable in this environment.'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('Unable to read blob as data URL'));
+    };
+    reader.readAsDataURL(blob);
+  });
+};
+
+const createFallbackUrl = async (blob: Blob): Promise<string> => {
+  const globalUrl = typeof URL !== 'undefined' ? URL : undefined;
+  const create =
+    (globalUrl && typeof globalUrl.createObjectURL === 'function'
+      ? globalUrl.createObjectURL.bind(globalUrl)
+      : undefined) ??
+    (typeof window !== 'undefined' && typeof window.URL?.createObjectURL === 'function'
+      ? window.URL.createObjectURL.bind(window.URL)
+      : undefined);
+
+  if (create) {
+    return create(blob);
+  }
+
+  if (typeof FileReader !== 'undefined') {
+    try {
+      return await readBlobAsDataUrl(blob);
+    } catch (error) {
+      console.warn('Failed to create data URL from blob using FileReader', error);
+    }
+  }
+
+  if (typeof Buffer !== 'undefined' && typeof blob.arrayBuffer === 'function') {
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    const mimeType = blob.type || 'application/octet-stream';
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  }
+
+  return '';
+};
+
+const revokeFallbackUrl = (entry: FallbackStoredFile | undefined) => {
+  if (!entry) {
+    return;
+  }
+
+  if (entry.url.startsWith('blob:') && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+    URL.revokeObjectURL(entry.url);
+  }
+};
+
+const toStorageObjectInfo = (entry: FallbackStoredFile): StorageObjectInfo => {
+  return {
+    id: entry.id,
+    name: entry.name,
+    path: entry.path,
+    url: entry.url,
+    type: entry.type,
+    size: entry.size,
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
+    metadata: entry.metadata ?? null,
+  } satisfies StorageObjectInfo;
+};
+
+const listFallbackStorageFiles = (
+  bucket: StorageBucket,
+  options: ListStorageFilesOptions,
+): StorageObjectInfo[] => {
+  const { path = '', limit = 100, offset = 0 } = options;
+  const bucketEntries = fallbackBuckets.get(bucket);
+  if (!bucketEntries) {
+    return [];
+  }
+
+  const items = Array.from(bucketEntries.values())
+    .filter((entry) => matchesPrefix(entry.path, path))
+    .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+    .slice(offset, offset + limit)
+    .map(toStorageObjectInfo);
+
+  return items;
+};
+
+const storeFallbackFile = async (
+  bucket: StorageBucket,
+  name: string,
+  path: string,
+  blob: Blob,
+  metadata?: Record<string, unknown> | null,
+): Promise<FallbackStoredFile> => {
+  const bucketEntries = ensureFallbackBucket(bucket);
+  const existing = bucketEntries.get(path);
+  revokeFallbackUrl(existing);
+
+  const now = new Date().toISOString();
+  const url = await createFallbackUrl(blob);
+  const entry: FallbackStoredFile = {
+    id: path,
+    name,
+    path,
+    url,
+    type: detectAssetType(name),
+    size: blob.size ?? 0,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    metadata,
+  };
+
+  bucketEntries.set(path, entry);
+  return entry;
+};
+
+const getFallbackFile = (bucket: StorageBucket, path: string): FallbackStoredFile | undefined => {
+  return fallbackBuckets.get(bucket)?.get(path);
+};
+
+const removeFallbackFile = (bucket: StorageBucket, path: string): boolean => {
+  const bucketEntries = fallbackBuckets.get(bucket);
+  if (!bucketEntries) {
+    return false;
+  }
+
+  const existing = bucketEntries.get(path);
+  if (!existing) {
+    return false;
+  }
+
+  revokeFallbackUrl(existing);
+  return bucketEntries.delete(path);
+};
+
+const isMissingBucketError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { message?: unknown; error?: unknown };
+  const message =
+    (typeof candidate.message === 'string' && candidate.message) ||
+    (typeof candidate.error === 'string' && candidate.error) ||
+    null;
+
+  if (!message) {
+    return false;
+  }
+
+  return message.toLowerCase().includes('bucket not found');
+};
+
+const shouldUseFallbackStorage = (): boolean => {
+  return !isSupabaseConfigured();
+};
+
 export interface StorageObjectInfo {
   id: string;
   name: string;
@@ -62,6 +258,15 @@ export interface ListStorageFilesOptions {
 }
 
 export const getPublicFileUrl = (bucket: StorageBucket, path: string): string => {
+  const fallback = getFallbackFile(bucket, path);
+  if (fallback) {
+    return fallback.url;
+  }
+
+  if (shouldUseFallbackStorage()) {
+    return '';
+  }
+
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return withCdn(data.publicUrl);
 };
@@ -70,6 +275,10 @@ export const listStorageFiles = async (
   bucket: StorageBucket,
   options: ListStorageFilesOptions = {},
 ): Promise<StorageObjectInfo[]> => {
+  if (shouldUseFallbackStorage()) {
+    return listFallbackStorageFiles(bucket, options);
+  }
+
   const { path = '', limit = 100, offset = 0 } = options;
 
   const { data, error } = await supabase.storage.from(bucket).list(path, {
@@ -79,6 +288,10 @@ export const listStorageFiles = async (
   });
 
   if (error) {
+    if (isMissingBucketError(error)) {
+      console.warn(`Storage bucket "${bucket}" is unavailable. Returning fallback files.`);
+      return listFallbackStorageFiles(bucket, options);
+    }
     console.error('Error listing storage files:', error);
     throw error;
   }
@@ -237,6 +450,18 @@ export const uploadFile = async (
     const fileName = generateUniqueFileName(file.name, extensionOverride ? { extension: extensionOverride } : undefined);
     const filePath = path ? `${path}/${fileName}` : fileName;
 
+    const uploadToFallback = async () => {
+      const fallbackEntry = await storeFallbackFile(bucket, fileName, filePath, fileToUpload, {
+        size: fileToUpload.size,
+        contentType,
+      });
+      return { url: fallbackEntry.url, path: fallbackEntry.path } satisfies UploadResult;
+    };
+
+    if (shouldUseFallbackStorage()) {
+      return await uploadToFallback();
+    }
+
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(filePath, fileToUpload, {
@@ -245,7 +470,15 @@ export const uploadFile = async (
         contentType,
       });
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingBucketError(error)) {
+        console.warn(
+          `Storage bucket "${bucket}" is unavailable. Using in-memory fallback storage for uploads.`,
+        );
+        return await uploadToFallback();
+      }
+      throw error;
+    }
 
     const { data: urlData } = supabase.storage
       .from(bucket)
@@ -274,6 +507,18 @@ export const uploadBase64 = async (
     const base64Response = await fetch(`data:image/${format};base64,${base64Data}`);
     const blob = await base64Response.blob();
 
+    const uploadToFallback = async () => {
+      const fallbackEntry = await storeFallbackFile(bucket, fileName, filePath, blob, {
+        size: blob.size,
+        contentType: `image/${format}`,
+      });
+      return { url: fallbackEntry.url, path: fallbackEntry.path } satisfies UploadResult;
+    };
+
+    if (shouldUseFallbackStorage()) {
+      return await uploadToFallback();
+    }
+
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(filePath, blob, {
@@ -282,7 +527,15 @@ export const uploadBase64 = async (
         contentType: `image/${format}`,
       });
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingBucketError(error)) {
+        console.warn(
+          `Storage bucket "${bucket}" is unavailable. Using in-memory fallback storage for uploads.`,
+        );
+        return await uploadToFallback();
+      }
+      throw error;
+    }
 
     const { data: urlData } = supabase.storage
       .from(bucket)
@@ -300,9 +553,20 @@ export const uploadBase64 = async (
 
 export const deleteFile = async (bucket: StorageBucket, path: string): Promise<void> => {
   try {
+    if (shouldUseFallbackStorage()) {
+      removeFallbackFile(bucket, path);
+      return;
+    }
+
     const { error } = await supabase.storage.from(bucket).remove([path]);
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingBucketError(error)) {
+        removeFallbackFile(bucket, path);
+        return;
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error deleting file:', error);
     throw error;
