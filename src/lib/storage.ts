@@ -8,7 +8,8 @@ export interface UploadResult {
   path: string;
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
 const DEFAULT_CACHE_CONTROL = '86400';
@@ -155,7 +156,7 @@ export const compressImage = async (file: File, maxWidth: number = 1920): Promis
 
 export const validateFile = (file: File, type: 'image' | 'video'): boolean => {
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`File size must be less than ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+    throw new Error(`File size must be less than ${MAX_FILE_SIZE_MB}MB`);
   }
 
   const allowedTypes = type === 'image' ? ALLOWED_IMAGE_TYPES : ALLOWED_VIDEO_TYPES;
