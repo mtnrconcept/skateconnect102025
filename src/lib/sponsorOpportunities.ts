@@ -1,6 +1,13 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 import { withTableFallback } from './postgrest.js';
 import { supabase } from './supabase.js';
+import {
+  getDemoChallengeParticipations,
+  getDemoSponsorCalls,
+  getDemoSponsorChallenges,
+  getDemoSponsorEvents,
+  getDemoSponsorNews,
+} from '../data/demoSponsorOpportunities';
 import type {
   SponsorCallOpportunity,
   SponsorChallengeOpportunity,
@@ -534,7 +541,16 @@ export async function fetchSponsorChallenges(
 
       return query;
     })(),
-    () => [] as RawSponsorRow[],
+    () => {
+      const participationMap = getDemoChallengeParticipations();
+      return getDemoSponsorChallenges({ sponsorId }).map((challenge) => ({
+        ...challenge,
+        participants_count: Math.max(
+          challenge.participants_count,
+          participationMap[challenge.id]?.length ?? 0,
+        ),
+      })) as RawSponsorRow[];
+    },
   );
 
   return (rows ?? []).map(mapSponsorChallenge);
@@ -559,7 +575,7 @@ export async function fetchSponsorEvents(
 
       return query;
     })(),
-    () => [] as RawSponsorRow[],
+    () => getDemoSponsorEvents({ sponsorId }) as RawSponsorRow[],
   );
 
   return (rows ?? []).map(mapSponsorEvent);
@@ -584,7 +600,7 @@ export async function fetchSponsorCalls(
 
       return query;
     })(),
-    () => [] as RawSponsorRow[],
+    () => getDemoSponsorCalls({ sponsorId }) as RawSponsorRow[],
   );
 
   return (rows ?? []).map(mapSponsorCall);
@@ -609,7 +625,7 @@ export async function fetchSponsorNews(
 
       return query;
     })(),
-    () => [] as RawSponsorRow[],
+    () => getDemoSponsorNews({ sponsorId }) as RawSponsorRow[],
   );
 
   return (rows ?? []).map(mapSponsorNews);
