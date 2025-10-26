@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { MapPin, Filter, Plus, Navigation, AlertTriangle } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -37,47 +37,241 @@ export default function MapSection({
 
   const [spots, setSpots] = useState<Spot[]>([]);
   const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
-  const [filter, setFilter] = useState<string>('all');
+  const [filter, setFilter] = useState<Spot['spot_type'] | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
   const [visibleSpotCount, setVisibleSpotCount] = useState(DEFAULT_VISIBLE_SPOTS);
+  const [surfaceFilters, setSurfaceFilters] = useState<string[]>([]);
+  const [moduleFilters, setModuleFilters] = useState<string[]>([]);
+  const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  const filterControlsRef = useRef<HTMLDivElement | null>(null);
+
+  const surfaceOptions = useMemo(
+    () => [
+      'concrete',
+      'wood',
+      'marble',
+      'granite',
+      'metal',
+      'asphalt',
+    ],
+    [],
+  );
+
+  const moduleOptions = useMemo(
+    () => [
+      'stairs',
+      'rails',
+      'ledges',
+      'gaps',
+      'quarter',
+      'funbox',
+      'bank',
+      'bowl',
+      'pool',
+      'transitions',
+      'manual pad',
+      'spine',
+      'curbs',
+    ],
+    [],
+  );
+
+  const surfaceLabels: Record<string, string> = {
+    concrete: 'Béton',
+    wood: 'Bois',
+    marble: 'Marbre',
+    granite: 'Granite',
+    metal: 'Métal',
+    asphalt: 'Asphalte',
+  };
+
+  const moduleLabels: Record<string, string> = {
+    stairs: 'Marches',
+    rails: 'Rails',
+    ledges: 'Ledges',
+    gaps: 'Gaps',
+    quarter: 'Quarter',
+    funbox: 'Funbox',
+    bank: 'Banks',
+    bowl: 'Bowl',
+    pool: 'Pool',
+    transitions: 'Transitions',
+    'manual pad': 'Manual pad',
+    spine: 'Spine',
+    curbs: 'Curbs',
+  };
+
+  const difficultyOptions: {
+    id: 'all' | 'beginner' | 'intermediate' | 'advanced';
+    label: string;
+    helper?: string;
+  }[] = [
+    { id: 'all', label: 'Tous niveaux' },
+    { id: 'beginner', label: 'Débutant', helper: 'Niveaux 1 à 2' },
+    { id: 'intermediate', label: 'Intermédiaire', helper: 'Niveau 3' },
+    { id: 'advanced', label: 'Avancé', helper: 'Niveaux 4 à 5' },
+  ];
+
+  const difficultyRanges = useMemo(
+    () => ({
+      beginner: { min: 1, max: 2 },
+      intermediate: { min: 3, max: 3 },
+      advanced: { min: 4, max: 5 },
+    }),
+    [],
+  );
+
+  const activeFiltersCount = surfaceFilters.length + moduleFilters.length + (difficultyFilter !== 'all' ? 1 : 0);
 
   const filteredSpots = useMemo(() => {
     const trimmedQuery = searchTerm.trim();
-    if (trimmedQuery.length === 0) {
-      return spots;
-    }
-
-    const normalizedTokens = trimmedQuery
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((token) => normalizeText(token));
-
-    if (normalizedTokens.length === 0) {
-      return spots;
-    }
+    const normalizedTokens = trimmedQuery.length > 0
+      ? trimmedQuery
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((token) => normalizeText(token))
+      : [];
 
     return spots.filter((spot) => {
-      const haystack = normalizeText(
-        `${spot.name} ${spot.address ?? ''} ${spot.description ?? ''} ${spot.spot_type ?? ''} ` +
-          `${spot.creator?.display_name ?? ''} ${spot.creator?.username ?? ''}`,
-      );
+      if (surfaceFilters.length > 0) {
+        const spotSurfaces = Array.isArray(spot.surfaces) ? spot.surfaces : [];
+        const hasAllSurfaces = surfaceFilters.every((surface) => spotSurfaces.includes(surface));
+        if (!hasAllSurfaces) {
+          return false;
+        }
+      }
 
-      return normalizedTokens.every((token) => haystack.includes(token));
+      if (moduleFilters.length > 0) {
+        const spotModules = Array.isArray(spot.modules) ? spot.modules : [];
+        const hasAllModules = moduleFilters.every((module) => spotModules.includes(module));
+        if (!hasAllModules) {
+          return false;
+        }
+      }
+
+      if (difficultyFilter !== 'all') {
+        const range = difficultyRanges[difficultyFilter];
+        if (spot.difficulty < range.min) {
+          return false;
+        }
+        if (typeof range.max !== 'undefined' && spot.difficulty > range.max) {
+          return false;
+        }
+      }
+
+      if (normalizedTokens.length > 0) {
+        const haystack = normalizeText(
+          `${spot.name} ${spot.address ?? ''} ${spot.description ?? ''} ${spot.spot_type ?? ''} ` +
+            `${spot.creator?.display_name ?? ''} ${spot.creator?.username ?? ''}`,
+        );
+
+        return normalizedTokens.every((token) => haystack.includes(token));
+      }
+
+      return true;
     });
-  }, [spots, searchTerm]);
+  }, [spots, searchTerm, surfaceFilters, moduleFilters, difficultyFilter, difficultyRanges]);
+
+  const loadCoverPhotos = useCallback(async (spotIds: string[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('spot_media')
+        .select('spot_id, media_url, is_cover_photo, created_at')
+        .in('spot_id', spotIds)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const coverMap: Record<string, string> = {};
+
+      spotIds.forEach(spotId => {
+        const spotMedia = data?.filter(m => m.spot_id === spotId) || [];
+        const coverPhoto = spotMedia.find(m => m.is_cover_photo) || spotMedia[0];
+        if (coverPhoto) {
+          coverMap[spotId] = coverPhoto.media_url;
+        }
+      });
+
+      setSpotCoverPhotos(coverMap);
+    } catch (error) {
+      console.error('Error loading cover photos:', error);
+    }
+  }, []);
+
+  const loadSpots = useCallback(async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('spots')
+        .select('*, creator:profiles(*)');
+
+      if (filter !== 'all') {
+        query = query.eq('spot_type', filter);
+      }
+
+      if (surfaceFilters.length > 0) {
+        query = query.contains('surfaces', surfaceFilters);
+      }
+
+      if (moduleFilters.length > 0) {
+        query = query.contains('modules', moduleFilters);
+      }
+
+      if (difficultyFilter !== 'all') {
+        const { min, max } = difficultyRanges[difficultyFilter];
+        query = query.gte('difficulty', min);
+        if (typeof max !== 'undefined') {
+          query = query.lte('difficulty', max);
+        }
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSpots(data || []);
+
+      if (data && data.length > 0) {
+        loadCoverPhotos(data.map(spot => spot.id));
+      }
+    } catch (error) {
+      console.error('Error loading spots:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [difficultyFilter, difficultyRanges, filter, loadCoverPhotos, moduleFilters, surfaceFilters]);
 
   useEffect(() => {
-    setLoading(true);
-    loadSpots();
-  }, [filter]);
+    void loadSpots();
+  }, [loadSpots]);
 
   useEffect(() => {
     setVisibleSpotCount(DEFAULT_VISIBLE_SPOTS);
-  }, [filter, searchTerm, spots]);
+  }, [filter, searchTerm, spots, surfaceFilters, moduleFilters, difficultyFilter]);
+
+  useEffect(() => {
+    if (!showFilterPanel) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (filterControlsRef.current && !filterControlsRef.current.contains(target)) {
+        setShowFilterPanel(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFilterPanel]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -150,60 +344,25 @@ export default function MapSection({
     if (!isMapAvailable) return;
     if (!map.current || loading) return;
     updateMarkers(filteredSpots);
-  }, [filteredSpots, loading, spotCoverPhotos, isMapAvailable]);
+  }, [filteredSpots, loading, isMapAvailable, updateMarkers]);
 
-  const loadSpots = async () => {
-    try {
-      let query = supabase
-        .from('spots')
-        .select('*, creator:profiles(*)');
+  const markerColors = useMemo(
+    () => ({
+      street: '#f97316',
+      skatepark: '#22d3ee',
+      bowl: '#a855f7',
+      diy: '#facc15',
+      transition: '#34d399',
+    } satisfies Record<Spot['spot_type'], string>),
+    [],
+  );
 
-      if (filter !== 'all') {
-        query = query.eq('spot_type', filter);
-      }
+  const getMarkerColor = useCallback(
+    (type: Spot['spot_type']): string => markerColors[type] ?? '#ff8c00',
+    [markerColors],
+  );
 
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setSpots(data || []);
-
-      if (data && data.length > 0) {
-        loadCoverPhotos(data.map(spot => spot.id));
-      }
-    } catch (error) {
-      console.error('Error loading spots:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCoverPhotos = async (spotIds: string[]) => {
-    try {
-      const { data, error } = await supabase
-        .from('spot_media')
-        .select('spot_id, media_url, is_cover_photo, created_at')
-        .in('spot_id', spotIds)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const coverMap: Record<string, string> = {};
-
-      spotIds.forEach(spotId => {
-        const spotMedia = data?.filter(m => m.spot_id === spotId) || [];
-        const coverPhoto = spotMedia.find(m => m.is_cover_photo) || spotMedia[0];
-        if (coverPhoto) {
-          coverMap[spotId] = coverPhoto.media_url;
-        }
-      });
-
-      setSpotCoverPhotos(coverMap);
-    } catch (error) {
-      console.error('Error loading cover photos:', error);
-    }
-  };
-
-  const updateMarkers = (spotsToRender: Spot[]) => {
+  const updateMarkers = useCallback((spotsToRender: Spot[]) => {
     if (!isMapAvailable) return;
     if (!map.current) return;
 
@@ -446,27 +605,26 @@ export default function MapSection({
 
       markersRef.current.push(marker);
     });
-  };
+  }, [getMarkerColor, isMapAvailable, spotCoverPhotos]);
 
-  const getMarkerColor = (_type: string): string => {
-    return '#ff8c00';
-  };
+  const flyToSpot = useCallback(
+    (spot: Spot) => {
+      setSelectedSpot(spot);
 
-  const flyToSpot = (spot: Spot) => {
-    setSelectedSpot(spot);
+      if (!isMapAvailable) {
+        return;
+      }
 
-    if (!isMapAvailable) {
-      return;
-    }
-
-    if (map.current) {
-      map.current.flyTo({
-        center: [spot.longitude, spot.latitude],
-        zoom: 15,
-        duration: 1500,
-      });
-    }
-  };
+      if (map.current) {
+        map.current.flyTo({
+          center: [spot.longitude, spot.latitude],
+          zoom: 15,
+          duration: 1500,
+        });
+      }
+    },
+    [isMapAvailable],
+  );
 
   useEffect(() => {
     if (!isMapAvailable) {
@@ -491,7 +649,7 @@ export default function MapSection({
       lastFocusedSpotRef.current = focusSpotId;
       onSpotFocusHandled?.();
     }
-  }, [focusSpotId, spots, onSpotFocusHandled, isMapAvailable]);
+  }, [focusSpotId, spots, onSpotFocusHandled, isMapAvailable, flyToSpot]);
 
   useEffect(() => {
     if (!focusSpotId) {
@@ -533,12 +691,13 @@ export default function MapSection({
     }
   };
 
-  const filterButtons = [
+  const filterButtons: { id: Spot['spot_type'] | 'all'; label: string }[] = [
     { id: 'all', label: 'Tous' },
     { id: 'street', label: 'Street' },
     { id: 'skatepark', label: 'Parks' },
     { id: 'bowl', label: 'Bowls' },
     { id: 'diy', label: 'DIY' },
+    { id: 'transition', label: 'Transitions' },
   ];
 
   const gridTemplateColumns = isDesktop ? 'minmax(0, 1fr) minmax(0, 1fr)' : undefined;
@@ -570,10 +729,142 @@ export default function MapSection({
                 className="w-full rounded-xl border border-dark-600 bg-dark-800/70 pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 transition-colors focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
               />
             </div>
-            <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70">
-              <Filter size={18} className="text-orange-400" />
-              Affiner les filtres
-            </button>
+            <div ref={filterControlsRef} className="relative">
+              <button
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dark-600 bg-dark-800/70 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-orange-500/40 hover:bg-dark-700/70"
+                onClick={() => setShowFilterPanel((previous) => !previous)}
+                aria-expanded={showFilterPanel}
+                type="button"
+              >
+                <Filter size={18} className="text-orange-400" />
+                Affiner les filtres
+                {activeFiltersCount > 0 && (
+                  <span className="ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-orange-500 px-2 py-0.5 text-xs font-semibold text-white">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
+
+              {showFilterPanel && (
+                <div
+                  className="absolute right-0 z-20 mt-2 w-full max-w-sm rounded-2xl border border-dark-600 bg-dark-900/95 p-4 shadow-2xl shadow-black/40 backdrop-blur"
+                  role="dialog"
+                  aria-label="Filtres des spots"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">Filtres avancés</p>
+                    {activeFiltersCount > 0 && (
+                      <span className="text-xs text-gray-400">
+                        {activeFiltersCount} filtre{activeFiltersCount > 1 ? 's' : ''} actif{activeFiltersCount > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-white">Surfaces</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {surfaceOptions.map((surface) => {
+                        const isActive = surfaceFilters.includes(surface);
+                        return (
+                          <button
+                            key={surface}
+                            onClick={() =>
+                              setSurfaceFilters((previous) =>
+                                previous.includes(surface)
+                                  ? previous.filter((value) => value !== surface)
+                                  : [...previous, surface],
+                              )
+                            }
+                            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                              isActive
+                                ? 'border border-orange-500/60 bg-orange-500/20 text-orange-100 shadow-[0_0_10px_rgba(255,153,0,0.12)]'
+                                : 'border border-dark-600 bg-dark-800/70 text-gray-300 hover:border-orange-500/40 hover:text-orange-100'
+                            }`}
+                            type="button"
+                          >
+                            {surfaceLabels[surface] ?? surface}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-white">Modules</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {moduleOptions.map((module) => {
+                        const isActive = moduleFilters.includes(module);
+                        return (
+                          <button
+                            key={module}
+                            onClick={() =>
+                              setModuleFilters((previous) =>
+                                previous.includes(module)
+                                  ? previous.filter((value) => value !== module)
+                                  : [...previous, module],
+                              )
+                            }
+                            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                              isActive
+                                ? 'border border-orange-500/60 bg-orange-500/20 text-orange-100 shadow-[0_0_10px_rgba(255,153,0,0.12)]'
+                                : 'border border-dark-600 bg-dark-800/70 text-gray-300 hover:border-orange-500/40 hover:text-orange-100'
+                            }`}
+                            type="button"
+                          >
+                            {moduleLabels[module] ?? module}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-white">Difficulté</p>
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {difficultyOptions.map((option) => {
+                        const isActive = difficultyFilter === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => setDifficultyFilter(option.id)}
+                            className={`flex flex-col rounded-xl border px-3 py-2 text-left transition-colors ${
+                              isActive
+                                ? 'border-orange-500/60 bg-orange-500/15 text-orange-100 shadow-[0_0_12px_rgba(255,153,0,0.12)]'
+                                : 'border-dark-600 bg-dark-800/70 text-gray-300 hover:border-orange-500/40 hover:text-orange-100'
+                            }`}
+                            type="button"
+                          >
+                            <span className="text-sm font-semibold">{option.label}</span>
+                            {option.helper && <span className="text-xs text-gray-400">{option.helper}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex items-center justify-between">
+                    <button
+                      onClick={() => {
+                        setSurfaceFilters([]);
+                        setModuleFilters([]);
+                        setDifficultyFilter('all');
+                      }}
+                      className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400 hover:text-orange-200"
+                      type="button"
+                    >
+                      Réinitialiser
+                    </button>
+                    <button
+                      onClick={() => setShowFilterPanel(false)}
+                      className="rounded-full bg-orange-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-orange-900/40 transition-transform hover:-translate-y-0.5 hover:bg-orange-400"
+                      type="button"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
