@@ -1,7 +1,7 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 
 const TABLE_MISSING_CODES = new Set(['PGRST205', '42P01']);
-const COLUMN_MISSING_CODES = new Set(['42703']);
+const COLUMN_MISSING_CODES = new Set(['42703', 'PGRST204']);
 
 function extractCode(error: Partial<PostgrestError> | undefined): string | undefined {
   if (!error) {
@@ -68,7 +68,11 @@ function matchesMissingColumnMessage(message: string, column?: string): boolean 
     return false;
   }
 
-  return /column .* does not exist/i.test(message) || /invalid reference to column/i.test(message);
+  if (/column .* does not exist/i.test(message) || /invalid reference to column/i.test(message)) {
+    return true;
+  }
+
+  return /schema cache/i.test(normalized);
 }
 
 export function isColumnMissingError(error: unknown, column?: string): boolean {
