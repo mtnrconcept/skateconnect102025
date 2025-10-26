@@ -445,6 +445,8 @@ export default function MapSection({
   };
 
   const flyToSpot = (spot: Spot) => {
+    setSelectedSpot(spot);
+
     if (!isMapAvailable) {
       return;
     }
@@ -455,7 +457,6 @@ export default function MapSection({
         zoom: 15,
         duration: 1500,
       });
-      setSelectedSpot(spot);
     }
   };
 
