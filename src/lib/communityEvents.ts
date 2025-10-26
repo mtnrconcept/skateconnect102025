@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { isSchemaMissing, withTableFallback } from './postgrest.js';
 import type { CommunityEvent } from '../types';
 
 export const COMMUNITY_EVENT_TYPES: CommunityEvent['type'][] = [
@@ -26,6 +27,12 @@ type CommunityEventRow = {
 type RegistrationRow = {
   event_id: string;
 };
+
+function missingCommunityEventsTableError(): Error {
+  return new Error(
+    'La table Supabase "community_events" est introuvable. Exécute les migrations communauté ou expose la vue correspondante.',
+  );
+}
 
 function capitalizeFirstLetter(value: string): string {
   if (!value) {
@@ -86,8 +93,8 @@ async function getRegistrationCounts(eventIds: string[]): Promise<Map<string, nu
     return new Map();
   }
 
-  const { data, error } = await supabase
-    .from<RegistrationRow>('event_registrations')
+  const { data, error } = await (supabase as any)
+    .from('event_registrations')
     .select('event_id')
     .in('event_id', eventIds);
 
@@ -96,7 +103,9 @@ async function getRegistrationCounts(eventIds: string[]): Promise<Map<string, nu
     return new Map();
   }
 
-  return (data ?? []).reduce<Map<string, number>>((accumulator, row) => {
+  const rows = (data ?? []) as RegistrationRow[];
+
+  return rows.reduce<Map<string, number>>((accumulator, row) => {
     const current = accumulator.get(row.event_id) ?? 0;
     accumulator.set(row.event_id, current + 1);
     return accumulator;
@@ -104,21 +113,47 @@ async function getRegistrationCounts(eventIds: string[]): Promise<Map<string, nu
 }
 
 export async function fetchCommunityEvents(): Promise<CommunityEvent[]> {
-  const { data, error } = await supabase
-    .from<CommunityEventRow>('community_events')
-    .select(
-      'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
-    )
-    .order('event_date', { ascending: true });
+  let rows: CommunityEventRow[] | null;
 
-  if (error) {
-    throw new Error(error.message ?? "Impossible de récupérer les événements de la communauté.");
+  try {
+    const request = (supabase as any)
+      .from('community_events')
+      .select(
+        'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
+      )
+      .order('event_date', { ascending: true });
+
+    rows = await withTableFallback<CommunityEventRow[] | null>(
+      request,
+      () => [],
+      {
+        onMissing: () => {
+          console.info('community_events table is missing. Returning an empty community events list.');
+        },
+      },
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = typeof (error as { message?: unknown }).message === 'string'
+        ? (error as { message?: string }).message
+        : null;
+
+      if (message) {
+        throw new Error(message);
+      }
+    }
+
+    throw new Error("Impossible de récupérer les événements de la communauté.");
   }
 
-  const rows = data ?? [];
-  const registrationCounts = await getRegistrationCounts(rows.map((row) => row.id));
+  const safeRows = rows ?? [];
+  const registrationCounts = await getRegistrationCounts(safeRows.map((row) => row.id));
 
-  return rows
+  return safeRows
     .map((row) => mapRowToCommunityEvent(row, registrationCounts))
     .filter((event): event is CommunityEvent => event !== null);
 }
@@ -148,16 +183,54 @@ export async function createCommunityEvent(input: CommunityEventInput): Promise<
     created_by: input.createdBy,
   };
 
-  const { data, error } = await supabase
-    .from<CommunityEventRow>('community_events')
-    .insert(payload)
-    .select(
-      'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
-    )
-    .single();
+  let data: CommunityEventRow | null;
 
-  if (error || !data) {
-    throw new Error(error?.message ?? "Impossible de créer l'événement.");
+  try {
+    const request = (supabase as any)
+      .from('community_events')
+      .insert(payload)
+      .select(
+        'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
+      )
+      .single();
+
+    data = await withTableFallback<CommunityEventRow | null>(
+      request,
+      () => {
+        throw missingCommunityEventsTableError();
+      },
+      {
+        onMissing: () => {
+          console.info(
+            'community_events table is missing. Throwing a descriptive error for community event creation.',
+          );
+        },
+      },
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    if (isSchemaMissing(error as any)) {
+      throw missingCommunityEventsTableError();
+    }
+
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = typeof (error as { message?: unknown }).message === 'string'
+        ? (error as { message?: string }).message
+        : null;
+
+      if (message) {
+        throw new Error(message);
+      }
+    }
+
+    throw new Error("Impossible de créer l'événement.");
+  }
+
+  if (!data) {
+    throw new Error("Impossible de créer l'événement.");
   }
 
   const event = mapRowToCommunityEvent(data, new Map());

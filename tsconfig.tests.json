@@ -17,6 +17,7 @@
   "include": [
     "src/lib/calendar.ts",
     "src/lib/engagement.ts",
+    "src/lib/communityEvents.ts",
     "src/lib/challenges.ts",
     "src/lib/supabase.ts",
     "src/types/**/*.ts",

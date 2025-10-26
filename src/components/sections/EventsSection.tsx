@@ -190,9 +190,13 @@ export default function EventsSection({ profile }: EventsSectionProps) {
       setFormMessage({ tone: 'success', message: 'Ton événement est en ligne !' });
     } catch (error) {
       console.error('community-events:create-error', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Impossible d'enregistrer l'événement pour le moment. Vérifie les champs et réessaie.";
       setFormMessage({
         tone: 'error',
-        message: "Impossible d'enregistrer l'événement pour le moment. Vérifie les champs et réessaie.",
+        message,
       });
     } finally {
       setIsSubmittingEvent(false);
