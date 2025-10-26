@@ -14,6 +14,30 @@ export interface SponsorMediaKitResource {
   description?: string | null;
 }
 
+export type SponsorTemplateType = 'challenge' | 'event' | 'call';
+
+export interface SponsorTemplateAsset {
+  id: string;
+  label: string;
+  url: string;
+  type: 'image' | 'video' | 'file';
+  path?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface SponsorTemplate {
+  id: string;
+  sponsor_id: string | null;
+  name: string;
+  type: SponsorTemplateType;
+  default_fields: Record<string, unknown>;
+  assets: SponsorTemplateAsset[];
+  share_key: string | null;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SponsorBranding {
   brand_name: string;
   logo_url?: string | null;
