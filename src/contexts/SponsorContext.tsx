@@ -200,6 +200,9 @@ interface SponsorContextValue {
   branding: SponsorBranding | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  stripeAccountId: string | null;
+  stripeAccountReady: boolean;
+  defaultCommissionRate: number | null;
   permissions: SponsorPermissions;
   analytics: CommunityAnalyticsSnapshot | null;
   analyticsHistory: CommunityAnalyticsSnapshot[];
@@ -225,6 +228,7 @@ interface SponsorContextValue {
   refreshShopAnalytics: () => Promise<void>;
   refreshApiKeys: () => Promise<void>;
   refreshOpportunities: () => Promise<void>;
+  createStripeOnboardingLink: (params: { returnUrl?: string; refreshUrl?: string }) => Promise<string | null>;
   updateSpotlightStatus: (spotlightId: string, status: SponsorSpotlight['status']) => Promise<void>;
   updateShopItemAvailability: (shopItemId: string, isActive: boolean) => Promise<void>;
   createShopItem: (
@@ -324,6 +328,10 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
   const branding = profile?.sponsor_branding ?? null;
   const contactEmail = profile?.sponsor_contact?.email ?? null;
   const contactPhone = profile?.sponsor_contact?.phone ?? null;
+  const stripeAccountId = profile?.stripe_account_id ?? null;
+  const stripeAccountReady = Boolean(profile?.stripe_account_ready);
+  const defaultCommissionRate =
+    typeof profile?.default_commission_rate === 'number' ? profile?.default_commission_rate : null;
 
   const resetState = useCallback(() => {
     setAnalytics(null);
@@ -494,6 +502,31 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       setError('Impossible de charger les opportunités sponsor.');
     }
   }, [permissions.canManageOpportunities, sponsorId]);
+
+  const createStripeOnboardingLink = useCallback(
+    async ({ returnUrl, refreshUrl }: { returnUrl?: string; refreshUrl?: string }) => {
+      if (!sponsorId) {
+        return null;
+      }
+
+      try {
+        const { data, error } = await supabase.functions.invoke('shop-connect', {
+          body: { returnUrl, refreshUrl },
+        });
+
+        if (error) {
+          throw new Error(error.message ?? 'Stripe onboarding unavailable');
+        }
+
+        return (data as { url?: string } | null)?.url ?? null;
+      } catch (cause) {
+        console.error('Unable to create Stripe onboarding link', cause);
+        setError("Impossible de générer le lien Stripe. Réessaie dans un instant.");
+        return null;
+      }
+    },
+    [sponsorId],
+  );
 
   const refreshAll = useCallback(async () => {
     if (!sponsorId) {
@@ -1031,6 +1064,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     branding,
     contactEmail,
     contactPhone,
+    stripeAccountId,
+    stripeAccountReady,
+    defaultCommissionRate,
     permissions,
     analytics,
     analyticsHistory,
@@ -1056,6 +1092,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshShopAnalytics,
     refreshApiKeys,
     refreshOpportunities,
+    createStripeOnboardingLink,
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItem: createShopItemHandler,
@@ -1077,6 +1114,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     branding,
     contactEmail,
     contactPhone,
+    stripeAccountId,
+    stripeAccountReady,
+    defaultCommissionRate,
     permissions,
     analytics,
     analyticsHistory,
@@ -1100,6 +1140,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     refreshShopAnalytics,
     refreshApiKeys,
     refreshOpportunities,
+    createStripeOnboardingLink,
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItemHandler,

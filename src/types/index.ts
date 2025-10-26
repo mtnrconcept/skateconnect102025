@@ -79,6 +79,11 @@ export interface Profile {
   achievements?: string[] | null;
   legacy_followers_count?: number | null;
   legacy_following_count?: number | null;
+  stripe_account_id?: string | null;
+  stripe_account_ready?: boolean;
+  stripe_onboarded_at?: string | null;
+  default_commission_rate?: number | null;
+  payout_email?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -645,6 +650,44 @@ export interface SponsorShopItemStat {
   updated_at: string;
 }
 
+export interface ShopFrontSponsor {
+  id: string;
+  displayName: string | null;
+  brandName: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  logoUrl: string | null;
+  stripeReady: boolean;
+}
+
+export interface ShopFrontVariant {
+  id: string;
+  name: string;
+  size: string | null;
+  color: string | null;
+  priceCents: number | null;
+  stock: number | null;
+  imageUrl: string | null;
+  availabilityStart: string | null;
+  availabilityEnd: string | null;
+}
+
+export interface ShopFrontItem {
+  id: string;
+  sponsorId: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+  currency: string;
+  stock: number | null;
+  imageUrl: string | null;
+  availableFrom: string | null;
+  availableUntil: string | null;
+  metadata: Record<string, unknown> | null;
+  sponsor: ShopFrontSponsor;
+  variants: ShopFrontVariant[];
+}
+
 export interface SponsorShopAnalyticsTotals {
   views: number;
   carts: number;
@@ -688,6 +731,7 @@ export type Section =
   | 'feed'
   | 'events'
   | 'challenges'
+  | 'shop'
   | 'search'
   | 'sponsors'
   | 'pricing'

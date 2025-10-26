@@ -1,0 +1,197 @@
+import { supabase, isSupabaseConfigured } from './supabase';
+import { isSchemaMissing } from './postgrest';
+import type { ShopFrontItem, ShopFrontSponsor, ShopFrontVariant } from '../types';
+
+interface RawSponsorBranding {
+  brand_name?: string;
+  primary_color?: string;
+  secondary_color?: string;
+  logo_url?: string;
+}
+
+interface RawShopItem {
+  id: string;
+  sponsor_id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  currency: string;
+  stock: number | null;
+  is_active: boolean;
+  image_url: string | null;
+  metadata: Record<string, unknown> | null;
+  available_from: string | null;
+  available_until: string | null;
+  sponsor: {
+    id: string;
+    display_name: string | null;
+    sponsor_branding: RawSponsorBranding | null;
+    stripe_account_ready: boolean | null;
+  } | null;
+  variants?: Array<{
+    id: string;
+    name: string;
+    size: string | null;
+    color: string | null;
+    price_cents: number | null;
+    stock: number | null;
+    is_active: boolean;
+    image_url: string | null;
+    availability_start: string | null;
+    availability_end: string | null;
+  }>;
+}
+
+function isWithinWindow(now: Date, start: string | null, end: string | null): boolean {
+  if (start && new Date(start) > now) {
+    return false;
+  }
+  if (end && new Date(end) < now) {
+    return false;
+  }
+  return true;
+}
+
+function mapSponsor(raw: RawShopItem['sponsor']): ShopFrontSponsor {
+  const branding = (raw?.sponsor_branding ?? {}) as RawSponsorBranding;
+  return {
+    id: raw?.id ?? '',
+    displayName: raw?.display_name ?? null,
+    brandName: branding.brand_name ?? raw?.display_name ?? null,
+    primaryColor: branding.primary_color ?? null,
+    secondaryColor: branding.secondary_color ?? null,
+    logoUrl: branding.logo_url ?? null,
+    stripeReady: Boolean(raw?.stripe_account_ready),
+  } satisfies ShopFrontSponsor;
+}
+
+function mapVariant(raw: RawShopItem['variants'][number]): ShopFrontVariant {
+  return {
+    id: raw.id,
+    name: raw.name,
+    size: raw.size ?? null,
+    color: raw.color ?? null,
+    priceCents: raw.price_cents ?? null,
+    stock: raw.stock ?? null,
+    imageUrl: raw.image_url ?? null,
+    availabilityStart: raw.availability_start ?? null,
+    availabilityEnd: raw.availability_end ?? null,
+  } satisfies ShopFrontVariant;
+}
+
+export async function fetchPublicShopCatalog(): Promise<ShopFrontItem[]> {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('sponsor_shop_items')
+    .select(`
+      id,
+      sponsor_id,
+      name,
+      description,
+      price_cents,
+      currency,
+      stock,
+      is_active,
+      image_url,
+      metadata,
+      available_from,
+      available_until,
+      sponsor:profiles!sponsor_shop_items_sponsor_id_fkey(
+        id,
+        display_name,
+        sponsor_branding,
+        stripe_account_ready
+      ),
+      variants:sponsor_shop_item_variants(
+        id,
+        name,
+        size,
+        color,
+        price_cents,
+        stock,
+        is_active,
+        image_url,
+        availability_start,
+        availability_end
+      )
+    `)
+    .eq('is_active', true)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    if (isSchemaMissing(error)) {
+      console.info('[shopfront] sponsor shop tables unavailable – returning empty catalog');
+      return [];
+    }
+    throw error;
+  }
+
+  const now = new Date();
+
+  return (data ?? [])
+    .map((raw) => raw as RawShopItem)
+    .filter((raw) => isWithinWindow(now, raw.available_from, raw.available_until))
+    .map((raw) => {
+      const variants = (raw.variants ?? [])
+        .filter((variant) => variant.is_active && isWithinWindow(now, variant.availability_start, variant.availability_end))
+        .map(mapVariant);
+
+      const stock = typeof raw.stock === 'number' ? raw.stock : null;
+      const hasVariantStock = variants.some((variant) => (variant.stock ?? 0) > 0);
+      const isSellable = (stock ?? 0) > 0 || hasVariantStock;
+      if (!isSellable) {
+        return null;
+      }
+
+      return {
+        id: raw.id,
+        sponsorId: raw.sponsor_id,
+        name: raw.name,
+        description: raw.description ?? null,
+        priceCents: raw.price_cents,
+        currency: raw.currency,
+        stock,
+        imageUrl: raw.image_url ?? null,
+        availableFrom: raw.available_from ?? null,
+        availableUntil: raw.available_until ?? null,
+        metadata: raw.metadata ?? null,
+        sponsor: mapSponsor(raw.sponsor),
+        variants,
+      } satisfies ShopFrontItem;
+    })
+    .filter((item): item is ShopFrontItem => Boolean(item));
+}
+
+interface CheckoutResponse {
+  sessionId: string;
+  url: string | null;
+  orderId: string | null;
+}
+
+interface CheckoutInput {
+  itemId: string;
+  variantId?: string | null;
+  quantity?: number;
+  customerEmail?: string | null;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export async function createShopCheckoutSession(payload: CheckoutInput): Promise<CheckoutResponse> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const { data, error } = await supabase.functions.invoke('shop-checkout', {
+    body: payload,
+  });
+
+  if (error) {
+    throw new Error(error.message ?? 'Unable to start checkout');
+  }
+
+  return (data ?? { sessionId: '', url: null, orderId: null }) as CheckoutResponse;
+}

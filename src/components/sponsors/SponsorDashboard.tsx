@@ -159,6 +159,9 @@ export default function SponsorDashboard() {
     branding,
     contactEmail,
     contactPhone,
+    stripeAccountId,
+    stripeAccountReady,
+    defaultCommissionRate,
     permissions,
     analytics,
     spotlights,
@@ -176,6 +179,7 @@ export default function SponsorDashboard() {
     setActiveView,
     refreshAll,
     refreshShopAnalytics,
+    createStripeOnboardingLink,
     updateSpotlightStatus,
     updateShopItemAvailability,
     createShopItem,
@@ -199,6 +203,8 @@ export default function SponsorDashboard() {
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [shopModalMode, setShopModalMode] = useState<'create' | 'edit'>('create');
   const [shopItemBeingEdited, setShopItemBeingEdited] = useState<SponsorShopItem | null>(null);
+  const [isRequestingStripeLink, setIsRequestingStripeLink] = useState(false);
+  const [stripeSetupError, setStripeSetupError] = useState<string | null>(null);
 
   const primaryColor = branding?.primary_color ?? '#0ea5e9';
   const secondaryColor = branding?.secondary_color ?? '#1e293b';
@@ -371,6 +377,31 @@ export default function SponsorDashboard() {
       updateShopItem,
     ],
   );
+
+  const handleStripeOnboarding = useCallback(async () => {
+    setStripeSetupError(null);
+    setIsRequestingStripeLink(true);
+    try {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+      const url = await createStripeOnboardingLink({
+        returnUrl: baseUrl ? `${baseUrl}/sponsors?stripe=return` : undefined,
+        refreshUrl: baseUrl ? `${baseUrl}/sponsors?stripe=refresh` : undefined,
+      });
+
+      if (!url) {
+        throw new Error('missing-url');
+      }
+
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (cause) {
+      console.error('Unable to launch Stripe onboarding', cause);
+      setStripeSetupError("Impossible de générer le lien Stripe. Réessaie dans un instant.");
+    } finally {
+      setIsRequestingStripeLink(false);
+    }
+  }, [createStripeOnboardingLink]);
 
   const serializeSpotlightForExport = useCallback((spotlight: SponsorSpotlight) => {
       const performance = spotlight.performance;
@@ -783,6 +814,72 @@ export default function SponsorDashboard() {
               >
                 <PlusCircle size={18} /> Ajouter un produit
               </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-slate-500">Stripe Connect</p>
+                <h3 className="text-lg font-semibold text-white">Statut des paiements</h3>
+                <p className="text-sm text-slate-400">
+                  Active le tunnel de paiement sécurisé Stripe pour encaisser les commandes et laisser SkateConnect appliquer
+                  sa commission ({defaultCommissionRate != null ? `${(defaultCommissionRate * 100).toFixed(1)} %` : '10 % par défaut'}).
+                </p>
+              </div>
+              <span
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                  stripeAccountReady
+                    ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
+                    : 'border-amber-500/60 bg-amber-500/10 text-amber-100'
+                }`}
+              >
+                {stripeAccountReady ? 'Connecté' : 'Connexion requise'}
+              </span>
+            </div>
+            <div className="mt-3 space-y-3 text-sm text-slate-300">
+              {stripeAccountReady ? (
+                <>
+                  <p>
+                    Compte Stripe :{' '}
+                    <code className="rounded bg-slate-800/80 px-2 py-1 text-xs text-slate-100">
+                      {stripeAccountId ?? 'non défini'}
+                    </code>
+                  </p>
+                  <p>
+                    Les paiements sont actifs et les commissions sont automatiquement déduites avant virement vers ton compte
+                    Stripe.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Connecte-toi pour générer ton compte Express et compléter l'onboarding réglementaire. Tu pourras encaisser
+                    les commandes dès validation par Stripe.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleStripeOnboarding}
+                      disabled={isRequestingStripeLink}
+                      className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 px-4 py-2 text-sm text-orange-100 hover:bg-orange-500/10 disabled:opacity-50"
+                    >
+                      {isRequestingStripeLink ? (
+                        <>
+                          <RefreshCw className="animate-spin" size={16} />
+                          Génération...
+                        </>
+                      ) : (
+                        <>
+                          <Store size={16} />
+                          Connecter Stripe
+                        </>
+                      )}
+                    </button>
+                    {stripeSetupError && <p className="text-xs text-rose-300">{stripeSetupError}</p>}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
