@@ -16,9 +16,6 @@ const normalizeText = (value: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-const DEFAULT_VISIBLE_SPOTS = 20;
-const LOAD_MORE_SPOTS = 20;
-
 interface MapSectionProps {
   focusSpotId?: string | null;
   onSpotFocusHandled?: () => void;
@@ -43,11 +40,11 @@ export default function MapSection({
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
-  const [visibleSpotCount, setVisibleSpotCount] = useState(DEFAULT_VISIBLE_SPOTS);
   const [surfaceFilters, setSurfaceFilters] = useState<string[]>([]);
   const [moduleFilters, setModuleFilters] = useState<string[]>([]);
   const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [mapVisibleSpots, setMapVisibleSpots] = useState<Spot[]>([]);
 
   const filterControlsRef = useRef<HTMLDivElement | null>(null);
 
@@ -251,10 +248,6 @@ export default function MapSection({
   }, [loadSpots]);
 
   useEffect(() => {
-    setVisibleSpotCount(DEFAULT_VISIBLE_SPOTS);
-  }, [filter, searchTerm, spots, surfaceFilters, moduleFilters, difficultyFilter]);
-
-  useEffect(() => {
     if (!showFilterPanel) {
       return;
     }
@@ -307,23 +300,39 @@ export default function MapSection({
       mapInstance.resize();
     };
 
+    const handleViewportChange = () => {
+      updateVisibleSpotsRef.current();
+    };
+
+    mapInstance.on('moveend', handleViewportChange);
+    mapInstance.on('zoomend', handleViewportChange);
+
     if (!mapInstance.loaded()) {
-      mapInstance.once('load', handleResize);
+      mapInstance.once('load', () => {
+        handleResize();
+        handleViewportChange();
+      });
     } else {
       handleResize();
+      handleViewportChange();
     }
 
     window.addEventListener('resize', handleResize);
 
     const resizeObserver = new ResizeObserver(() => {
       handleResize();
+      handleViewportChange();
     });
 
-    resizeObserver.observe(mapContainer.current);
+    if (mapContainer.current) {
+      resizeObserver.observe(mapContainer.current);
+    }
 
     return () => {
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
+      mapInstance.off('moveend', handleViewportChange);
+      mapInstance.off('zoomend', handleViewportChange);
       mapInstance.remove();
       map.current = null;
     };
@@ -355,6 +364,38 @@ export default function MapSection({
     (type: Spot['spot_type']): string => markerColors[type] ?? '#ff8c00',
     [markerColors],
   );
+
+  const updateVisibleSpotsOnMap = useCallback(() => {
+    if (!isMapAvailable || !map.current) {
+      setMapVisibleSpots(filteredSpots);
+      return;
+    }
+
+    const bounds = map.current.getBounds();
+    if (!bounds) {
+      setMapVisibleSpots(filteredSpots);
+      return;
+    }
+    const visibleSpots = filteredSpots.filter((spot) => {
+      if (typeof spot.latitude !== 'number' || typeof spot.longitude !== 'number') {
+        return false;
+      }
+
+      return bounds.contains([spot.longitude, spot.latitude]);
+    });
+
+    setMapVisibleSpots(visibleSpots);
+  }, [filteredSpots, isMapAvailable]);
+
+  useEffect(() => {
+    updateVisibleSpotsOnMap();
+  }, [updateVisibleSpotsOnMap]);
+
+  const updateVisibleSpotsRef = useRef(updateVisibleSpotsOnMap);
+
+  useEffect(() => {
+    updateVisibleSpotsRef.current = updateVisibleSpotsOnMap;
+  }, [updateVisibleSpotsOnMap]);
 
   const updateMarkers = useCallback((spotsToRender: Spot[]) => {
     if (!isMapAvailable) return;
@@ -961,18 +1002,19 @@ export default function MapSection({
                       : 'Ajoute le premier spot dans cette catégorie.'}
                   </p>
                 </div>
+              ) : mapVisibleSpots.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-gray-400 text-center">
+                  <MapPin size={48} className="opacity-40" />
+                  <p>Aucun spot visible dans cette zone.</p>
+                  <p className="text-sm text-gray-500">
+                    Dézoome ou déplace la carte pour découvrir davantage de spots.
+                  </p>
+                </div>
               ) : (
                 <ScrollableSpotList
-                  spots={filteredSpots}
-                  visibleCount={visibleSpotCount}
+                  spots={mapVisibleSpots}
                   onSpotClick={flyToSpot}
                   coverPhotos={spotCoverPhotos}
-                  hasMore={filteredSpots.length > visibleSpotCount}
-                  onLoadMore={() =>
-                    setVisibleSpotCount((previous) =>
-                      Math.min(filteredSpots.length, previous + LOAD_MORE_SPOTS)
-                    )
-                  }
                 />
               )}
             </div>

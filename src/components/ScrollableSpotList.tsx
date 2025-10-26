@@ -3,12 +3,12 @@ import type { Spot } from '../types';
 
 interface ScrollableSpotListProps {
   spots: Spot[];
-  visibleCount: number;
-  onLoadMore: () => void;
+  visibleCount?: number;
+  onLoadMore?: () => void;
   onSpotClick?: (spot: Spot) => void;
   coverPhotos?: Record<string, string>;
   loadMoreLabel?: string;
-  hasMore: boolean;
+  hasMore?: boolean;
 }
 
 const getSpotTypeLabel = (type: string) => {
@@ -30,9 +30,9 @@ export default function ScrollableSpotList({
   onSpotClick,
   coverPhotos,
   loadMoreLabel = 'Afficher plus',
-  hasMore,
+  hasMore = false,
 }: ScrollableSpotListProps) {
-  const visibleSpots = spots.slice(0, visibleCount);
+  const visibleSpots = typeof visibleCount === 'number' ? spots.slice(0, visibleCount) : spots;
 
   return (
     <div className="flex h-full flex-1 flex-col">
@@ -107,7 +107,7 @@ export default function ScrollableSpotList({
         </div>
       </div>
 
-      {hasMore && (
+      {hasMore && onLoadMore && (
         <div className="border-t border-dark-800/70 bg-dark-900/90 px-6 pb-6 pt-4">
           <button
             type="button"
