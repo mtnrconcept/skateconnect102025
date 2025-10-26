@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase.js';
 import SpotDetailModal from '../SpotDetailModal';
 import AddSpotModal from '../AddSpotModal';
 import type { Spot } from '../../types';
-import SpotGrid from '../SpotGrid';
+import ScrollableSpotList from '../ScrollableSpotList';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
@@ -15,6 +15,9 @@ const normalizeText = (value: string) =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+
+const DEFAULT_VISIBLE_SPOTS = 20;
+const LOAD_MORE_SPOTS = 20;
 
 interface MapSectionProps {
   focusSpotId?: string | null;
@@ -40,6 +43,7 @@ export default function MapSection({
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
+  const [visibleSpotCount, setVisibleSpotCount] = useState(DEFAULT_VISIBLE_SPOTS);
 
   const filteredSpots = useMemo(() => {
     const trimmedQuery = searchTerm.trim();
@@ -70,6 +74,10 @@ export default function MapSection({
     setLoading(true);
     loadSpots();
   }, [filter]);
+
+  useEffect(() => {
+    setVisibleSpotCount(DEFAULT_VISIBLE_SPOTS);
+  }, [filter, searchTerm, spots]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -663,11 +671,17 @@ export default function MapSection({
                   </p>
                 </div>
               ) : (
-                <SpotGrid
+                <ScrollableSpotList
                   spots={filteredSpots}
-                  initialCount={3}
+                  visibleCount={visibleSpotCount}
                   onSpotClick={flyToSpot}
                   coverPhotos={spotCoverPhotos}
+                  hasMore={filteredSpots.length > visibleSpotCount}
+                  onLoadMore={() =>
+                    setVisibleSpotCount((previous) =>
+                      Math.min(filteredSpots.length, previous + LOAD_MORE_SPOTS)
+                    )
+                  }
                 />
               )}
             </div>
