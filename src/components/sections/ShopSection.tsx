@@ -245,8 +245,8 @@ export default function ShopSection({ profile }: ShopSectionProps) {
         successUrl: typeof window !== 'undefined' ? `${window.location.origin}/shop?checkout=success` : undefined,
         cancelUrl: typeof window !== 'undefined' ? `${window.location.origin}/shop?checkout=cancel` : undefined,
       };
-      const { sessionId, url } = await createShopCheckoutSession(payload);
-      if (stripeReady) {
+      const { sessionId, url, mode } = await createShopCheckoutSession(payload);
+      if (mode === 'stripe' && stripeReady) {
         const stripe = await getStripeClient();
         if (stripe) {
           const result = await stripe.redirectToCheckout({ sessionId });
@@ -260,7 +260,11 @@ export default function ShopSection({ profile }: ShopSectionProps) {
         window.location.href = url;
         return;
       }
-      setCheckoutState({ loading: false, error: "Redirection Stripe indisponible.", success: null });
+      const fallbackError =
+        mode === 'external'
+          ? "Lien produit Amazon introuvable pour ce modèle."
+          : 'Redirection Stripe indisponible.';
+      setCheckoutState({ loading: false, error: fallbackError, success: null });
     } catch (cause) {
       console.error('Unable to start checkout', cause);
       setCheckoutState({ loading: false, error: "Impossible de lancer le paiement. Réessaie dans un instant.", success: null });
