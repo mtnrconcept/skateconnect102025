@@ -704,7 +704,7 @@ export default function MapSection({
 
   return (
     <div className="relative flex flex-col overflow-hidden rounded-3xl border border-dark-700 bg-dark-900/70 shadow-2xl shadow-orange-900/10 min-h-[640px] lg:h-[calc(100vh-13rem)] lg:max-h-[calc(100vh-13rem)]">
-      <div className="border-b border-dark-700 bg-dark-900/80 px-6 py-6 backdrop-blur">
+      <div className="relative z-30 border-b border-dark-700 bg-dark-900/80 px-6 py-6 backdrop-blur">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-orange-400/80 mb-2">Explorer</p>
@@ -747,7 +747,7 @@ export default function MapSection({
 
               {showFilterPanel && (
                 <div
-                  className="absolute right-0 z-20 mt-2 w-full max-w-sm rounded-2xl border border-dark-600 bg-dark-900/95 p-4 shadow-2xl shadow-black/40 backdrop-blur"
+                  className="absolute right-0 z-50 mt-2 w-full max-w-sm rounded-2xl border border-dark-600 bg-dark-900/95 p-4 shadow-2xl shadow-black/40 backdrop-blur"
                   role="dialog"
                   aria-label="Filtres des spots"
                 >
