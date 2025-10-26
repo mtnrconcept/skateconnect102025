@@ -298,6 +298,46 @@ function App() {
     setRestrictionNotice(null);
   };
 
+  const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions): boolean => {
+    if (section === 'map' && !isMapAvailable) {
+      setRestrictionNotice(null);
+      setCurrentSection(section);
+      setPendingNavigation(null);
+      setMapFocusSpotId(null);
+      return true;
+    }
+
+    if (!canAccessSection(subscriptionPlan, section)) {
+      setPendingNavigation(null);
+      const requiredPlan = findNextEligiblePlan(subscriptionPlan, section);
+      if (requiredPlan) {
+        const message = getUpgradeMessage(subscriptionPlan, section, {
+          displayName: sectionDisplayNames[section] ?? 'cette section',
+        });
+        setRestrictionNotice({
+          target: section,
+          requiredPlan,
+          message,
+        });
+      }
+      return false;
+    }
+
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
+
+    setRestrictionNotice(null);
+    setCurrentSection(section);
+    if (options) {
+      setPendingNavigation({ section, options });
+    } else {
+      setPendingNavigation(null);
+    }
+
+    return true;
+  };
+
   const handleOpenConversation = useCallback(
     async (targetProfileId: string, options?: { synthetic?: boolean }) => {
       if (!targetProfileId) {
@@ -366,46 +406,6 @@ function App() {
     },
     [profileMode],
   );
-
-  const handleNavigateToContent = (section: Section, options?: ContentNavigationOptions): boolean => {
-    if (section === 'map' && !isMapAvailable) {
-      setRestrictionNotice(null);
-      setCurrentSection(section);
-      setPendingNavigation(null);
-      setMapFocusSpotId(null);
-      return true;
-    }
-
-    if (!canAccessSection(subscriptionPlan, section)) {
-      setPendingNavigation(null);
-      const requiredPlan = findNextEligiblePlan(subscriptionPlan, section);
-      if (requiredPlan) {
-        const message = getUpgradeMessage(subscriptionPlan, section, {
-          displayName: sectionDisplayNames[section] ?? 'cette section',
-        });
-        setRestrictionNotice({
-          target: section,
-          requiredPlan,
-          message,
-        });
-      }
-      return false;
-    }
-
-    if (location.pathname !== '/') {
-      navigate('/');
-    }
-
-    setRestrictionNotice(null);
-    setCurrentSection(section);
-    if (options) {
-      setPendingNavigation({ section, options });
-    } else {
-      setPendingNavigation(null);
-    }
-
-    return true;
-  };
 
   const handleProfileModeChange = useCallback(
     (mode: ProfileExperienceMode) => {
