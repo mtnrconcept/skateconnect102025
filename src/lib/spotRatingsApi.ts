@@ -157,28 +157,23 @@ export async function saveSpotRating({
 }: SaveSpotRatingInput): Promise<void> {
   await withCommentColumn(async (fallback) => {
     const payload: Record<string, unknown> = {
+      spot_id: spotId,
+      user_id: userId,
       rating,
     };
 
     payload[fallback.column] = comment;
 
     if (existingRatingId) {
-      const { error } = await supabase.from('spot_ratings').update(payload).eq('id', existingRatingId);
-      if (error) {
-        throw error;
-      }
-    } else {
-      const { error } = await supabase
-        .from('spot_ratings')
-        .insert({
-          spot_id: spotId,
-          user_id: userId,
-          ...payload,
-        });
+      payload.id = existingRatingId;
+    }
 
-      if (error) {
-        throw error;
-      }
+    const { error } = await supabase
+      .from('spot_ratings')
+      .upsert(payload, { onConflict: 'spot_id,user_id' });
+
+    if (error) {
+      throw error;
     }
   });
 }
