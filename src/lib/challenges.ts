@@ -178,3 +178,59 @@ export async function fetchSubmissionHistoryWithClient(
 export async function fetchSubmissionHistory(userId: string): Promise<ChallengeSubmission[]> {
   return fetchSubmissionHistoryWithClient(supabase, userId);
 }
+
+export async function fetchChallengeWinnersWithClient(
+  client: SupabaseClient,
+  challengeId: string,
+): Promise<ChallengeSubmission[]> {
+  const flaggedQuery = client
+    .from('challenge_submissions')
+    .select(`*, user:profiles(${PROFILE_FIELDS})`)
+    .eq('challenge_id', challengeId)
+    .eq('is_winner', true)
+    .order('votes_count', { ascending: false })
+    .order('created_at', { ascending: true })
+    .limit(3);
+
+  const { data: flaggedData, error: flaggedError } = await flaggedQuery;
+
+  if (flaggedError) {
+    throw flaggedError;
+  }
+
+  const flaggedWinners = (flaggedData || []) as ChallengeSubmission[];
+
+  if (flaggedWinners.length >= 3) {
+    return flaggedWinners;
+  }
+
+  const fallbackQuery = client
+    .from('challenge_submissions')
+    .select(`*, user:profiles(${PROFILE_FIELDS})`)
+    .eq('challenge_id', challengeId)
+    .order('votes_count', { ascending: false })
+    .order('created_at', { ascending: true })
+    .limit(3);
+
+  const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+
+  if (fallbackError) {
+    throw fallbackError;
+  }
+
+  const fallbackWinners = (fallbackData || []) as ChallengeSubmission[];
+
+  if (flaggedWinners.length === 0) {
+    return fallbackWinners;
+  }
+
+  const fallbackToInclude = fallbackWinners
+    .filter((submission) => !flaggedWinners.some((winner) => winner.id === submission.id))
+    .slice(0, Math.max(0, 3 - flaggedWinners.length));
+
+  return [...flaggedWinners, ...fallbackToInclude];
+}
+
+export async function fetchChallengeWinners(challengeId: string): Promise<ChallengeSubmission[]> {
+  return fetchChallengeWinnersWithClient(supabase, challengeId);
+}

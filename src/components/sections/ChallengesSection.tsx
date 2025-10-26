@@ -7,9 +7,8 @@ import {
   registerForChallenge,
 } from '../../lib/engagement';
 import { getFallbackChallenges } from '../../data/challengesCatalog';
-import ChallengeSubmissionExperience from '../challenges/ChallengeSubmissionExperience';
-import ChallengeSubmissionHistory from '../challenges/ChallengeSubmissionHistory';
-import { fetchSubmissionHistory } from '../../lib/challenges';
+import ChallengeDetailModal from '../challenges/ChallengeDetailModal';
+import { fetchSubmissionHistory, fetchChallengeWinners } from '../../lib/challenges';
 import type { Challenge, ChallengeSubmission, ContentNavigationOptions, Profile } from '../../types';
 
 interface ChallengesSectionProps {
@@ -30,6 +29,10 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   const [submissionHistory, setSubmissionHistory] = useState<ChallengeSubmission[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [completedChallenges, setCompletedChallenges] = useState<Challenge[]>([]);
+  const [completedLoading, setCompletedLoading] = useState(false);
+  const [completedError, setCompletedError] = useState<string | null>(null);
+  const [winnersByChallenge, setWinnersByChallenge] = useState<Record<string, ChallengeSubmission[]>>({});
   const lastFocusedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -41,18 +44,17 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   }, []);
 
   useEffect(() => {
-    if (challenges.length === 0) {
-      setSelectedChallengeId(null);
-      return;
-    }
-
     setSelectedChallengeId((current) => {
-      if (current && challenges.some((challenge) => challenge.id === current)) {
-        return current;
+      if (!current) {
+        return null;
       }
-      return challenges[0]?.id ?? null;
+
+      const existsInActive = challenges.some((challenge) => challenge.id === current);
+      const existsInCompleted = completedChallenges.some((challenge) => challenge.id === current);
+
+      return existsInActive || existsInCompleted ? current : null;
     });
-  }, [challenges]);
+  }, [challenges, completedChallenges]);
 
   const loadChallenges = async () => {
     try {
@@ -145,9 +147,60 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
     if (!selectedChallengeId) {
       return null;
     }
-    return challenges.find((challenge) => challenge.id === selectedChallengeId) ?? null;
-  }, [selectedChallengeId, challenges]);
+    return (
+      challenges.find((challenge) => challenge.id === selectedChallengeId) ||
+      completedChallenges.find((challenge) => challenge.id === selectedChallengeId) ||
+      null
+    );
+  }, [selectedChallengeId, challenges, completedChallenges]);
   const selectedChallengeJoined = selectedChallenge ? joinedChallengeSet.has(selectedChallenge.id) : false;
+
+  const loadCompletedChallenges = useCallback(async () => {
+    try {
+      setCompletedLoading(true);
+      setCompletedError(null);
+
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('challenges')
+        .select('*, creator:profiles(*)')
+        .eq('is_active', false)
+        .lte('end_date', now)
+        .order('end_date', { ascending: false })
+        .limit(3);
+
+      if (error) {
+        throw error;
+      }
+
+      const completedList = (data || []) as Challenge[];
+      setCompletedChallenges(completedList);
+
+      if (completedList.length === 0) {
+        setWinnersByChallenge({});
+        return;
+      }
+
+      const winnersEntries = await Promise.all(
+        completedList.map(async (challenge) => {
+          try {
+            const winners = await fetchChallengeWinners(challenge.id);
+            return [challenge.id, winners] as const;
+          } catch (err) {
+            console.error('Error loading winners for challenge', challenge.id, err);
+            return [challenge.id, []] as const;
+          }
+        }),
+      );
+
+      setWinnersByChallenge(Object.fromEntries(winnersEntries));
+    } catch (error) {
+      console.error('Error loading completed challenges:', error);
+      setCompletedError("Impossible de charger les vainqueurs des précédents challenges.");
+    } finally {
+      setCompletedLoading(false);
+    }
+  }, []);
 
   const loadHistory = useCallback(async () => {
     if (!profile?.id) {
@@ -171,6 +224,10 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    void loadCompletedChallenges();
+  }, [loadCompletedChallenges]);
 
   const handleJoinChallenge = async (challenge: Challenge) => {
     if (!profile?.id) {
@@ -335,6 +392,88 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
             </div>
           ) : (
             <div className="space-y-6">
+              {(completedLoading || completedChallenges.length > 0 || completedError) && (
+                <div className="bg-dark-800 rounded-xl border border-dark-700 p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-2 text-white">
+                      <Trophy size={20} className="text-orange-400" />
+                      <h2 className="text-xl font-semibold">Vainqueurs des challenges terminés</h2>
+                    </div>
+                    <button
+                      onClick={() => void loadCompletedChallenges()}
+                      disabled={completedLoading}
+                      className={`text-sm underline transition-colors ${
+                        completedLoading
+                          ? 'text-gray-500 cursor-not-allowed'
+                          : 'text-orange-300 hover:text-orange-200'
+                      }`}
+                    >
+                      {completedLoading ? 'Chargement...' : 'Actualiser'}
+                    </button>
+                  </div>
+
+                  {completedLoading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div key={index} className="h-44 bg-dark-900 border border-dark-700 rounded-xl animate-pulse" />
+                      ))}
+                    </div>
+                  ) : completedError ? (
+                    <div className="text-sm text-red-300">{completedError}</div>
+                  ) : completedChallenges.length === 0 ? (
+                    <div className="text-sm text-gray-400">
+                      Aucun challenge terminé récemment. Reste connecté pour découvrir les prochains gagnants !
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {completedChallenges.map((challenge) => {
+                        const winners = winnersByChallenge[challenge.id] ?? [];
+                        return (
+                          <div
+                            key={challenge.id}
+                            className="bg-dark-900 border border-dark-700 rounded-xl p-4 space-y-4 hover:border-dark-500 transition-colors cursor-pointer"
+                            onClick={() => setSelectedChallengeId(challenge.id)}
+                          >
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-white/60">Challenge terminé</p>
+                              <h3 className="text-lg font-semibold text-white mt-1">{challenge.title}</h3>
+                              <p className="text-xs text-gray-400 mt-1">
+                                Clôturé le {formatDate(challenge.end_date)}
+                              </p>
+                            </div>
+                            {winners.length === 0 ? (
+                              <p className="text-sm text-gray-400">Résultats en cours de vérification.</p>
+                            ) : (
+                              <ol className="space-y-3">
+                                {winners.map((winner, index) => (
+                                  <li
+                                    key={winner.id}
+                                    className="flex items-center justify-between gap-3 bg-dark-800 border border-dark-700 rounded-lg px-3 py-2"
+                                  >
+                                    <div>
+                                      <p className="text-sm font-semibold text-white">
+                                        {index + 1}.{' '}
+                                        {winner.user?.display_name || winner.user?.username || 'Rider mystère'}
+                                      </p>
+                                      {winner.caption && (
+                                        <p className="text-xs text-gray-400 line-clamp-1">{winner.caption}</p>
+                                      )}
+                                    </div>
+                                    <div className="text-xs font-semibold text-orange-300">
+                                      {winner.votes_count} vote{winner.votes_count > 1 ? 's' : ''}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {challenges.map((challenge) => {
                   const daysRemaining = getDaysRemaining(challenge.end_date);
@@ -448,33 +587,24 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
                   );
                 })}
               </div>
-
-              {selectedChallenge && (
-                <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
-                  <ChallengeSubmissionExperience
-                    challenge={selectedChallenge}
-                    profile={profile}
-                    hasJoined={selectedChallengeJoined}
-                    onSubmissionCreated={(submission) => {
-                      setSubmissionHistory((prev) => [
-                        submission,
-                        ...prev.filter((item) => item.id !== submission.id),
-                      ]);
-                      void loadHistory();
-                    }}
-                  />
-                  <div className="space-y-4">
-                    {historyError && (
-                      <div className="bg-red-500/10 border border-red-500/40 text-red-300 rounded-xl px-3 py-2 text-sm">
-                        {historyError}
-                      </div>
-                    )}
-                    <ChallengeSubmissionHistory
-                      submissions={submissionHistory}
-                      loading={historyLoading}
-                    />
-                  </div>
-                </div>
+              {selectedChallenge && profile && (
+                <ChallengeDetailModal
+                  challenge={selectedChallenge}
+                  profile={profile}
+                  hasJoined={selectedChallengeJoined}
+                  onClose={() => setSelectedChallengeId(null)}
+                  onSubmissionCreated={(submission) => {
+                    setSubmissionHistory((prev) => [
+                      submission,
+                      ...prev.filter((item) => item.id !== submission.id),
+                    ]);
+                    void loadHistory();
+                  }}
+                  submissionHistory={submissionHistory}
+                  historyLoading={historyLoading}
+                  historyError={historyError}
+                  onReloadHistory={() => void loadHistory()}
+                />
               )}
             </div>
           )}
