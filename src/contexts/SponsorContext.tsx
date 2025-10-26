@@ -20,6 +20,9 @@ import type {
   SponsorShopAnalyticsHistoryPoint,
   SponsorShopAnalyticsSummary,
   SponsorShopItem,
+  SponsorShopItemVariant,
+  SponsorShopBundle,
+  SponsorShopCoupon,
   SponsorSpotlight,
   SponsorSpotlightPerformance,
   SpotlightPerformanceInsights,
@@ -35,10 +38,19 @@ import {
 import {
   buildShopAnalyticsSummary,
   createSponsorShopItem,
+  fetchSponsorShopBundles,
+  fetchSponsorShopCoupons,
   fetchSponsorShopItems,
+  fetchSponsorShopItemVariants,
   fetchSponsorShopItemStats,
+  syncSponsorShopBundles,
+  syncSponsorShopCoupons,
+  syncSponsorShopItemVariants,
   updateSponsorShopItem,
   type ShopItemPayload,
+  type SponsorShopBundleDraft,
+  type SponsorShopCouponDraft,
+  type SponsorShopVariantDraft,
 } from '../lib/sponsorShop';
 import {
   fetchSponsorApiKeys,
@@ -101,11 +113,11 @@ function isSchemaMissing(err: unknown): boolean {
   }
 
   if (typeof err === 'string') {
-    return /sponsor_shop_items/.test(err) || /schema not available/i.test(err);
+    return /sponsor_shop_/i.test(err) || /schema not available/i.test(err);
   }
 
   if (err instanceof Error) {
-    return /sponsor_shop_items/.test(err.message) || /schema not available/i.test(err.message);
+    return /sponsor_shop_/i.test(err.message) || /schema not available/i.test(err.message);
   }
 
   return false;
@@ -196,6 +208,9 @@ interface SponsorContextValue {
   analyticsPeriods: AnalyticsPeriodFilter[];
   spotlights: SponsorSpotlight[];
   shopItems: SponsorShopItem[];
+  shopVariants: SponsorShopItemVariant[];
+  shopBundles: SponsorShopBundle[];
+  shopCoupons: SponsorShopCoupon[];
   shopAnalytics: SponsorShopAnalyticsSummary | null;
   shopAnalyticsHistory: SponsorShopAnalyticsHistoryPoint[];
   shopAnalyticsExportUrl: string | null;
@@ -219,6 +234,18 @@ interface SponsorContextValue {
     shopItemId: string,
     updates: Partial<Omit<SponsorShopItem, 'id' | 'sponsor_id' | 'created_at' | 'updated_at'>>,
   ) => Promise<SponsorShopItem | null>;
+  syncShopItemVariants: (
+    itemId: string,
+    variants: SponsorShopVariantDraft[],
+  ) => Promise<void>;
+  syncShopItemCoupons: (
+    itemId: string,
+    coupons: SponsorShopCouponDraft[],
+  ) => Promise<void>;
+  syncShopItemBundles: (
+    primaryItemId: string,
+    bundles: SponsorShopBundleDraft[],
+  ) => Promise<void>;
   revokeApiKey: (apiKeyId: string) => Promise<void>;
   createApiKey: (
     params: Omit<CreateSponsorApiKeyParams, 'sponsorId'>,
@@ -279,6 +306,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
   });
   const [spotlights, setSpotlights] = useState<SponsorSpotlight[]>([]);
   const [shopItems, setShopItems] = useState<SponsorShopItem[]>([]);
+  const [shopVariants, setShopVariants] = useState<SponsorShopItemVariant[]>([]);
+  const [shopBundles, setShopBundles] = useState<SponsorShopBundle[]>([]);
+  const [shopCoupons, setShopCoupons] = useState<SponsorShopCoupon[]>([]);
   const [shopAnalytics, setShopAnalytics] = useState<SponsorShopAnalyticsSummary | null>(null);
   const [shopAnalyticsHistory, setShopAnalyticsHistory] = useState<SponsorShopAnalyticsHistoryPoint[]>([]);
   const [apiKeys, setApiKeys] = useState<SponsorApiKey[]>([]);
@@ -302,6 +332,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     setAnalyticsBreakdowns({ periods: [], regions: [], hashtags: [] });
     setSpotlights([]);
     setShopItems([]);
+    setShopVariants([]);
+    setShopBundles([]);
+    setShopCoupons([]);
     setShopAnalytics(null);
     setShopAnalyticsHistory([]);
     setApiKeys([]);
@@ -369,15 +402,30 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
   const refreshShop = useCallback(async () => {
     if (!sponsorId || !permissions.canManageShop) {
       setShopItems([]);
+      setShopVariants([]);
+      setShopBundles([]);
+      setShopCoupons([]);
       return;
     }
     try {
-      const items = await fetchSponsorShopItems(sponsorId);
+      const [items, variants, bundles, coupons] = await Promise.all([
+        fetchSponsorShopItems(sponsorId),
+        fetchSponsorShopItemVariants(sponsorId),
+        fetchSponsorShopBundles(sponsorId),
+        fetchSponsorShopCoupons(sponsorId),
+      ]);
+
       setShopItems(items);
+      setShopVariants(variants);
+      setShopBundles(bundles);
+      setShopCoupons(coupons);
     } catch (cause) {
       if (isSchemaMissing(cause)) {
         warnSchemaMissing('refreshShop', cause);
         setShopItems([]);
+        setShopVariants([]);
+        setShopBundles([]);
+        setShopCoupons([]);
         return;
       }
       console.error('Unable to load sponsor shop', cause);
@@ -570,6 +618,138 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
       }
     },
     [permissions.canManageShop, sponsorId],
+  );
+
+  const syncShopItemVariantsHandler = useCallback(
+    async (itemId: string, variants: SponsorShopVariantDraft[]) => {
+      if (!sponsorId || !permissions.canManageShop) {
+        return;
+      }
+      try {
+        const existingVariantIds = shopVariants
+          .filter((variant) => variant.item_id === itemId)
+          .map((variant) => variant.id);
+
+        const sanitizedVariants = variants.map((variant) => ({
+          ...variant,
+          name: variant.name.trim(),
+        }));
+
+        const variantIdsToDelete = existingVariantIds.filter(
+          (id) => !sanitizedVariants.some((variant) => variant.id === id),
+        );
+
+        await syncSponsorShopItemVariants({
+          sponsorId,
+          itemId,
+          variants: sanitizedVariants,
+          variantIdsToDelete,
+        });
+
+        const refreshedVariants = await fetchSponsorShopItemVariants(sponsorId);
+        setShopVariants(refreshedVariants);
+        setError(null);
+      } catch (cause) {
+        const postgrestError = extractPostgrestError(cause);
+        if (isSchemaMissing(postgrestError)) {
+          warnSchemaMissing('syncShopItemVariants', cause);
+          setError('Gestion des variantes indisponible tant que le schéma sponsor est absent.');
+          throw cause;
+        }
+        console.error('Unable to synchronise sponsor shop variants', cause);
+        setError('Impossible de synchroniser les variantes du produit.');
+        throw cause;
+      }
+    },
+    [permissions.canManageShop, shopVariants, sponsorId],
+  );
+
+  const syncShopItemCouponsHandler = useCallback(
+    async (itemId: string, coupons: SponsorShopCouponDraft[]) => {
+      if (!sponsorId || !permissions.canManageShop) {
+        return;
+      }
+      try {
+        const existingCouponIds = shopCoupons
+          .filter((coupon) => coupon.item_id === itemId)
+          .map((coupon) => coupon.id);
+
+        const sanitizedCoupons = coupons.map((coupon) => ({
+          ...coupon,
+          code: coupon.code.trim(),
+        }));
+
+        const couponIdsToDelete = existingCouponIds.filter(
+          (id) => !sanitizedCoupons.some((coupon) => coupon.id === id),
+        );
+
+        await syncSponsorShopCoupons({
+          sponsorId,
+          itemId,
+          coupons: sanitizedCoupons,
+          couponIdsToDelete,
+        });
+
+        const refreshedCoupons = await fetchSponsorShopCoupons(sponsorId);
+        setShopCoupons(refreshedCoupons);
+        setError(null);
+      } catch (cause) {
+        const postgrestError = extractPostgrestError(cause);
+        if (isSchemaMissing(postgrestError)) {
+          warnSchemaMissing('syncShopItemCoupons', cause);
+          setError('Gestion des codes promo indisponible tant que le schéma sponsor est absent.');
+          throw cause;
+        }
+        console.error('Unable to synchronise sponsor shop coupons', cause);
+        setError('Impossible de synchroniser les codes promotionnels.');
+        throw cause;
+      }
+    },
+    [permissions.canManageShop, shopCoupons, sponsorId],
+  );
+
+  const syncShopItemBundlesHandler = useCallback(
+    async (primaryItemId: string, bundles: SponsorShopBundleDraft[]) => {
+      if (!sponsorId || !permissions.canManageShop) {
+        return;
+      }
+      try {
+        const existingBundleIds = shopBundles
+          .filter((bundle) => bundle.primary_item_id === primaryItemId)
+          .map((bundle) => bundle.id);
+
+        const sanitizedBundles = bundles.map((bundle) => ({
+          ...bundle,
+          name: bundle.name.trim(),
+        }));
+
+        const bundleIdsToDelete = existingBundleIds.filter(
+          (id) => !sanitizedBundles.some((bundle) => bundle.id === id),
+        );
+
+        await syncSponsorShopBundles({
+          sponsorId,
+          primaryItemId,
+          bundles: sanitizedBundles,
+          bundleIdsToDelete,
+        });
+
+        const refreshedBundles = await fetchSponsorShopBundles(sponsorId);
+        setShopBundles(refreshedBundles);
+        setError(null);
+      } catch (cause) {
+        const postgrestError = extractPostgrestError(cause);
+        if (isSchemaMissing(postgrestError)) {
+          warnSchemaMissing('syncShopItemBundles', cause);
+          setError('Gestion des bundles indisponible tant que le schéma sponsor est absent.');
+          throw cause;
+        }
+        console.error('Unable to synchronise sponsor shop bundles', cause);
+        setError('Impossible de synchroniser les bundles du produit.');
+        throw cause;
+      }
+    },
+    [permissions.canManageShop, shopBundles, sponsorId],
   );
 
   const revokeApiKeyHandler = useCallback(
@@ -859,6 +1039,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     analyticsPeriods: DEFAULT_ANALYTICS_PERIODS,
     spotlights,
     shopItems,
+    shopVariants,
+    shopBundles,
+    shopCoupons,
     shopAnalytics,
     shopAnalyticsHistory,
     shopAnalyticsExportUrl,
@@ -877,6 +1060,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     updateShopItemAvailability,
     createShopItem: createShopItemHandler,
     updateShopItem: updateShopItemHandler,
+    syncShopItemVariants: syncShopItemVariantsHandler,
+    syncShopItemCoupons: syncShopItemCouponsHandler,
+    syncShopItemBundles: syncShopItemBundlesHandler,
     revokeApiKey: revokeApiKeyHandler,
     createApiKey: createApiKeyHandler,
     upsertOpportunity,
@@ -899,6 +1085,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     opportunities,
     spotlights,
     shopItems,
+    shopVariants,
+    shopBundles,
+    shopCoupons,
     shopAnalytics,
     shopAnalyticsHistory,
     shopAnalyticsExportUrl,
@@ -915,6 +1104,9 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     updateShopItemAvailability,
     createShopItemHandler,
     updateShopItemHandler,
+    syncShopItemVariantsHandler,
+    syncShopItemCouponsHandler,
+    syncShopItemBundlesHandler,
     revokeApiKeyHandler,
     createApiKeyHandler,
     upsertOpportunity,
