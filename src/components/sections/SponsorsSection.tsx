@@ -52,6 +52,7 @@ import {
 } from '../../lib/sponsorOpportunities';
 import { useSponsorOpportunities } from '../../hooks/useSponsorOpportunities';
 import SponsorPostForm from '../sponsors/SponsorPostForm';
+import { SponsorPlanner } from '../sponsors/planner';
 
 interface SponsorsSectionProps {
   profile: Profile | null;
@@ -144,6 +145,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<SponsorOpportunityDateFilter>('all');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'planner'>('list');
   const [activeTab, setActiveTab] = useState<'details' | 'participations' | 'participer'>('details');
   const [participationSort, setParticipationSort] = useState<'votes' | 'recent'>('votes');
   const [participations, setParticipations] = useState<Record<string, ParticipationMedia[]>>({});
@@ -706,6 +708,52 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         </div>
       </header>
 
+      <div className="flex flex-col gap-4 rounded-3xl border border-dark-700 bg-dark-900/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-white">Choisis ton mode d'exploration</p>
+          <p className="text-xs text-gray-400">
+            Alterne entre le fil détaillé et une vue planner inspirée du dashboard sponsor.
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full border border-dark-600 bg-dark-800/80 p-1 text-xs text-gray-300">
+          <button
+            type="button"
+            className={`rounded-full px-4 py-1 transition ${
+              viewMode === 'list' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'hover:text-orange-300'
+            }`}
+            onClick={() => setViewMode('list')}
+          >
+            Découvrir
+          </button>
+          <button
+            type="button"
+            className={`rounded-full px-4 py-1 transition ${
+              viewMode === 'planner' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'hover:text-orange-300'
+            }`}
+            onClick={() => setViewMode('planner')}
+          >
+            Planner
+          </button>
+        </div>
+      </div>
+
+      {loadError && (
+        <div className="bg-rose-500/10 border border-rose-500/40 rounded-2xl p-4 text-sm text-rose-200">
+          {loadError}
+        </div>
+      )}
+
+      {viewMode === 'planner' ? (
+        <SponsorPlanner
+          challenges={challenges}
+          events={events}
+          calls={calls}
+          currentUserId={profile?.id ?? null}
+          loading={loadingOpportunities}
+          readOnly
+        />
+      ) : (
+        <>
       <section className="bg-dark-900/60 border border-dark-700 rounded-3xl p-6 space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex-1 w-full">
@@ -789,12 +837,6 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
           </div>
         </div>
       </section>
-
-      {loadError && (
-        <div className="bg-rose-500/10 border border-rose-500/40 rounded-2xl p-4 text-sm text-rose-200">
-          {loadError}
-        </div>
-      )}
 
       <section className="space-y-6">
         {filteredPosts.map((post) => {
@@ -968,6 +1010,8 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         </div>
       )}
       </section>
+        </>
+      )}
 
       {formState && profile?.id && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10">

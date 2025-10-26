@@ -3,6 +3,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
+  CalendarDays,
   Copy,
   Download,
   KanbanSquare,
@@ -21,13 +22,20 @@ import {
 import { useSponsorContext } from '../../contexts/SponsorContext';
 import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
 import SponsorOpportunitiesView from './opportunities/SponsorOpportunitiesView';
-import type { SponsorShopItem, SponsorSpotlight } from '../../types';
+import { SponsorPlanner } from './planner';
+import type {
+  SponsorChallengeOpportunity,
+  SponsorEditableOpportunityType,
+  SponsorShopItem,
+  SponsorSpotlight,
+} from '../../types';
 import SponsorShopItemModal, {
   type SponsorShopItemFormValues,
 } from './shop/SponsorShopItemModal';
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
+  { id: 'planner' as const, label: 'Planner', icon: CalendarDays },
   { id: 'opportunities' as const, label: 'Opportunités', icon: KanbanSquare },
   { id: 'spotlights' as const, label: 'Spotlight', icon: Megaphone },
   { id: 'shop' as const, label: 'Boutique', icon: Store },
@@ -170,6 +178,10 @@ export default function SponsorDashboard() {
     updateShopItem,
     revokeApiKey,
     createApiKey,
+    profile,
+    opportunities,
+    updateOpportunityStatus,
+    updateOpportunityOwner,
   } = useSponsorContext();
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyScopes, setApiKeyScopes] = useState<string[]>(['analytics:read']);
@@ -198,6 +210,42 @@ export default function SponsorDashboard() {
     setIsShopModalOpen(false);
     setShopItemBeingEdited(null);
   };
+
+  const handlePlannerStatusChange = useCallback(
+    async (
+      type: SponsorEditableOpportunityType,
+      id: string,
+      status: SponsorChallengeOpportunity['status'],
+    ) => {
+      if (!permissions.canManageOpportunities) {
+        return;
+      }
+      try {
+        await updateOpportunityStatus(type, id, status);
+      } catch (cause) {
+        console.error('Unable to update planner status', cause);
+      }
+    },
+    [permissions.canManageOpportunities, updateOpportunityStatus],
+  );
+
+  const handlePlannerOwnerChange = useCallback(
+    async (
+      type: SponsorEditableOpportunityType,
+      id: string,
+      ownerId: string | null,
+    ) => {
+      if (!permissions.canManageOpportunities) {
+        return;
+      }
+      try {
+        await updateOpportunityOwner(type, id, ownerId);
+      } catch (cause) {
+        console.error('Unable to update planner owner', cause);
+      }
+    },
+    [permissions.canManageOpportunities, updateOpportunityOwner],
+  );
 
   const overviewCards = useMemo(
     () => [
@@ -1124,6 +1172,22 @@ export default function SponsorDashboard() {
 
           <div className={loading ? 'opacity-60 pointer-events-none' : ''}>
             {activeView === 'overview' && renderOverview()}
+            {activeView === 'planner' && (
+              <SponsorPlanner
+                challenges={opportunities.challenges}
+                events={opportunities.events}
+                calls={opportunities.calls}
+                currentUserId={profile?.id ?? null}
+                readOnly={!permissions.canManageOpportunities}
+                loading={loading}
+                onStatusChange={
+                  permissions.canManageOpportunities ? handlePlannerStatusChange : undefined
+                }
+                onOwnerChange={
+                  permissions.canManageOpportunities ? handlePlannerOwnerChange : undefined
+                }
+              />
+            )}
             {activeView === 'opportunities' && <SponsorOpportunitiesView />}
             {activeView === 'spotlights' && renderSpotlights()}
             {activeView === 'shop' && renderShop()}
@@ -1139,6 +1203,6 @@ export default function SponsorDashboard() {
           onSubmit={handleShopItemSubmit}
         />
       )}
-    </>
+    </div>
   );
 }

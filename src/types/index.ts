@@ -126,6 +126,21 @@ export interface SponsorProfileSummary {
   sponsor_branding?: SponsorBranding | null;
 }
 
+export type SponsorPlannerStatus =
+  | 'idea'
+  | 'briefing'
+  | 'production'
+  | 'promotion'
+  | 'live'
+  | 'archived';
+
+export interface SponsorOpportunityOwnerSummary {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
 export interface SponsorChallengeOpportunity {
   id: string;
   sponsor_id: string;
@@ -144,6 +159,9 @@ export interface SponsorChallengeOpportunity {
   created_at: string;
   updated_at: string;
   sponsor?: SponsorProfileSummary | null;
+  status: SponsorPlannerStatus;
+  owner_id: string | null;
+  owner?: SponsorOpportunityOwnerSummary | null;
 }
 
 export interface SponsorEventOpportunity {
@@ -162,6 +180,9 @@ export interface SponsorEventOpportunity {
   created_at: string;
   updated_at: string;
   sponsor?: SponsorProfileSummary | null;
+  status: SponsorPlannerStatus;
+  owner_id: string | null;
+  owner?: SponsorOpportunityOwnerSummary | null;
 }
 
 export interface SponsorCallOpportunity {
@@ -182,6 +203,9 @@ export interface SponsorCallOpportunity {
   created_at: string;
   updated_at: string;
   sponsor?: SponsorProfileSummary | null;
+  status: SponsorPlannerStatus;
+  owner_id: string | null;
+  owner?: SponsorOpportunityOwnerSummary | null;
 }
 
 export interface SponsorNewsItem {

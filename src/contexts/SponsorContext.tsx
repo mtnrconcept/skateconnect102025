@@ -52,7 +52,13 @@ import {
   deleteSponsorEvent,
   emptySponsorOpportunityCollections,
   fetchSponsorOpportunityCollections,
+  updateSponsorCall,
+  updateSponsorChallenge,
+  updateSponsorEvent,
   type SponsorOpportunityCollections,
+  type UpdateSponsorCallPayload,
+  type UpdateSponsorChallengePayload,
+  type UpdateSponsorEventPayload,
 } from '../lib/sponsorOpportunities';
 import {
   DEFAULT_ANALYTICS_PERIODS,
@@ -107,7 +113,13 @@ function isSchemaMissing(err: unknown): boolean {
 
 const extractPostgrestError = (cause: unknown) => (cause as { error?: unknown })?.error ?? cause;
 
-export type SponsorDashboardView = 'overview' | 'opportunities' | 'spotlights' | 'shop' | 'api-keys';
+export type SponsorDashboardView =
+  | 'overview'
+  | 'planner'
+  | 'opportunities'
+  | 'spotlights'
+  | 'shop'
+  | 'api-keys';
 
 function roundTo(value: number, precision = 2): number {
   const factor = 10 ** precision;
@@ -172,6 +184,7 @@ interface SponsorContextValue {
   sponsorId: string | null;
   loading: boolean;
   error: string | null;
+  profile: Profile | null;
   branding: SponsorBranding | null;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -215,6 +228,26 @@ interface SponsorContextValue {
     record: SponsorChallengeOpportunity | SponsorEventOpportunity | SponsorCallOpportunity,
   ) => void;
   deleteOpportunity: (type: SponsorEditableOpportunityType, id: string) => Promise<void>;
+  updateOpportunityStatus: (
+    type: SponsorEditableOpportunityType,
+    id: string,
+    status: SponsorChallengeOpportunity['status'],
+  ) => Promise<
+    | SponsorChallengeOpportunity
+    | SponsorEventOpportunity
+    | SponsorCallOpportunity
+    | null
+  >;
+  updateOpportunityOwner: (
+    type: SponsorEditableOpportunityType,
+    id: string,
+    ownerId: string | null,
+  ) => Promise<
+    | SponsorChallengeOpportunity
+    | SponsorEventOpportunity
+    | SponsorCallOpportunity
+    | null
+  >;
 }
 
 const defaultPermissions: SponsorPermissions = {
@@ -675,6 +708,92 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     [permissions.canManageOpportunities, sponsorId],
   );
 
+  const updateOpportunityHandler = useCallback(
+    async (
+      type: SponsorEditableOpportunityType,
+      id: string,
+      updates:
+        | UpdateSponsorChallengePayload
+        | UpdateSponsorEventPayload
+        | UpdateSponsorCallPayload,
+    ) => {
+      if (!sponsorId || !permissions.canManageOpportunities) {
+        return null;
+      }
+
+      try {
+        let updated:
+          | SponsorChallengeOpportunity
+          | SponsorEventOpportunity
+          | SponsorCallOpportunity;
+
+        if (type === 'challenge') {
+          updated = await updateSponsorChallenge(id, updates as UpdateSponsorChallengePayload);
+        } else if (type === 'event') {
+          updated = await updateSponsorEvent(id, updates as UpdateSponsorEventPayload);
+        } else {
+          updated = await updateSponsorCall(id, updates as UpdateSponsorCallPayload);
+        }
+
+        setOpportunities((current) => {
+          if (type === 'challenge') {
+            const value = updated as SponsorChallengeOpportunity;
+            return {
+              ...current,
+              challenges: current.challenges.map((item) => (item.id === value.id ? value : item)),
+            };
+          }
+
+          if (type === 'event') {
+            const value = updated as SponsorEventOpportunity;
+            return {
+              ...current,
+              events: current.events.map((item) => (item.id === value.id ? value : item)),
+            };
+          }
+
+          const value = updated as SponsorCallOpportunity;
+          return {
+            ...current,
+            calls: current.calls.map((item) => (item.id === value.id ? value : item)),
+          };
+        });
+        setError(null);
+        return updated;
+      } catch (cause) {
+        const postgrestError = extractPostgrestError(cause);
+        if (isSchemaMissing(postgrestError)) {
+          warnSchemaMissing('updateOpportunity', cause);
+          setOpportunities(emptySponsorOpportunityCollections());
+          setError("Fonction opportunités indisponible (schéma sponsor non déployé).");
+        } else {
+          console.error('Unable to update sponsor opportunity', cause);
+          setError('Impossible de mettre à jour cette opportunité.');
+        }
+        return null;
+      }
+    },
+    [permissions.canManageOpportunities, sponsorId],
+  );
+
+  const updateOpportunityStatus = useCallback(
+    async (
+      type: SponsorEditableOpportunityType,
+      id: string,
+      status: SponsorChallengeOpportunity['status'],
+    ) => updateOpportunityHandler(type, id, { status }),
+    [updateOpportunityHandler],
+  );
+
+  const updateOpportunityOwner = useCallback(
+    async (
+      type: SponsorEditableOpportunityType,
+      id: string,
+      ownerId: string | null,
+    ) => updateOpportunityHandler(type, id, { owner_id: ownerId }),
+    [updateOpportunityHandler],
+  );
+
   /* ------------ Cycle de vie ------------ */
 
   useEffect(() => {
@@ -728,6 +847,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     sponsorId,
     loading,
     error,
+    profile,
     branding,
     contactEmail,
     contactPhone,
@@ -761,10 +881,13 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     createApiKey: createApiKeyHandler,
     upsertOpportunity,
     deleteOpportunity: deleteOpportunityHandler,
+    updateOpportunityStatus,
+    updateOpportunityOwner,
   }), [
     sponsorId,
     loading,
     error,
+    profile,
     branding,
     contactEmail,
     contactPhone,
@@ -796,6 +919,8 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     createApiKeyHandler,
     upsertOpportunity,
     deleteOpportunityHandler,
+    updateOpportunityStatus,
+    updateOpportunityOwner,
   ]);
 
   return <SponsorContext.Provider value={value}>{children}</SponsorContext.Provider>;
