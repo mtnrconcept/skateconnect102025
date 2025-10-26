@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Heart, Share2, Eye, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
+import { X, Heart, Share2, Eye, ChevronLeft, ChevronRight, MessageCircle, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import LazyImage from './LazyImage';
 import SpotMediaCommentSection from './SpotMediaCommentSection';
@@ -9,6 +9,8 @@ interface MediaDetailModalProps {
   media: SpotMedia[];
   initialIndex: number;
   onClose: () => void;
+  canSetCover?: boolean;
+  onSetCover?: (media: SpotMedia) => Promise<void> | void;
 }
 
 interface MediaWithStats extends SpotMedia {
@@ -18,46 +20,45 @@ interface MediaWithStats extends SpotMedia {
   user_liked?: boolean;
 }
 
-export default function MediaDetailModal({ media, initialIndex, onClose }: MediaDetailModalProps) {
+export default function MediaDetailModal({ media, initialIndex, onClose, canSetCover = false, onSetCover }: MediaDetailModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [currentMedia, setCurrentMedia] = useState<MediaWithStats>(media[initialIndex] as MediaWithStats);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showComments, setShowComments] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [settingCover, setSettingCover] = useState(false);
 
   useEffect(() => {
     loadCurrentUser();
-    loadMediaStats();
   }, []);
-
-  useEffect(() => {
-    setCurrentMedia(media[currentIndex] as MediaWithStats);
-    loadMediaStats();
-  }, [currentIndex]);
 
   const loadCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
   };
 
-  const loadMediaStats = async () => {
+  const loadMediaStats = useCallback(async () => {
     try {
       const mediaItem = media[currentIndex];
 
+      if (!mediaItem) return;
+
+      const userId = currentUser?.id ?? null;
+
       const { data: mediaData, error } = await supabase
         .from('spot_media')
-        .select('likes_count, views_count, comments_count')
+        .select('likes_count, views_count, comments_count, is_cover_photo')
         .eq('id', mediaItem.id)
         .single();
 
       if (error) throw error;
 
-      if (currentUser) {
+      if (userId) {
         const { data: likeData } = await supabase
           .from('spot_media_likes')
           .select('id')
           .eq('media_id', mediaItem.id)
-          .eq('user_id', currentUser.id)
+          .eq('user_id', userId)
           .maybeSingle();
 
         setCurrentMedia({
@@ -65,6 +66,7 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
           likes_count: mediaData.likes_count || 0,
           views_count: mediaData.views_count || 0,
           comments_count: mediaData.comments_count || 0,
+          is_cover_photo: mediaData.is_cover_photo ?? mediaItem.is_cover_photo,
           user_liked: !!likeData,
         } as MediaWithStats);
       } else {
@@ -73,10 +75,35 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
           likes_count: mediaData.likes_count || 0,
           views_count: mediaData.views_count || 0,
           comments_count: mediaData.comments_count || 0,
+          is_cover_photo: mediaData.is_cover_photo ?? mediaItem.is_cover_photo,
         } as MediaWithStats);
       }
     } catch (error) {
       console.error('Error loading media stats:', error);
+    }
+  }, [media, currentIndex, currentUser?.id]);
+
+  useEffect(() => {
+    if (media[currentIndex]) {
+      setCurrentMedia(media[currentIndex] as MediaWithStats);
+    }
+  }, [media, currentIndex]);
+
+  useEffect(() => {
+    loadMediaStats();
+  }, [loadMediaStats]);
+
+  const handleSetCover = async () => {
+    if (!onSetCover || settingCover || currentMedia.is_cover_photo) return;
+
+    try {
+      setSettingCover(true);
+      await onSetCover(currentMedia);
+      setCurrentMedia(prev => ({ ...prev, is_cover_photo: true }));
+    } catch (error) {
+      console.error('Error setting cover photo:', error);
+    } finally {
+      setSettingCover(false);
     }
   };
 
@@ -217,6 +244,11 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
 
         <div className="flex flex-col lg:flex-row w-full h-full max-h-[90vh] bg-black lg:bg-transparent overflow-hidden">
           <div className="flex-1 flex items-center justify-center bg-black relative">
+            {currentMedia.is_cover_photo && (
+              <div className="absolute top-4 left-4 z-10 rounded-full bg-blue-600 bg-opacity-90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                Photo de couverture
+              </div>
+            )}
             {currentMedia.media_type === 'video' ? (
               <video
                 src={currentMedia.media_url}
@@ -297,7 +329,7 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
               </div>
             </div>
 
-            <div className="flex border-b border-slate-200">
+            <div className="flex flex-wrap border-b border-slate-200">
               <button
                 onClick={handleLike}
                 disabled={!currentUser}
@@ -328,6 +360,25 @@ export default function MediaDetailModal({ media, initialIndex, onClose }: Media
                 <Share2 size={20} />
                 <span className="font-semibold">Partager</span>
               </button>
+
+              {canSetCover && (
+                <button
+                  onClick={handleSetCover}
+                  disabled={settingCover || currentMedia.is_cover_photo}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 hover:bg-slate-50 transition-colors ${
+                    currentMedia.is_cover_photo ? 'text-blue-600' : 'text-slate-700'
+                  } ${settingCover ? 'opacity-70' : ''}`}
+                >
+                  <ImageIcon size={20} />
+                  <span className="font-semibold text-sm">
+                    {currentMedia.is_cover_photo
+                      ? 'Couverture actuelle'
+                      : settingCover
+                        ? 'Mise à jour...'
+                        : 'Définir comme couverture'}
+                  </span>
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto">

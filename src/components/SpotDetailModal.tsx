@@ -35,6 +35,10 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
   const ratingsPageRef = useRef(1);
   const [ratingsTotal, setRatingsTotal] = useState(0);
   const [ratingsLoading, setRatingsLoading] = useState(false);
+  const [galleryRefreshToken, setGalleryRefreshToken] = useState(0);
+
+  const ownerId = spotData?.created_by ?? spot.created_by ?? null;
+  const canSetCover = !!(ownerId && currentUser?.id === ownerId);
 
   const loadSpotRatings = useCallback(
     async (page: number = 1, replace: boolean = false) => {
@@ -209,6 +213,35 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
       console.error('Error loading spot media:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSetCoverPhoto = async (mediaItem: SpotMedia) => {
+    if (!currentUser?.id || !ownerId || currentUser.id !== ownerId) {
+      alert('Seul le créateur du spot peut modifier la photo de couverture.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('set_spot_cover_photo', {
+        p_spot_id: spot.id,
+        p_media_id: mediaItem.id,
+      });
+
+      if (error) throw error;
+
+      setCoverPhoto({ ...mediaItem, is_cover_photo: true });
+      setMedia(prev =>
+        prev.map(m =>
+          m.id === mediaItem.id
+            ? { ...m, is_cover_photo: true }
+            : { ...m, is_cover_photo: false }
+        )
+      );
+      setGalleryRefreshToken(prev => prev + 1);
+    } catch (error) {
+      console.error('Error setting cover photo:', error);
+      alert('Impossible de mettre à jour la photo de couverture.');
     }
   };
 
@@ -564,6 +597,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
 
                     loadSpotMedia();
                     setShowGallery(true);
+                    setGalleryRefreshToken(prev => prev + 1);
                     if (fileInputRef.current) {
                       fileInputRef.current.value = '';
                     }
@@ -599,6 +633,7 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                     }
                   }}
                   onUploadClick={() => fileInputRef.current?.click()}
+                  refreshToken={galleryRefreshToken}
                 />
               )}
             </div>
@@ -611,6 +646,8 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
           media={media}
           initialIndex={currentMediaIndex}
           onClose={() => setShowMediaDetail(false)}
+          canSetCover={canSetCover}
+          onSetCover={handleSetCoverPhoto}
         />
       )}
     </div>

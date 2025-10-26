@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Heart, Eye, Filter, Image as ImageIcon, Video, Clock, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import LazyImage from './LazyImage';
@@ -8,6 +8,7 @@ interface SpotMediaGalleryProps {
   spotId: string;
   onMediaClick: (media: SpotMedia, index: number) => void;
   onUploadClick: () => void;
+  refreshToken?: number;
 }
 
 type FilterType = 'recent' | 'oldest' | 'most_liked' | 'most_viewed' | 'photos' | 'videos';
@@ -19,7 +20,7 @@ interface MediaWithStats extends SpotMedia {
   user_liked?: boolean;
 }
 
-export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }: SpotMediaGalleryProps) {
+export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick, refreshToken = 0 }: SpotMediaGalleryProps) {
   const [allMedia, setAllMedia] = useState<MediaWithStats[]>([]);
   const [filteredMedia, setFilteredMedia] = useState<MediaWithStats[]>([]);
   const [displayedMedia, setDisplayedMedia] = useState<MediaWithStats[]>([]);
@@ -38,8 +39,11 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
 
   useEffect(() => {
     loadCurrentUser();
+  }, []);
+
+  useEffect(() => {
     loadMedia();
-  }, [spotId]);
+  }, [spotId, currentUser?.id, refreshToken]);
 
   useEffect(() => {
     applyFilter();
@@ -316,6 +320,11 @@ export default function SpotMediaGallery({ spotId, onMediaClick, onUploadClick }
                 }}
                 className="relative aspect-square bg-slate-900 rounded-lg overflow-hidden cursor-pointer group"
               >
+                {item.is_cover_photo && (
+                  <div className="absolute top-2 left-2 z-10 rounded-full bg-blue-600 bg-opacity-90 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    Couverture
+                  </div>
+                )}
                 {item.media_type === 'video' ? (
                   <div className="relative w-full h-full">
                     <video
