@@ -10,9 +10,9 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }} # requis: postgresql://postgres:<PWD>@db...:5432/postgres?sslmode=require
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}       # optionnel: https://<project-ref>.supabase.co
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }} # optionnel pour le smoke test REST
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}      # ex: postgresql://postgres:***@db.vlhxrovtrdhcmvvqlryd.supabase.co:5432/postgres?sslmode=require
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}            # ex: https://vlhxrovtrdhcmvvqlryd.supabase.co (optionnel)
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}  # anon key (optionnel)
 
     steps:
       - name: Checkout
@@ -23,29 +23,40 @@ jobs:
         with:
           version: v2.53.6
 
-      - name: Push migrations (DB URL)
+      - name: Push migrations via DB URL
+        shell: bash
         run: |
-          if [ -z "${SUPABASE_DB_URL}" ]; then
-            echo "❌ SUPABASE_DB_URL secret manquant."; exit 1;
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "SUPABASE_DB_URL secret manquant."; exit 1;
           fi
           supabase migration up --db-url "${SUPABASE_DB_URL}"
 
-      - name: Install psql client
+      - name: Install psql client & jq
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
 
-      - name: Notify PostgREST to reload schema
-        run: psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
-
-      - name: Sanity check: column spot_ratings.comment exists
+      - name: NOTIFY PostgREST to reload schema
+        shell: bash
         run: |
-          psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "\
-            select column_name from information_schema.columns \
-            where table_schema='public' and table_name='spot_ratings' and column_name='comment';"
+          set -euo pipefail
+          psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
+
+      - name: Sanity check - column spot_ratings.comment exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c \
+          "select column_name from information_schema.columns where table_schema='public' and table_name='spot_ratings' and column_name='comment';"
 
       - name: Smoke test REST (optional)
-        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
+        shell: bash
         run: |
-          curl -sS "${SUPABASE_URL}/rest/v1/spot_ratings?select=id,comment&limit=1" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "Accept-Profile: public" | jq .
+          set -euo pipefail
+          if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+            curl -sS "${SUPABASE_URL}/rest/v1/spot_ratings?select=id,comment&limit=1" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              -H "Accept-Profile: public" | jq .
+          else
+            echo "Secrets SUPABASE_URL/SUPABASE_ANON_KEY absents — on saute le smoke test REST."
+          fi
