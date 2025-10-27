@@ -1096,7 +1096,11 @@ export default function MapSection({
   }, [selectedSpot, activeRouteSpotId, clearRoute]);
 
   useEffect(() => {
-    if (routeDetails) {
+    if (!routeDetails) {
+      return;
+    }
+
+    if (routeDetails.mode !== routeMode) {
       clearRoute();
     }
   }, [routeMode, routeDetails, clearRoute]);
