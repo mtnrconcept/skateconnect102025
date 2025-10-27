@@ -1,8 +1,10 @@
 name: Apply Supabase Migrations
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   push:
+    branches:
+      - "**"
     paths:
       - "supabase/migrations/**"
 
@@ -10,13 +12,15 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
+      # Host/port/db de ton projet Supabase
       SUPABASE_DB_HOST: db.vlhxrovtrdhcmvvqlryd.supabase.co
       SUPABASE_DB_PORT: "5432"
       SUPABASE_DB_NAME: postgres
 
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}           # optionnel
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }} # optionnel
+      # Secrets (à créer dans Settings → Secrets and variables → Actions)
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}  # OBLIGATOIRE (mot de passe DB)
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}                   # Optionnel (https://<ref>.supabase.co)
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}         # Optionnel (anon key)
 
     steps:
       - name: Checkout
@@ -34,6 +38,7 @@ jobs:
           if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
             echo "❌ Secret SUPABASE_DB_PASSWORD manquant."; exit 1;
           fi
+          # Encode propre du mot de passe pour une URL Postgres
           PASS_ENC=$(python3 - <<'PY'
 import os, urllib.parse
 print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"], safe=""))
@@ -42,28 +47,30 @@ PY
           DB_URL="postgresql://postgres:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
           echo "DB_URL=$DB_URL" >> "$GITHUB_ENV"
 
-      - name: Verify CLI
+      - name: Show Supabase CLI version
         run: supabase -v
 
-      - name: Push migrations
+      - name: Apply migrations
         shell: bash
         run: |
           set -euo pipefail
+          # Applique toutes les migrations présentes dans supabase/migrations
           supabase migration up --db-url "${DB_URL}"
 
       - name: Install psql client & jq
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
 
-      - name: NOTIFY pgrst reload
+      - name: NOTIFY PostgREST to reload schema
         shell: bash
         run: |
           set -euo pipefail
+          # Utilise PGPASSWORD + paramètres (évite les soucis d’URL ici)
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
             -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
             -d "${SUPABASE_DB_NAME}" -U postgres "sslmode=require" \
             -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
 
-      - name: Sanity check - spot_ratings.comment
+      - name: Sanity check - spot_ratings.comment exists
         shell: bash
         run: |
           set -euo pipefail
@@ -72,7 +79,9 @@ PY
             -d "${SUPABASE_DB_NAME}" -U postgres "sslmode=require" \
             -v ON_ERROR_STOP=1 -c "
               select column_name from information_schema.columns
-              where table_schema='public' and table_name='spot_ratings' and column_name='comment';
+              where table_schema='public'
+                and table_name='spot_ratings'
+                and column_name='comment';
             "
 
       - name: Smoke test REST (optional)
@@ -85,5 +94,5 @@ PY
               -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
               -H "Accept-Profile: public" | jq .
           else
-            echo "ℹ️ Pas de SUPABASE_URL/ANON_KEY → smoke test REST sauté."
+            echo "ℹ️ SUPABASE_URL / SUPABASE_ANON_KEY non fournis — smoke test REST sauté."
           fi
