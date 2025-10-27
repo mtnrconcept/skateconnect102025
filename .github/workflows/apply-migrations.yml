@@ -1,30 +1,28 @@
-name: Apply Supabase Migrations (Pooler IPv4)
+name: Apply Supabase Migrations (IPv4 pooler via project host)
 
 on:
   workflow_dispatch: {}
   push:
-    branches:
-      - "**"
-    paths:
-      - "supabase/migrations/**"
+    branches: ["**"]
+    paths: ["supabase/migrations/**"]
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      # === Configuration Supabase (Session Pooler IPv4) ===
-      SUPABASE_DB_HOST: aws-1-us-east-1.pooler.supabase.com
-      SUPABASE_DB_PORT: "5432"
+      # === IPv4 Session Pooler via project host ===
+      SUPABASE_DB_HOST: db.vlhxrovtrdhcmvvqlryd.supabase.co
+      SUPABASE_DB_PORT: "6543"           # pooler IPv4 sur host projet
       SUPABASE_DB_NAME: postgres
-      SUPABASE_DB_USER: postgres.vlhxrovtrdhcmvvqlryd   # ⚠️ user complet requis pour pooler IPv4
+      SUPABASE_DB_USER: postgres         # <- sans suffixe de ref
 
-      # === Secrets à définir dans GitHub Settings → Secrets and variables → Actions ===
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}   # mot de passe DB Supabase
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}                   # optionnel (https://vlhxrovtrdhcmvvqlryd.supabase.co)
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}         # optionnel (clé API publique)
+      # === Secrets (Settings → Secrets and variables → Actions) ===
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}           # optionnel
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }} # optionnel
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Supabase CLI
@@ -32,80 +30,63 @@ jobs:
         with:
           version: latest
 
-      - name: Install psql client & jq
+      - name: Install psql & jq
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
 
       - name: Build DB_URL (encode password)
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
-            echo "❌ Secret SUPABASE_DB_PASSWORD manquant."; exit 1;
-          fi
-
-          # Encode proprement le mot de passe pour éviter les caractères spéciaux
+          [ -n "${SUPABASE_DB_PASSWORD:-}" ] || { echo "❌ SUPABASE_DB_PASSWORD manquant"; exit 1; }
           PASS_ENC=$(printf '%s' "$SUPABASE_DB_PASSWORD" | jq -sRr @uri)
-
           DB_URL="postgresql://${SUPABASE_DB_USER}:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
           echo "DB_URL=$DB_URL" >> "$GITHUB_ENV"
+          echo "✅ URL construite pour ${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT} en user=${SUPABASE_DB_USER}"
 
-          echo "✅ Connection string construite avec user=${SUPABASE_DB_USER}"
-          echo "🔒 Mot de passe encodé (masqué)"
-
-      - name: Debug DB_URL user & host
-        shell: bash
-        run: |
-          echo "=== DEBUG INFO ==="
-          echo "User: ${SUPABASE_DB_USER}"
-          echo "Host: ${SUPABASE_DB_HOST}"
-          echo "Port: ${SUPABASE_DB_PORT}"
-          echo "Database: ${SUPABASE_DB_NAME}"
-          echo "=================="
-
-      - name: Show Supabase CLI version
-        run: supabase -v
-
-      - name: Apply migrations via Pooler IPv4
+      - name: Preflight DB connectivity (psql)
         shell: bash
         run: |
           set -euo pipefail
-          echo "🚀 Applying migrations via Pooler IPv4..."
+          echo "🔎 psql \\conninfo"
+          PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
+            "host=${SUPABASE_DB_HOST} port=${SUPABASE_DB_PORT} dbname=${SUPABASE_DB_NAME} user=${SUPABASE_DB_USER} sslmode=require" \
+            -v ON_ERROR_STOP=1 -c "\conninfo"
+
+      - name: Supabase CLI version
+        run: supabase -v
+
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "🚀 Applying migrations..."
           supabase migration up --db-url "${DB_URL}"
 
       - name: Reload PostgREST schema
         shell: bash
         run: |
           set -euo pipefail
-          echo "♻️  Reloading PostgREST schema..."
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
-            -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
-            -d "${SUPABASE_DB_NAME}" -U "${SUPABASE_DB_USER}" "sslmode=require" \
+            "host=${SUPABASE_DB_HOST} port=${SUPABASE_DB_PORT} dbname=${SUPABASE_DB_NAME} user=${SUPABASE_DB_USER} sslmode=require" \
             -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
-          echo "✅ PostgREST schema reloaded"
+          echo "✅ PostgREST reloaded"
 
       - name: Check column spot_ratings.comment
         shell: bash
         run: |
           set -euo pipefail
-          echo "🔍 Vérification de la colonne 'comment' dans 'spot_ratings'..."
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
-            -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
-            -d "${SUPABASE_DB_NAME}" -U "${SUPABASE_DB_USER}" "sslmode=require" \
+            "host=${SUPABASE_DB_HOST} port=${SUPABASE_DB_PORT} dbname=${SUPABASE_DB_NAME} user=${SUPABASE_DB_USER} sslmode=require" \
             -v ON_ERROR_STOP=1 -c "
-              select column_name
-              from information_schema.columns
-              where table_schema='public'
-                and table_name='spot_ratings'
-                and column_name='comment';
+              select column_name from information_schema.columns
+              where table_schema='public' and table_name='spot_ratings' and column_name='comment';
             "
-          echo "✅ Vérification terminée."
 
-      - name: (Optional) Smoke test REST API
+      - name: (Optional) Smoke test REST
         if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "🌐 REST API smoke test..."
           curl -sS "${SUPABASE_URL}/rest/v1/spot_ratings?select=id,comment&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
