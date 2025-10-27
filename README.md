@@ -140,6 +140,8 @@ installent du contenu test (spots, profils sponsorisés, interactions sociales).
   Capacitor, des certificats iOS/Android et des builds natifs.
 - [`MEDIA_SYSTEM.md`](./MEDIA_SYSTEM.md) : architecture du système média (upload,
   transcodage, génération de vignettes) et intégration avec Supabase Storage.
+- [`docs/SUPABASE_MIGRATIONS.md`](./docs/SUPABASE_MIGRATIONS.md) : mode d'emploi du
+  workflow GitHub Actions pour appliquer les migrations Supabase.
 - [`SPOT_MEDIA_GALLERY.md`](./SPOT_MEDIA_GALLERY.md) &
   [`SPOT_MEDIA_GALLERY_FINAL.md`](./SPOT_MEDIA_GALLERY_FINAL.md) : conception de
   la galerie de spots et guidelines UX.
