@@ -565,7 +565,11 @@ function App() {
                   />
                 )}
                 {currentSection === 'feed' && (
-                  <FeedSection currentUser={activeProfile} onOpenConversation={handleOpenConversation} />
+                  <FeedSection
+                    currentUser={activeProfile}
+                    onOpenConversation={handleOpenConversation}
+                    onNavigateToSection={handleNavigateToContent}
+                  />
                 )}
                 {currentSection === 'events' && <EventsSection profile={activeProfile} />}
                 {currentSection === 'challenges' && (
