@@ -10,44 +10,47 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_DB_HOST: db.vlhxrovtrdhcmvvqlryd.supabase.co
+      SUPABASE_DB_PORT: "5432"
+      SUPABASE_DB_NAME: postgres
+
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}           # optionnel
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }} # optionnel
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Installer le CLI (demande la dernière version stable)
       - name: Setup Supabase CLI (latest)
-        id: setup_cli
-        continue-on-error: true
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      # 1bis) Fallback si le step ci-dessus échoue (ex: 404)
-      - name: Fallback install via npm
-        if: steps.setup_cli.outcome == 'failure'
+      - name: Build DB_URL (URL-encode password)
+        shell: bash
         run: |
           set -euo pipefail
-          npm i -g supabase
-          supabase -v
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "❌ Secret SUPABASE_DB_PASSWORD manquant."; exit 1;
+          fi
+          PASS_ENC=$(python3 - <<'PY'
+import os, urllib.parse
+print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"], safe=""))
+PY
+)
+          DB_URL="postgresql://postgres:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
+          echo "DB_URL=$DB_URL" >> "$GITHUB_ENV"
 
       - name: Verify CLI
         run: supabase -v
 
-      # 2) Appliquer les migrations via DB URL (zéro local)
-      - name: Push migrations via DB URL
+      - name: Push migrations
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_DB_URL:-}" ]; then
-            echo "❌ Secret SUPABASE_DB_URL manquant."; exit 1;
-          fi
-          supabase migration up --db-url "${SUPABASE_DB_URL}"
+          supabase migration up --db-url "${DB_URL}"
 
-      # 3) NOTIFY PostgREST pour recharger le schéma
       - name: Install psql client & jq
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
 
@@ -55,20 +58,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
+          PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
+            -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
+            -d "${SUPABASE_DB_NAME}" -U postgres "sslmode=require" \
+            -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
 
-      # 4) Sanity check: colonne comment
       - name: Sanity check - spot_ratings.comment
         shell: bash
         run: |
           set -euo pipefail
-          psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "
-            select column_name from information_schema.columns
-            where table_schema='public' and table_name='spot_ratings' and column_name='comment';
-          "
+          PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
+            -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
+            -d "${SUPABASE_DB_NAME}" -U postgres "sslmode=require" \
+            -v ON_ERROR_STOP=1 -c "
+              select column_name from information_schema.columns
+              where table_schema='public' and table_name='spot_ratings' and column_name='comment';
+            "
 
-      # 5) (Optionnel) Smoke test REST
-      - name: Smoke test REST
+      - name: Smoke test REST (optional)
         shell: bash
         run: |
           set -euo pipefail
@@ -78,5 +85,5 @@ jobs:
               -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
               -H "Accept-Profile: public" | jq .
           else
-            echo "ℹ️ Pas de SUPABASE_URL/ANON_KEY → on saute le smoke test REST."
+            echo "ℹ️ Pas de SUPABASE_URL/ANON_KEY → smoke test REST sauté."
           fi
