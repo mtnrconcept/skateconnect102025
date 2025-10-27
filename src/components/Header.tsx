@@ -13,6 +13,7 @@ import {
   Hash,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { clearPersistedSession } from '../lib/authPersistence';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
 import NotificationsPanel from './NotificationsPanel';
@@ -96,6 +97,7 @@ export default function Header({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    clearPersistedSession();
     window.location.reload();
   };
 
