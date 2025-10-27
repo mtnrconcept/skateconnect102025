@@ -1379,19 +1379,16 @@ export default function MapSection({
 
                 {isRouteLoading && (
                   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-dark-900/70 backdrop-blur-sm">
-                    <div className="skate-loading" aria-hidden="true">
-                      <div className="skate-loading__shadow" />
-                      <div className="skate-loading__board">
-                        <span className="skate-loading__wheel" />
-                        <span className="skate-loading__wheel" />
-                      </div>
-                      <div className="skate-loading__figure">
-                        <div className="skate-loading__head" />
-                        <div className="skate-loading__body" />
-                        <div className="skate-loading__arm" />
-                        <div className="skate-loading__leg skate-loading__leg--front" />
-                        <div className="skate-loading__leg skate-loading__leg--back" />
-                      </div>
+                    <div className="relative h-40 w-40 overflow-hidden rounded-3xl border border-orange-500/30 shadow-[0_0_50px_rgba(255,149,60,0.35)]">
+                      <video
+                        className="h-full w-full object-cover"
+                        src="/Création_d_animation_de_chargement_skate_urbain.mp4"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                      />
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-dark-900/60 via-transparent to-transparent" />
                     </div>
                     <p className="text-xs font-semibold uppercase tracking-[0.4em] text-orange-100 drop-shadow-[0_0_12px_rgba(251,146,60,0.65)]">
                       Calcul de l'itinéraire
