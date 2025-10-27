@@ -158,6 +158,161 @@
   animation: cards-leave-up 0.3s ease-in forwards;
 }
 
+.login-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 35%, rgba(17, 24, 39, 0.62), rgba(3, 7, 18, 0.94));
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.login-intro-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.login-intro-overlay--zooming {
+  animation: login-intro-overlay-fade 0.68s ease forwards;
+}
+
+.login-intro-backdrop {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(80% 80% at 50% 35%, rgba(255, 115, 50, 0.22), transparent 70%),
+    radial-gradient(60% 60% at 65% 65%, rgba(255, 255, 255, 0.08), transparent 75%),
+    radial-gradient(55% 55% at 30% 70%, rgba(255, 255, 255, 0.06), transparent 72%);
+  filter: blur(80px);
+  animation: login-intro-backdrop-pulse 6s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.login-intro-video-wrapper {
+  position: relative;
+  width: min(78vw, 960px);
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 45px 85px rgba(0, 0, 0, 0.55));
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(120% 120% at 50% 50%, rgba(0, 0, 0, 1) 46%, rgba(0, 0, 0, 0) 86%);
+  mask-image: radial-gradient(120% 120% at 50% 50%, rgba(0, 0, 0, 1) 46%, rgba(0, 0, 0, 0) 86%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.login-intro-video-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  background:
+    radial-gradient(50% 60% at 25% 30%, rgba(255, 255, 255, 0.16), transparent 70%),
+    radial-gradient(55% 55% at 80% 25%, rgba(255, 255, 255, 0.12), transparent 72%),
+    radial-gradient(70% 70% at 50% 75%, rgba(255, 255, 255, 0.18), transparent 80%);
+  filter: blur(55px);
+  opacity: 0.5;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: login-intro-mist-shift 12s ease-in-out infinite alternate;
+  z-index: 1;
+}
+
+.login-intro-video-wrapper--zoom {
+  animation: login-intro-zoom 0.68s ease forwards;
+}
+
+.login-intro-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 32px;
+  position: relative;
+  z-index: 2;
+  opacity: 0;
+  animation: login-intro-video-reveal 0.9s ease forwards 0.12s;
+}
+
+.login-intro-video-fog {
+  position: absolute;
+  inset: -14%;
+  background:
+    radial-gradient(65% 60% at 20% 25%, rgba(255, 255, 255, 0.26), transparent 75%),
+    radial-gradient(60% 55% at 78% 30%, rgba(255, 255, 255, 0.22), transparent 72%),
+    radial-gradient(70% 70% at 50% 85%, rgba(255, 255, 255, 0.18), transparent 82%);
+  filter: blur(65px);
+  opacity: 0.35;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 3;
+  animation: login-intro-fog-flow 10s ease-in-out infinite alternate;
+}
+
+@keyframes login-intro-overlay-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes login-intro-zoom {
+  to {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+
+@keyframes login-intro-video-reveal {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes login-intro-fog-flow {
+  from {
+    transform: translate3d(-4%, 2%, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(4%, -3%, 0) scale(1.08);
+  }
+}
+
+@keyframes login-intro-mist-shift {
+  from {
+    transform: translate3d(1%, -2%, 0) scale(1.02);
+  }
+
+  to {
+    transform: translate3d(-1%, 2%, 0) scale(1.08);
+  }
+}
+
+@keyframes login-intro-backdrop-pulse {
+  from {
+    opacity: 0.32;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 0.58;
+    transform: scale(1.05);
+  }
+}
+
 @keyframes cards-enter-up {
   from {
     opacity: 0;
