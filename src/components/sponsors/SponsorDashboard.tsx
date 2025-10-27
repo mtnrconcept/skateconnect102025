@@ -207,7 +207,7 @@ export default function SponsorDashboard() {
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [shopCopyFeedback, setShopCopyFeedback] = useState<string | null>(null);
   const [spotlightFeedback, setSpotlightFeedback] = useState<
-    | { type: 'success' | 'error'; message: string }
+    | { type: 'success' | 'error' | 'info'; message: string }
     | null
   >(null);
   const [isSpotlightModalOpen, setIsSpotlightModalOpen] = useState(false);
@@ -371,7 +371,17 @@ export default function SponsorDashboard() {
           if (!created) {
             throw new Error('create-spotlight-failed');
           }
-          setSpotlightFeedback({ type: 'success', message: 'Spotlight créé avec succès.' });
+          const isLocalPlaceholder = created.id.startsWith('local-');
+          setSpotlightFeedback({
+            type: isLocalPlaceholder ? 'info' : 'success',
+            message: isLocalPlaceholder
+              ?
+                "Spotlight créé en mode démo. Applique les migrations sponsor pour l'activer définitivement."
+              : 'Spotlight créé avec succès.',
+          });
+          if (!isLocalPlaceholder) {
+            await refreshSpotlights();
+          }
         } else {
           if (!spotlightBeingEdited) {
             throw new Error('missing-spotlight-reference');
@@ -382,9 +392,8 @@ export default function SponsorDashboard() {
             throw new Error('update-spotlight-failed');
           }
           setSpotlightFeedback({ type: 'success', message: 'Spotlight mis à jour.' });
+          await refreshSpotlights();
         }
-
-        await refreshSpotlights();
       } catch (cause) {
         setSpotlightFeedback({
           type: 'error',
@@ -718,7 +727,11 @@ export default function SponsorDashboard() {
           {spotlightFeedback && (
             <p
               className={`text-xs ${
-                spotlightFeedback.type === 'success' ? 'text-emerald-300' : 'text-rose-300'
+                spotlightFeedback.type === 'success'
+                  ? 'text-emerald-300'
+                  : spotlightFeedback.type === 'info'
+                    ? 'text-sky-300'
+                    : 'text-rose-300'
               }`}
             >
               {spotlightFeedback.message}
