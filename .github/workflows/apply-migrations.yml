@@ -1,4 +1,4 @@
-name: Apply Supabase Migrations (via Pooler IPv4)
+name: Apply Supabase Migrations (Pooler IPv4)
 
 on:
   workflow_dispatch: {}
@@ -12,18 +12,19 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      # Paramètres du pooler IPv4
-      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
-      SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
-      SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # === Configuration Supabase (Session Pooler IPv4) ===
+      SUPABASE_DB_HOST: aws-1-us-east-1.pooler.supabase.com
+      SUPABASE_DB_PORT: "5432"
+      SUPABASE_DB_NAME: postgres
+      SUPABASE_DB_USER: postgres.vlhxrovtrdhcmvvqlryd   # <- identifiant pooler correct
 
-      # (optionnel)
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      # === Secrets à définir dans GitHub Settings → Secrets → Actions ===
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}   # mot de passe DB Supabase
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}                   # optionnel pour test REST
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}         # optionnel pour test REST
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Supabase CLI
@@ -41,15 +42,16 @@ jobs:
           if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
             echo "❌ Secret SUPABASE_DB_PASSWORD manquant."; exit 1;
           fi
+          # Encode proprement le mot de passe
           PASS_ENC=$(printf '%s' "$SUPABASE_DB_PASSWORD" | jq -sRr @uri)
-          DB_URL="postgresql://postgres:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
+          DB_URL="postgresql://${SUPABASE_DB_USER}:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
           echo "DB_URL=$DB_URL" >> "$GITHUB_ENV"
-          echo "✅ Connection string construite pour pooler IPv4"
+          echo "✅ Connection string construite avec user=${SUPABASE_DB_USER}"
 
       - name: Show Supabase CLI version
         run: supabase -v
 
-      - name: Apply migrations
+      - name: Apply migrations via Pooler IPv4
         shell: bash
         run: |
           set -euo pipefail
@@ -62,7 +64,7 @@ jobs:
           set -euo pipefail
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
             -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
-            -d "${SUPABASE_DB_NAME}" -U postgres "sslmode=require" \
+            -d "${SUPABASE_DB_NAME}" -U "${SUPABASE_DB_USER}" "sslmode=require" \
             -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
           echo "✅ PostgREST schema reloaded"
 
@@ -72,19 +74,22 @@ jobs:
           set -euo pipefail
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
             -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
-            -d "${SUPABASE_DB_NAME}" -U postgres "sslmode=require" \
+            -d "${SUPABASE_DB_NAME}" -U "${SUPABASE_DB_USER}" "sslmode=require" \
             -v ON_ERROR_STOP=1 -c "
-              select column_name from information_schema.columns
+              select column_name
+              from information_schema.columns
               where table_schema='public'
-              and table_name='spot_ratings'
-              and column_name='comment';
+                and table_name='spot_ratings'
+                and column_name='comment';
             "
+          echo "✅ Column 'comment' check completed."
 
       - name: (Optional) Smoke test REST API
         if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
         shell: bash
         run: |
           set -euo pipefail
+          echo "🌐 Running REST API smoke test..."
           curl -sS "${SUPABASE_URL}/rest/v1/spot_ratings?select=id,comment&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
