@@ -1162,6 +1162,14 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
           onToggleFollow={toggleFollow}
           isFollowing={!!followingMap[activeProfileId]}
           isFollowLoading={!!followLoadingMap[activeProfileId]}
+          onMessage={(targetProfileId) => {
+            if (!currentUser) {
+              alert('Connectez-vous pour envoyer un message.');
+              return;
+            }
+            setActiveProfileId(null);
+            onOpenConversation?.(targetProfileId);
+          }}
         />
       )}
     </div>

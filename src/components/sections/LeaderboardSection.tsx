@@ -14,9 +14,10 @@ interface LeaderboardEntry extends UserXP {
 
 interface LeaderboardSectionProps {
   profile: Profile | null;
+  onOpenConversation?: (profileId: string) => void;
 }
 
-export default function LeaderboardSection({ profile }: LeaderboardSectionProps) {
+export default function LeaderboardSection({ profile, onOpenConversation }: LeaderboardSectionProps) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [userRank, setUserRank] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,6 +152,16 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
       return;
     }
     alert('La messagerie des profils fictifs arrive bientôt !');
+  };
+
+  const handleProfileMessage = (profileId: string) => {
+    if (!profile) {
+      alert('Connectez-vous pour envoyer un message.');
+      return;
+    }
+
+    setActiveProfileId(null);
+    onOpenConversation?.(profileId);
   };
 
   const activeFakeProfile = useMemo(() => {
@@ -422,6 +433,7 @@ export default function LeaderboardSection({ profile }: LeaderboardSectionProps)
           profileId={activeProfileId}
           currentUserId={profile.id}
           onClose={() => setActiveProfileId(null)}
+          onMessage={onOpenConversation ? handleProfileMessage : undefined}
         />
       )}
     </div>
