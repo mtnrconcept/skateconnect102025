@@ -447,11 +447,12 @@ function logMissingTable(table: string, error: PostgrestError) {
 
 async function fetchWithSponsorFallback<T>(
   table: string,
-  request: PromiseLike<{ data: T; error: PostgrestError | null }>,
+  requestFactory: () => PromiseLike<{ data: T; error: PostgrestError | null }>,
   fallback: () => Promise<T> | T,
 ): Promise<T> {
-  return withTableFallback(request, fallback, {
+  return withTableFallback(requestFactory, fallback, {
     onMissing: (error) => logMissingTable(table, error),
+    retry: { attempts: 2, delayMs: 500 },
   });
 }
 
@@ -528,7 +529,7 @@ export async function fetchSponsorChallenges(
   const { sponsorId } = options;
   const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_challenges',
-    (() => {
+    () => {
       const query = supabase
         .from('sponsor_challenges')
         .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
@@ -540,7 +541,7 @@ export async function fetchSponsorChallenges(
       }
 
       return query;
-    })(),
+    },
     () => {
       const participationMap = getDemoChallengeParticipations();
       return getDemoSponsorChallenges({ sponsorId }).map((challenge) => ({
@@ -562,7 +563,7 @@ export async function fetchSponsorEvents(
   const { sponsorId } = options;
   const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_events',
-    (() => {
+    () => {
       const query = supabase
         .from('sponsor_events')
         .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
@@ -574,7 +575,7 @@ export async function fetchSponsorEvents(
       }
 
       return query;
-    })(),
+    },
     () => getDemoSponsorEvents({ sponsorId }) as RawSponsorRow[],
   );
 
@@ -587,7 +588,7 @@ export async function fetchSponsorCalls(
   const { sponsorId } = options;
   const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_calls',
-    (() => {
+    () => {
       const query = supabase
         .from('sponsor_calls')
         .select(`*, sponsor:profiles(${sponsorProfileSelection}), owner:profiles(${ownerProfileSelection})`)
@@ -599,7 +600,7 @@ export async function fetchSponsorCalls(
       }
 
       return query;
-    })(),
+    },
     () => getDemoSponsorCalls({ sponsorId }) as RawSponsorRow[],
   );
 
@@ -612,7 +613,7 @@ export async function fetchSponsorNews(
   const { sponsorId } = options;
   const rows = await fetchWithSponsorFallback<RawSponsorRow[] | null>(
     'sponsor_news',
-    (() => {
+    () => {
       const query = supabase
         .from('sponsor_news')
         .select(`*, sponsor:profiles(${sponsorProfileSelection})`)
@@ -624,7 +625,7 @@ export async function fetchSponsorNews(
       }
 
       return query;
-    })(),
+    },
     () => getDemoSponsorNews({ sponsorId }) as RawSponsorRow[],
   );
 

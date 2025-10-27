@@ -45,16 +45,18 @@ function missingApiKeyTableError(): Error {
 
 export async function fetchSponsorApiKeys(sponsorId: string): Promise<SponsorApiKey[]> {
   const rows = await withTableFallback<SponsorApiKey[] | null>(
-    supabase
-      .from('sponsor_api_keys')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('created_at', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_api_keys')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('created_at', { ascending: false }),
     () => [],
     {
       onMissing: () => {
         console.info('sponsor_api_keys table is missing. Returning an empty API key list.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 

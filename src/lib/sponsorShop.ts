@@ -153,16 +153,18 @@ function normalizeText(value: string | null | undefined): string | null {
 
 export async function fetchSponsorShopItems(sponsorId: string): Promise<SponsorShopItem[]> {
   const rows = await withTableFallback<SponsorShopItem[] | null>(
-    supabase
-      .from('sponsor_shop_items')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('updated_at', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_shop_items')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('updated_at', { ascending: false }),
     () => [],
     {
       onMissing: () => {
         console.info('sponsor_shop_items table is missing. Returning an empty shop inventory.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
@@ -173,16 +175,18 @@ export async function fetchSponsorShopItemVariants(
   sponsorId: string,
 ): Promise<SponsorShopItemVariant[]> {
   const rows = await withTableFallback<SponsorShopItemVariant[] | null>(
-    supabase
-      .from('sponsor_shop_item_variants')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('updated_at', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_shop_item_variants')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('updated_at', { ascending: false }),
     () => [],
     {
       onMissing: () => {
         console.info('sponsor_shop_item_variants table is missing. Returning an empty variant inventory.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
@@ -199,16 +203,18 @@ export async function fetchSponsorShopBundles(sponsorId: string): Promise<Sponso
   };
 
   const rows = await withTableFallback<RawBundle[] | null>(
-    supabase
-      .from('sponsor_shop_bundles')
-      .select('*, items:sponsor_shop_bundle_items(item_id, quantity, sponsor_id)')
-      .eq('sponsor_id', sponsorId)
-      .order('updated_at', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_shop_bundles')
+        .select('*, items:sponsor_shop_bundle_items(item_id, quantity, sponsor_id)')
+        .eq('sponsor_id', sponsorId)
+        .order('updated_at', { ascending: false }),
     () => [],
     {
       onMissing: () => {
         console.info('sponsor_shop_bundles table is missing. Returning an empty bundle inventory.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
@@ -239,16 +245,18 @@ export async function fetchSponsorShopBundles(sponsorId: string): Promise<Sponso
 
 export async function fetchSponsorShopCoupons(sponsorId: string): Promise<SponsorShopCoupon[]> {
   const rows = await withTableFallback<SponsorShopCoupon[] | null>(
-    supabase
-      .from('sponsor_shop_item_coupons')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('updated_at', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_shop_item_coupons')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('updated_at', { ascending: false }),
     () => [],
     {
       onMissing: () => {
         console.info('sponsor_shop_item_coupons table is missing. Returning an empty coupon inventory.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
@@ -627,17 +635,19 @@ function toAnalyticsTotals({
 
 export async function fetchSponsorShopItemStats(sponsorId: string): Promise<SponsorShopItemStat[]> {
   const rows = await withTableFallback<SponsorShopItemStat[] | null>(
-    supabase
-      .from('sponsor_shop_item_stats')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('metric_date', { ascending: false })
-      .limit(365),
+    () =>
+      supabase
+        .from('sponsor_shop_item_stats')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('metric_date', { ascending: false })
+        .limit(365),
     () => [],
     {
       onMissing: () => {
         console.info('sponsor_shop_item_stats table is missing. Returning empty analytics history.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
