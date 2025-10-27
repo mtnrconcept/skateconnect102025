@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
-import { LogIn, UserPlus } from 'lucide-react';
+import { LogIn, UserPlus, Check } from 'lucide-react';
+import {
+  clearPersistedSession,
+  getRememberMePreference,
+  persistSession,
+  setRememberMePreference,
+} from '../lib/authPersistence';
 
 interface AuthProps {
   onAuthSuccess: () => void;
@@ -14,6 +20,24 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const hasHydratedPreference = useRef(false);
+
+  useEffect(() => {
+    setRememberMe(getRememberMePreference());
+    hasHydratedPreference.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedPreference.current) {
+      return;
+    }
+
+    setRememberMePreference(rememberMe);
+    if (!rememberMe) {
+      clearPersistedSession();
+    }
+  }, [rememberMe]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,12 +46,17 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
     try {
       if (isLogin) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
         if (signInError) throw signInError;
+        if (rememberMe) {
+          persistSession(signInData.session ?? null);
+        } else {
+          clearPersistedSession();
+        }
         onAuthSuccess();
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -45,6 +74,11 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
           });
 
           if (profileError) throw profileError;
+          if (rememberMe && data.session) {
+            persistSession(data.session);
+          } else {
+            clearPersistedSession();
+          }
           onAuthSuccess();
         }
       }
@@ -172,6 +206,28 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                   placeholder="••••••••"
                 />
               </div>
+
+              <button
+                type="button"
+                onClick={() => setRememberMe((previous) => !previous)}
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border transition-all duration-200 ${
+                  rememberMe
+                    ? 'border-orange-500 bg-orange-500/10 text-orange-200'
+                    : 'border-dark-600 text-gray-400 hover:border-dark-500'
+                }`}
+                aria-pressed={rememberMe}
+              >
+                <span className="font-medium">Resté connecté</span>
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded-full border ${
+                    rememberMe
+                      ? 'border-orange-500 bg-orange-500 text-white'
+                      : 'border-gray-500 text-transparent'
+                  }`}
+                >
+                  <Check size={14} strokeWidth={3} />
+                </span>
+              </button>
 
               {error && (
                 <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">

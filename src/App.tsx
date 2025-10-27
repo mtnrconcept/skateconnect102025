@@ -1,5 +1,11 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase.js';
+import {
+  clearPersistedSession,
+  getRememberMePreference,
+  loadPersistedSession,
+  persistSession,
+} from './lib/authPersistence';
 import Auth from './components/Auth';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -162,14 +168,42 @@ function App() {
   }, [profile?.role]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let isMounted = true;
+
+    const initializeAuth = async () => {
+      if (typeof window === 'undefined') {
+        setLoading(false);
+        return;
+      }
+
+      const storedSession = loadPersistedSession();
+      if (storedSession) {
+        const { error } = await supabase.auth.setSession(storedSession);
+        if (error) {
+          console.error('Impossible de restaurer la session persistée :', error);
+          clearPersistedSession();
+        } else if (!getRememberMePreference()) {
+          clearPersistedSession();
+        }
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!isMounted) {
+        return;
+      }
+
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
       } else {
         setLoading(false);
       }
-    });
+    };
+
+    void initializeAuth();
 
     const {
       data: { subscription },
@@ -177,13 +211,20 @@ function App() {
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
+        if (getRememberMePreference()) {
+          persistSession(session);
+        }
       } else {
         setProfile(null);
         setLoading(false);
+        clearPersistedSession();
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -291,6 +332,11 @@ function App() {
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
+        if (getRememberMePreference()) {
+          persistSession(session);
+        }
+      } else {
+        clearPersistedSession();
       }
     });
   };
