@@ -1,4 +1,4 @@
-name: Apply Supabase Migrations (IPv4 pooler via project host)
+name: Apply Supabase Migrations (Pooler IPv4 – global)
 
 on:
   workflow_dispatch: {}
@@ -10,16 +10,13 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      # === IPv4 Session Pooler via project host ===
-      SUPABASE_DB_HOST: db.vlhxrovtrdhcmvvqlryd.supabase.co
-      SUPABASE_DB_PORT: "6543"           # pooler IPv4 sur host projet
+      SUPABASE_DB_HOST: aws-1-us-east-1.pooler.supabase.com
+      SUPABASE_DB_PORT: "5432"
       SUPABASE_DB_NAME: postgres
-      SUPABASE_DB_USER: postgres         # <- sans suffixe de ref
-
-      # === Secrets (Settings → Secrets and variables → Actions) ===
+      SUPABASE_DB_USER: postgres.vlhxrovtrdhcmvvqlryd
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}           # optionnel
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }} # optionnel
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout
@@ -41,13 +38,12 @@ jobs:
           PASS_ENC=$(printf '%s' "$SUPABASE_DB_PASSWORD" | jq -sRr @uri)
           DB_URL="postgresql://${SUPABASE_DB_USER}:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
           echo "DB_URL=$DB_URL" >> "$GITHUB_ENV"
-          echo "✅ URL construite pour ${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT} en user=${SUPABASE_DB_USER}"
+          echo "✅ URL construite (user=${SUPABASE_DB_USER})"
 
-      - name: Preflight DB connectivity (psql)
+      - name: Preflight (psql \conninfo)
         shell: bash
         run: |
           set -euo pipefail
-          echo "🔎 psql \\conninfo"
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
             "host=${SUPABASE_DB_HOST} port=${SUPABASE_DB_PORT} dbname=${SUPABASE_DB_NAME} user=${SUPABASE_DB_USER} sslmode=require" \
             -v ON_ERROR_STOP=1 -c "\conninfo"
