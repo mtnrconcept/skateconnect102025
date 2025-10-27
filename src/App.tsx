@@ -588,7 +588,12 @@ function App() {
                 )}
                 {currentSection === 'badges' && <BadgesSection profile={activeProfile} />}
                 {currentSection === 'rewards' && <RewardsSection profile={activeProfile} />}
-                {currentSection === 'leaderboard' && <LeaderboardSection profile={activeProfile} />}
+                {currentSection === 'leaderboard' && (
+                  <LeaderboardSection
+                    profile={activeProfile}
+                    onOpenConversation={handleOpenConversation}
+                  />
+                )}
                 {currentSection === 'messages' && (
                   <MessagesSection
                     profile={activeProfile}

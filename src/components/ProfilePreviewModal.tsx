@@ -12,6 +12,7 @@ interface ProfilePreviewModalProps {
   onToggleFollow?: (profileId: string) => Promise<boolean | null>;
   isFollowing?: boolean;
   isFollowLoading?: boolean;
+  onMessage?: (profileId: string) => void;
 }
 
 type ProfileWithDetails = Profile & {
@@ -38,6 +39,7 @@ export default function ProfilePreviewModal({
   onToggleFollow,
   isFollowing,
   isFollowLoading,
+  onMessage,
 }: ProfilePreviewModalProps) {
   const [profile, setProfile] = useState<ProfileWithDetails | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -150,6 +152,14 @@ export default function ProfilePreviewModal({
     }
   };
 
+  const handleMessage = () => {
+    if (!onMessage || isOwnProfile) {
+      return;
+    }
+
+    onMessage(profileId);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm px-4 py-6">
       <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-dark-700 bg-[#101019] shadow-2xl">
@@ -220,25 +230,38 @@ export default function ProfilePreviewModal({
                       )}
                     </div>
                   </div>
-                  {!isOwnProfile && onToggleFollow && (
-                    <button
-                      type="button"
-                      onClick={handleFollow}
-                      disabled={isFollowLoading}
-                      className={`flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                        localFollowing
-                          ? 'border border-orange-500/60 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20'
-                          : 'bg-orange-500 text-white hover:bg-orange-600'
-                      } ${isFollowLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                      {isFollowLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : localFollowing ? (
-                        'Abonné·e'
-                      ) : (
-                        'Suivre'
+                  {!isOwnProfile && (onToggleFollow || onMessage) && (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      {onToggleFollow && (
+                        <button
+                          type="button"
+                          onClick={handleFollow}
+                          disabled={isFollowLoading}
+                          className={`flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                            localFollowing
+                              ? 'border border-orange-500/60 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20'
+                              : 'bg-orange-500 text-white hover:bg-orange-600'
+                          } ${isFollowLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {isFollowLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : localFollowing ? (
+                            'Abonné·e'
+                          ) : (
+                            'Suivre'
+                          )}
+                        </button>
                       )}
-                    </button>
+                      {onMessage && (
+                        <button
+                          type="button"
+                          onClick={handleMessage}
+                          className="inline-flex items-center justify-center rounded-full border border-dark-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-orange-500/70 hover:text-orange-200"
+                        >
+                          Envoyer un message
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
