@@ -1,0 +1,70 @@
+name: Apply Supabase Migrations
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "supabase/migrations/**"
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: v2.53.6
+
+      # ===== Variante A: via DB URL direct =====
+      - name: Push migrations via DB URL
+        if: env.SUPABASE_DB_URL != ''
+        run: supabase migration up --db-url "${SUPABASE_DB_URL}"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      # ===== Variante B: via Access Token + link =====
+      - name: Login & Link project
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        run: |
+          supabase login --token "${SUPABASE_ACCESS_TOKEN}"
+          supabase link --project-ref "vlhxrovtrdhcmvvqlryd"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Push migrations (linked)
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        run: supabase db push
+
+      # ===== NOTIFY pgrst pour recharger le schéma =====
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Notify PostgREST to reload schema
+        if: env.SUPABASE_DB_URL != ''
+        run: psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Notify PostgREST to reload schema (linked variant)
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        run: |
+          # Derive DB URL from project settings is not exposed via CLI,
+          # so notify step is skipped in token-only mode unless you also provide DB URL.
+          echo "Skip NOTIFY without DB URL. Provide SUPABASE_DB_URL secret if you want this step."
+
+      # ===== Smoke test API (facultatif mais utile) =====
+      - name: Smoke test: check spot_ratings.comment exists
+        if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''
+        run: |
+          set -e
+          curl -sS "${SUPABASE_URL}/rest/v1/spot_ratings?select=id,comment&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Accept-Profile: public" \
+            -H "Prefer: count=exact" | jq .
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
