@@ -1,4 +1,4 @@
-import { MapPin, Star } from 'lucide-react';
+import { MapPin, Star, Route } from 'lucide-react';
 import type { Spot } from '../types';
 
 interface ScrollableSpotListProps {
@@ -9,6 +9,7 @@ interface ScrollableSpotListProps {
   coverPhotos?: Record<string, string>;
   loadMoreLabel?: string;
   hasMore?: boolean;
+  onRouteRequest?: (spot: Spot) => void;
 }
 
 const getSpotTypeLabel = (type: string) => {
@@ -31,6 +32,7 @@ export default function ScrollableSpotList({
   coverPhotos,
   loadMoreLabel = 'Afficher plus',
   hasMore = false,
+  onRouteRequest,
 }: ScrollableSpotListProps) {
   const visibleSpots = typeof visibleCount === 'number' ? spots.slice(0, visibleCount) : spots;
 
@@ -46,12 +48,10 @@ export default function ScrollableSpotList({
             const rating = Math.max(0, Math.min(5, ratingSource));
 
             return (
-              <button
+              <div
                 key={spot.id}
-                type="button"
-                onClick={() => onSpotClick?.(spot)}
-                className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
                 role="listitem"
+                className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-dark-700/80 bg-dark-800/70 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-orange-400/50 hover:shadow-orange-900/20"
               >
                 <div className="absolute inset-0">
                   {mediaUrl ? (
@@ -68,7 +68,18 @@ export default function ScrollableSpotList({
                   <div className="absolute inset-0 bg-gradient-to-t from-dark-900/90 via-dark-900/30 to-transparent transition-opacity duration-500 group-hover:from-dark-900/95 group-hover:via-dark-900/50" />
                 </div>
 
-                <div className="absolute inset-0 flex flex-col justify-between p-4">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSpotClick?.(spot)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSpotClick?.(spot);
+                    }
+                  }}
+                  className="absolute inset-0 flex cursor-pointer flex-col justify-between p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                >
                   <div className="flex items-start justify-between text-xs font-semibold uppercase tracking-wide text-white">
                     <span className="rounded-full bg-orange-500/90 px-3 py-1 text-[11px]">
                       {getSpotTypeLabel(spot.spot_type)}
@@ -85,15 +96,32 @@ export default function ScrollableSpotList({
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1">
-                      <h3 className="truncate text-lg font-semibold text-white" title={spot.name}>
-                        {spot.name}
-                      </h3>
-                      <div className="flex items-start gap-2 text-xs text-gray-200">
-                        <MapPin size={14} className="mt-0.5 text-orange-400" />
-                        <span className="truncate leading-snug" title={spot.address || 'Adresse non spécifiée'}>
-                          {spot.address || 'Adresse non spécifiée'}
-                        </span>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-1">
+                        <h3 className="truncate text-lg font-semibold text-white" title={spot.name}>
+                          {spot.name}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-200">
+                          <div className="flex items-start gap-2">
+                            <MapPin size={14} className="mt-0.5 text-orange-400" />
+                            <span className="truncate leading-snug" title={spot.address || 'Adresse non spécifiée'}>
+                              {spot.address || 'Adresse non spécifiée'}
+                            </span>
+                          </div>
+                          {onRouteRequest && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onRouteRequest(spot);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-dark-900/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-100 transition-colors hover:border-orange-400 hover:bg-orange-500/20"
+                            >
+                              <Route size={12} className="text-orange-300" />
+                              Itinéraire
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <span className="inline-flex items-center rounded-full border border-orange-500/40 bg-orange-500/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-orange-100">
@@ -101,7 +129,7 @@ export default function ScrollableSpotList({
                     </span>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
