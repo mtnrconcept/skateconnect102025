@@ -10,45 +10,65 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}      # ex: postgresql://postgres:***@db.vlhxrovtrdhcmvvqlryd.supabase.co:5432/postgres?sslmode=require
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}            # ex: https://vlhxrovtrdhcmvvqlryd.supabase.co (optionnel)
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}  # anon key (optionnel)
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Supabase CLI
+      # 1) Installer le CLI (demande la dernière version stable)
+      - name: Setup Supabase CLI (latest)
+        id: setup_cli
+        continue-on-error: true
         uses: supabase/setup-cli@v1
         with:
-          version: v2.53.6
+          version: latest
 
+      # 1bis) Fallback si le step ci-dessus échoue (ex: 404)
+      - name: Fallback install via npm
+        if: steps.setup_cli.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          npm i -g supabase
+          supabase -v
+
+      - name: Verify CLI
+        run: supabase -v
+
+      # 2) Appliquer les migrations via DB URL (zéro local)
       - name: Push migrations via DB URL
         shell: bash
         run: |
           set -euo pipefail
           if [ -z "${SUPABASE_DB_URL:-}" ]; then
-            echo "SUPABASE_DB_URL secret manquant."; exit 1;
+            echo "❌ Secret SUPABASE_DB_URL manquant."; exit 1;
           fi
           supabase migration up --db-url "${SUPABASE_DB_URL}"
 
+      # 3) NOTIFY PostgREST pour recharger le schéma
       - name: Install psql client & jq
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
 
-      - name: NOTIFY PostgREST to reload schema
+      - name: NOTIFY pgrst reload
         shell: bash
         run: |
           set -euo pipefail
           psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
 
-      - name: Sanity check - column spot_ratings.comment exists
+      # 4) Sanity check: colonne comment
+      - name: Sanity check - spot_ratings.comment
         shell: bash
         run: |
           set -euo pipefail
-          psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c \
-          "select column_name from information_schema.columns where table_schema='public' and table_name='spot_ratings' and column_name='comment';"
+          psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "
+            select column_name from information_schema.columns
+            where table_schema='public' and table_name='spot_ratings' and column_name='comment';
+          "
 
-      - name: Smoke test REST (optional)
+      # 5) (Optionnel) Smoke test REST
+      - name: Smoke test REST
         shell: bash
         run: |
           set -euo pipefail
@@ -58,5 +78,5 @@ jobs:
               -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
               -H "Accept-Profile: public" | jq .
           else
-            echo "Secrets SUPABASE_URL/SUPABASE_ANON_KEY absents — on saute le smoke test REST."
+            echo "ℹ️ Pas de SUPABASE_URL/ANON_KEY → on saute le smoke test REST."
           fi
