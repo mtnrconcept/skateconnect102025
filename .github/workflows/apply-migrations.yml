@@ -1,4 +1,4 @@
-name: Apply Supabase Migrations
+name: Apply Supabase Migrations (via Pooler IPv4)
 
 on:
   workflow_dispatch: {}
@@ -12,10 +12,13 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_DB_HOST: db.vlhxrovtrdhcmvvqlryd.supabase.co
-      SUPABASE_DB_PORT: "5432"
-      SUPABASE_DB_NAME: postgres
+      # Paramètres du pooler IPv4
+      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+      SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
+      SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # (optionnel)
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
@@ -25,6 +28,8 @@ jobs:
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
+        with:
+          version: latest
 
       - name: Install psql client and jq
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
@@ -33,10 +38,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "${SUPABASE_DB_PASSWORD:-}" ] || { echo "SUPABASE_DB_PASSWORD manquant"; exit 1; }
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "❌ Secret SUPABASE_DB_PASSWORD manquant."; exit 1;
+          fi
           PASS_ENC=$(printf '%s' "$SUPABASE_DB_PASSWORD" | jq -sRr @uri)
           DB_URL="postgresql://postgres:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
           echo "DB_URL=$DB_URL" >> "$GITHUB_ENV"
+          echo "✅ Connection string construite pour pooler IPv4"
 
       - name: Show Supabase CLI version
         run: supabase -v
@@ -45,9 +53,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "🚀 Applying migrations via Pooler IPv4..."
           supabase migration up --db-url "${DB_URL}"
 
-      - name: Notify PostgREST to reload schema
+      - name: Reload PostgREST schema
         shell: bash
         run: |
           set -euo pipefail
@@ -55,8 +64,9 @@ jobs:
             -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
             -d "${SUPABASE_DB_NAME}" -U postgres "sslmode=require" \
             -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
+          echo "✅ PostgREST schema reloaded"
 
-      - name: Sanity check - spot_ratings.comment
+      - name: Check column spot_ratings.comment
         shell: bash
         run: |
           set -euo pipefail
@@ -66,11 +76,11 @@ jobs:
             -v ON_ERROR_STOP=1 -c "
               select column_name from information_schema.columns
               where table_schema='public'
-                and table_name='spot_ratings'
-                and column_name='comment';
+              and table_name='spot_ratings'
+              and column_name='comment';
             "
 
-      - name: Smoke test REST (optional)
+      - name: (Optional) Smoke test REST API
         if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
         shell: bash
         run: |
