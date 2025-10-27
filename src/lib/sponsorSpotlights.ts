@@ -121,49 +121,88 @@ function missingSpotlightTableError(): Error {
   );
 }
 
+function createLocalSpotlightRow(payload: SpotlightPayload): SpotlightRow {
+  const now = new Date().toISOString();
+  const randomId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `local-${Math.random().toString(36).slice(2, 11)}`;
+
+  return {
+    id: randomId,
+    sponsor_id: payload.sponsor_id,
+    title: payload.title,
+    description: payload.description ?? null,
+    media_url: payload.media_url ?? null,
+    call_to_action: payload.call_to_action ?? null,
+    call_to_action_url: payload.call_to_action_url ?? null,
+    status: (payload.status ?? 'draft') as SponsorSpotlight['status'],
+    start_date: payload.start_date ?? null,
+    end_date: payload.end_date ?? null,
+    performance: null,
+    created_at: now,
+    updated_at: now,
+  } satisfies SpotlightRow;
+}
+
 export async function fetchSponsorSpotlights(sponsorId: string): Promise<SponsorSpotlight[]> {
+  let schemaMissing = false;
+
   const rows = await withTableFallback<SpotlightRow[] | null>(
     supabase
       .from('sponsor_spotlights')
       .select('*')
       .eq('sponsor_id', sponsorId)
       .order('updated_at', { ascending: false }),
-    () => [],
+    () => {
+      schemaMissing = true;
+      console.info('sponsor_spotlights table is missing. Returning an empty spotlight list.');
+      return [];
+    },
     {
       onMissing: () => {
-        console.info('sponsor_spotlights table is missing. Returning an empty spotlight list.');
+        schemaMissing = true;
       },
     },
   );
+
+  if (schemaMissing) {
+    throw missingSpotlightTableError();
+  }
 
   return (rows ?? []).map((row) => normalizeSponsorSpotlight(row));
 }
 
 export async function createSponsorSpotlight(payload: SpotlightPayload): Promise<SponsorSpotlight> {
-  const { data, error } = await supabase
-    .from('sponsor_spotlights')
-    .insert({
-      sponsor_id: payload.sponsor_id,
-      title: payload.title,
-      description: payload.description ?? '',
-      media_url: payload.media_url ?? null,
-      call_to_action: payload.call_to_action ?? null,
-      call_to_action_url: payload.call_to_action_url ?? null,
-      status: payload.status ?? 'draft',
-      start_date: payload.start_date ?? null,
-      end_date: payload.end_date ?? null,
-    })
-    .select('*')
-    .single();
+  const row = await withTableFallback<SpotlightRow | null>(
+    supabase
+      .from('sponsor_spotlights')
+      .insert({
+        sponsor_id: payload.sponsor_id,
+        title: payload.title,
+        description: payload.description ?? '',
+        media_url: payload.media_url ?? null,
+        call_to_action: payload.call_to_action ?? null,
+        call_to_action_url: payload.call_to_action_url ?? null,
+        status: payload.status ?? 'draft',
+        start_date: payload.start_date ?? null,
+        end_date: payload.end_date ?? null,
+      })
+      .select('*')
+      .single(),
+    () => {
+      console.info(
+        'sponsor_spotlights table is missing. Creating a local-only spotlight placeholder instead.',
+      );
+      return createLocalSpotlightRow(payload);
+    },
+  );
 
-  if (error) {
-    if (isSchemaMissing(error)) {
-      throw missingSpotlightTableError();
-    }
-    throw error;
+  if (!row) {
+    throw new Error('Impossible de créer le Spotlight.');
   }
 
-  return normalizeSponsorSpotlight(data as SpotlightRow);
+  return normalizeSponsorSpotlight(row);
 }
 
 export async function updateSponsorSpotlight(

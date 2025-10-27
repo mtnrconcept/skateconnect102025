@@ -406,7 +406,7 @@ export function SponsorProvider({ profile, children }: SponsorProviderProps) {
     } catch (cause) {
       if (isSchemaMissing(cause)) {
         warnSchemaMissing('refreshSpotlights', cause);
-        setSpotlights([]);
+        setSpotlights((current) => current.filter((spotlight) => spotlight.id.startsWith('local-')));
         return;
       }
       console.error('Unable to load sponsor spotlights', cause);
