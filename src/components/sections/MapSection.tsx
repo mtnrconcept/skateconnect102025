@@ -1096,14 +1096,38 @@ export default function MapSection({
   }, [selectedSpot, activeRouteSpotId, clearRoute]);
 
   useEffect(() => {
-    if (!routeDetails) {
+    if (!activeRouteSpotId) {
       return;
     }
 
-    if (routeDetails.mode !== routeMode) {
-      clearRoute();
+    if (isRouteLoading) {
+      return;
     }
-  }, [routeMode, routeDetails, clearRoute]);
+
+    const targetSpot =
+      spots.find((spotItem) => spotItem.id === activeRouteSpotId) ??
+      (selectedSpot?.id === activeRouteSpotId ? selectedSpot : null);
+
+    if (!targetSpot) {
+      clearRoute();
+      return;
+    }
+
+    if (routeDetails?.mode === routeMode) {
+      return;
+    }
+
+    void showRouteToSpot(targetSpot);
+  }, [
+    activeRouteSpotId,
+    clearRoute,
+    isRouteLoading,
+    routeDetails,
+    routeMode,
+    selectedSpot,
+    showRouteToSpot,
+    spots,
+  ]);
 
   const filterButtons: { id: Spot['spot_type'] | 'all'; label: string }[] = [
     { id: 'all', label: 'Tous' },
@@ -1352,6 +1376,28 @@ export default function MapSection({
                 <div ref={mapContainer} className="absolute inset-0" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-dark-900/70 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark-900/70 to-transparent" />
+
+                {isRouteLoading && (
+                  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-dark-900/70 backdrop-blur-sm">
+                    <div className="skate-loading" aria-hidden="true">
+                      <div className="skate-loading__shadow" />
+                      <div className="skate-loading__board">
+                        <span className="skate-loading__wheel" />
+                        <span className="skate-loading__wheel" />
+                      </div>
+                      <div className="skate-loading__figure">
+                        <div className="skate-loading__head" />
+                        <div className="skate-loading__body" />
+                        <div className="skate-loading__arm" />
+                        <div className="skate-loading__leg skate-loading__leg--front" />
+                        <div className="skate-loading__leg skate-loading__leg--back" />
+                      </div>
+                    </div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.4em] text-orange-100 drop-shadow-[0_0_12px_rgba(251,146,60,0.65)]">
+                      Calcul de l'itinéraire
+                    </p>
+                  </div>
+                )}
 
                 <div className="absolute left-4 top-4 flex flex-col gap-3">
                   <button
