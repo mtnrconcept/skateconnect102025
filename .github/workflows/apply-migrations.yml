@@ -16,12 +16,12 @@ jobs:
       SUPABASE_DB_HOST: aws-1-us-east-1.pooler.supabase.com
       SUPABASE_DB_PORT: "5432"
       SUPABASE_DB_NAME: postgres
-      SUPABASE_DB_USER: postgres.vlhxrovtrdhcmvvqlryd   # <- identifiant pooler correct
+      SUPABASE_DB_USER: postgres.vlhxrovtrdhcmvvqlryd   # ⚠️ user complet requis pour pooler IPv4
 
-      # === Secrets à définir dans GitHub Settings → Secrets → Actions ===
+      # === Secrets à définir dans GitHub Settings → Secrets and variables → Actions ===
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}   # mot de passe DB Supabase
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}                   # optionnel pour test REST
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}         # optionnel pour test REST
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}                   # optionnel (https://vlhxrovtrdhcmvvqlryd.supabase.co)
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}         # optionnel (clé API publique)
 
     steps:
       - name: Checkout repository
@@ -32,7 +32,7 @@ jobs:
         with:
           version: latest
 
-      - name: Install psql client and jq
+      - name: Install psql client & jq
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
 
       - name: Build DB_URL (encode password)
@@ -42,11 +42,25 @@ jobs:
           if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
             echo "❌ Secret SUPABASE_DB_PASSWORD manquant."; exit 1;
           fi
-          # Encode proprement le mot de passe
+
+          # Encode proprement le mot de passe pour éviter les caractères spéciaux
           PASS_ENC=$(printf '%s' "$SUPABASE_DB_PASSWORD" | jq -sRr @uri)
+
           DB_URL="postgresql://${SUPABASE_DB_USER}:${PASS_ENC}@${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?sslmode=require"
           echo "DB_URL=$DB_URL" >> "$GITHUB_ENV"
+
           echo "✅ Connection string construite avec user=${SUPABASE_DB_USER}"
+          echo "🔒 Mot de passe encodé (masqué)"
+
+      - name: Debug DB_URL user & host
+        shell: bash
+        run: |
+          echo "=== DEBUG INFO ==="
+          echo "User: ${SUPABASE_DB_USER}"
+          echo "Host: ${SUPABASE_DB_HOST}"
+          echo "Port: ${SUPABASE_DB_PORT}"
+          echo "Database: ${SUPABASE_DB_NAME}"
+          echo "=================="
 
       - name: Show Supabase CLI version
         run: supabase -v
@@ -62,6 +76,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "♻️  Reloading PostgREST schema..."
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
             -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
             -d "${SUPABASE_DB_NAME}" -U "${SUPABASE_DB_USER}" "sslmode=require" \
@@ -72,6 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "🔍 Vérification de la colonne 'comment' dans 'spot_ratings'..."
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql \
             -h "${SUPABASE_DB_HOST}" -p "${SUPABASE_DB_PORT}" \
             -d "${SUPABASE_DB_NAME}" -U "${SUPABASE_DB_USER}" "sslmode=require" \
@@ -82,14 +98,14 @@ jobs:
                 and table_name='spot_ratings'
                 and column_name='comment';
             "
-          echo "✅ Column 'comment' check completed."
+          echo "✅ Vérification terminée."
 
       - name: (Optional) Smoke test REST API
         if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "🌐 Running REST API smoke test..."
+          echo "🌐 REST API smoke test..."
           curl -sS "${SUPABASE_URL}/rest/v1/spot_ratings?select=id,comment&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
