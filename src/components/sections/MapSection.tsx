@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { MapPin, Filter, Plus, Navigation, AlertTriangle, Star } from 'lucide-react';
+import { MapPin, Filter, Plus, Navigation, AlertTriangle, Star, Route } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase.js';
@@ -7,8 +7,12 @@ import SpotDetailModal from '../SpotDetailModal';
 import AddSpotModal from '../AddSpotModal';
 import type { Spot } from '../../types';
 import ScrollableSpotList from '../ScrollableSpotList';
+import type { FeatureCollection, LineString } from 'geojson';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
+
+const ROUTE_SOURCE_ID = 'map-section-route-source';
+const ROUTE_LAYER_ID = 'map-section-route-layer';
 
 const normalizeText = (value: string) =>
   value
@@ -31,6 +35,8 @@ export default function MapSection({
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const lastFocusedSpotRef = useRef<string | null>(null);
+  const userLocationRef = useRef<[number, number] | null>(null);
+  const userLocationMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   const [spots, setSpots] = useState<Spot[]>([]);
   const [spotCoverPhotos, setSpotCoverPhotos] = useState<Record<string, string>>({});
@@ -46,8 +52,35 @@ export default function MapSection({
   const [ratingFilter, setRatingFilter] = useState<'all' | 1 | 2 | 3 | 4 | 5>('all');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapVisibleSpots, setMapVisibleSpots] = useState<Spot[]>([]);
+  const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const [activeRouteSpotId, setActiveRouteSpotId] = useState<string | null>(null);
 
   const filterControlsRef = useRef<HTMLDivElement | null>(null);
+
+  const clearRoute = useCallback(() => {
+    if (!isMapAvailable) {
+      return;
+    }
+
+    const mapInstance = map.current;
+    if (!mapInstance) {
+      return;
+    }
+
+    if (mapInstance.getLayer(ROUTE_LAYER_ID)) {
+      mapInstance.removeLayer(ROUTE_LAYER_ID);
+    }
+
+    if (mapInstance.getSource(ROUTE_SOURCE_ID)) {
+      mapInstance.removeSource(ROUTE_SOURCE_ID);
+    }
+  }, [isMapAvailable]);
+
+  useEffect(() => {
+    return () => {
+      clearRoute();
+    };
+  }, [clearRoute]);
 
   const surfaceOptions = useMemo(
     () => [
@@ -359,10 +392,16 @@ export default function MapSection({
       resizeObserver.disconnect();
       mapInstance.off('moveend', handleViewportChange);
       mapInstance.off('zoomend', handleViewportChange);
+      clearRoute();
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove();
+        userLocationMarkerRef.current = null;
+      }
+      userLocationRef.current = null;
       mapInstance.remove();
       map.current = null;
     };
-  }, [isMapAvailable]);
+  }, [clearRoute, isMapAvailable]);
 
   useEffect(() => {
     if (!isMapAvailable) return;
@@ -727,36 +766,209 @@ export default function MapSection({
     setSearchTerm('');
   }, [focusSpotId]);
 
-  const getUserLocation = () => {
+  const updateUserLocationMarker = useCallback(
+    (coords: [number, number]) => {
+      if (!isMapAvailable) {
+        return;
+      }
+
+      const mapInstance = map.current;
+      if (!mapInstance) {
+        return;
+      }
+
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.setLngLat(coords);
+      } else {
+        userLocationMarkerRef.current = new mapboxgl.Marker({ color: '#3b82f6' })
+          .setLngLat(coords)
+          .setPopup(new mapboxgl.Popup().setHTML('<p class="text-sm font-medium">Vous êtes ici</p>'))
+          .addTo(mapInstance);
+      }
+    },
+    [isMapAvailable],
+  );
+
+  const requestUserLocation = useCallback(async () => {
+    if (!isMapAvailable) {
+      throw new Error('Carte indisponible');
+    }
+
+    if (userLocationRef.current) {
+      updateUserLocationMarker(userLocationRef.current);
+      return userLocationRef.current;
+    }
+
+    if (!('geolocation' in navigator)) {
+      throw new Error('La géolocalisation n\'est pas supportée par votre navigateur.');
+    }
+
+    return await new Promise<[number, number]>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords: [number, number] = [position.coords.longitude, position.coords.latitude];
+          userLocationRef.current = coords;
+          updateUserLocationMarker(coords);
+          resolve(coords);
+        },
+        (error) => {
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 60_000,
+          timeout: 15_000,
+        },
+      );
+    });
+  }, [isMapAvailable, updateUserLocationMarker]);
+
+  const getUserLocation = useCallback(() => {
     if (!isMapAvailable) {
       return;
     }
 
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const coords: [number, number] = [position.coords.longitude, position.coords.latitude];
+    (async () => {
+      try {
+        const coords = await requestUserLocation();
 
-          if (map.current) {
-            map.current.flyTo({
-              center: coords,
-              zoom: 14,
-              duration: 1500,
-            });
-
-            new mapboxgl.Marker({ color: '#3b82f6' })
-              .setLngLat(coords)
-              .setPopup(new mapboxgl.Popup().setHTML('<p class="text-sm font-medium">Vous êtes ici</p>'))
-              .addTo(map.current);
-          }
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-          alert('Impossible d\'obtenir votre position');
+        if (map.current) {
+          map.current.flyTo({
+            center: coords,
+            zoom: 14,
+            duration: 1500,
+          });
         }
-      );
+      } catch (error) {
+        console.error('Geolocation error:', error);
+        alert('Impossible d\'obtenir votre position');
+      }
+    })();
+  }, [isMapAvailable, requestUserLocation]);
+
+  const showRouteToSpot = useCallback(
+    async (spot: Spot) => {
+      if (!isMapAvailable) {
+        alert('La carte n\'est pas disponible.');
+        return;
+      }
+
+      if (!map.current) {
+        return;
+      }
+
+      if (typeof spot.longitude !== 'number' || typeof spot.latitude !== 'number') {
+        alert('Ce spot ne dispose pas de coordonnées valides.');
+        return;
+      }
+
+      setIsRouteLoading(true);
+
+      try {
+        const userCoords = await requestUserLocation();
+        const mapInstance = map.current;
+
+        if (!mapInstance) {
+          throw new Error('Carte non disponible');
+        }
+
+        const directionsUrl = new URL(
+          `https://api.mapbox.com/directions/v5/mapbox/walking/${userCoords[0]},${userCoords[1]};${spot.longitude},${spot.latitude}`,
+        );
+        directionsUrl.searchParams.set('geometries', 'geojson');
+        directionsUrl.searchParams.set('overview', 'full');
+        directionsUrl.searchParams.set('access_token', mapboxgl.accessToken ?? '');
+
+        const response = await fetch(directionsUrl.toString());
+
+        if (!response.ok) {
+          throw new Error(`Échec de la récupération de l'itinéraire (${response.status})`);
+        }
+
+        const data: {
+          routes?: Array<{ geometry?: LineString }>;
+        } = await response.json();
+
+        const routeGeometry = data.routes?.[0]?.geometry;
+
+        if (!routeGeometry || !Array.isArray(routeGeometry.coordinates) || routeGeometry.coordinates.length === 0) {
+          throw new Error('Aucun itinéraire disponible');
+        }
+
+        const routeFeatureCollection: FeatureCollection<LineString> = {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: routeGeometry,
+              properties: {},
+            },
+          ],
+        };
+
+        clearRoute();
+
+        mapInstance.addSource(ROUTE_SOURCE_ID, {
+          type: 'geojson',
+          data: routeFeatureCollection,
+        });
+
+        mapInstance.addLayer({
+          id: ROUTE_LAYER_ID,
+          type: 'line',
+          source: ROUTE_SOURCE_ID,
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': '#fb923c',
+            'line-width': 5,
+            'line-opacity': 0.9,
+          },
+        });
+
+        const bounds = routeGeometry.coordinates.reduce(
+          (acc, coordinate) => acc.extend(coordinate as [number, number]),
+          new mapboxgl.LngLatBounds(),
+        );
+
+        bounds.extend(userCoords);
+        bounds.extend([spot.longitude, spot.latitude]);
+
+        mapInstance.fitBounds(bounds, {
+          padding: 80,
+          duration: 1200,
+          maxZoom: 15.5,
+        });
+
+        setActiveRouteSpotId(spot.id);
+      } catch (error) {
+        console.error('Error fetching route:', error);
+        clearRoute();
+        setActiveRouteSpotId(null);
+        alert('Impossible de calculer l\'itinéraire jusqu\'à ce spot.');
+      } finally {
+        setIsRouteLoading(false);
+      }
+    },
+    [clearRoute, isMapAvailable, requestUserLocation],
+  );
+
+  useEffect(() => {
+    if (!selectedSpot) {
+      if (activeRouteSpotId) {
+        clearRoute();
+        setActiveRouteSpotId(null);
+      }
+      return;
     }
-  };
+
+    if (activeRouteSpotId && activeRouteSpotId !== selectedSpot.id) {
+      clearRoute();
+      setActiveRouteSpotId(null);
+    }
+  }, [selectedSpot, activeRouteSpotId, clearRoute]);
 
   const filterButtons: { id: Spot['spot_type'] | 'all'; label: string }[] = [
     { id: 'all', label: 'Tous' },
@@ -1015,6 +1227,23 @@ export default function MapSection({
                     <Navigation size={18} className="text-orange-400" />
                     <span>Ma position</span>
                   </button>
+                  {selectedSpot && (
+                    <button
+                      onClick={() => {
+                        void showRouteToSpot(selectedSpot);
+                      }}
+                      disabled={isRouteLoading}
+                      className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-black/50 transition-colors hover:border-orange-500/50 hover:bg-dark-800/90 ${
+                        activeRouteSpotId === selectedSpot.id
+                          ? 'border-orange-500/60 bg-orange-500/20 text-orange-100'
+                          : 'border-dark-700 bg-dark-900/80'
+                      } ${isRouteLoading ? 'cursor-wait opacity-80' : ''}`}
+                      title="Afficher l'itinéraire vers ce spot"
+                    >
+                      <Route size={18} className="text-orange-400" />
+                      <span>{isRouteLoading ? 'Calcul...' : 'Itinéraire'}</span>
+                    </button>
+                  )}
                 </div>
 
                 <button
