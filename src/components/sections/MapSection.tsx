@@ -814,13 +814,6 @@ export default function MapSection({
     [isMapAvailable],
   );
 
-  const handleRouteRequest = useCallback(
-    (spot: Spot) => {
-      void showRouteToSpot(spot);
-    },
-    [showRouteToSpot],
-  );
-
   useEffect(() => {
     if (!isMapAvailable) {
       if (focusSpotId) {
@@ -1059,6 +1052,13 @@ export default function MapSection({
       }
     },
     [clearRoute, isMapAvailable, requestUserLocation, sanitizeInstruction],
+  );
+
+  const handleRouteRequest = useCallback(
+    (spot: Spot) => {
+      void showRouteToSpot(spot);
+    },
+    [showRouteToSpot],
   );
 
   useEffect(() => {
