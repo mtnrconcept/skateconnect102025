@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { MapPin, Filter, Plus, Navigation, AlertTriangle, Star, Route } from 'lucide-react';
+import { MapPin, Filter, Plus, Navigation, AlertTriangle, Star, Route, X, Clock } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '../../lib/supabase.js';
@@ -13,6 +13,31 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
 const ROUTE_SOURCE_ID = 'map-section-route-source';
 const ROUTE_LAYER_ID = 'map-section-route-layer';
+
+interface MapboxRouteResponse {
+  routes?: Array<{
+    geometry?: LineString;
+    distance?: number;
+    duration?: number;
+    legs?: Array<{
+      distance?: number;
+      duration?: number;
+      steps?: Array<{
+        distance?: number;
+        duration?: number;
+        maneuver?: {
+          instruction?: string;
+        };
+      }>;
+    }>;
+  }>;
+}
+
+interface RouteStep {
+  instruction: string;
+  distance: number;
+  duration: number;
+}
 
 const normalizeText = (value: string) =>
   value
@@ -54,10 +79,20 @@ export default function MapSection({
   const [mapVisibleSpots, setMapVisibleSpots] = useState<Spot[]>([]);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [activeRouteSpotId, setActiveRouteSpotId] = useState<string | null>(null);
+  const [routeDetails, setRouteDetails] = useState<{
+    spotId: string;
+    spotName: string;
+    distance: number;
+    duration: number;
+    steps: RouteStep[];
+  } | null>(null);
 
   const filterControlsRef = useRef<HTMLDivElement | null>(null);
 
   const clearRoute = useCallback(() => {
+    setRouteDetails(null);
+    setActiveRouteSpotId(null);
+
     if (!isMapAvailable) {
       return;
     }
@@ -75,6 +110,47 @@ export default function MapSection({
       mapInstance.removeSource(ROUTE_SOURCE_ID);
     }
   }, [isMapAvailable]);
+
+  const formatDistance = useCallback((meters: number) => {
+    if (!Number.isFinite(meters) || meters <= 0) {
+      return '—';
+    }
+
+    if (meters >= 1000) {
+      return `${(meters / 1000).toFixed(1)} km`;
+    }
+
+    return `${Math.round(meters)} m`;
+  }, []);
+
+  const formatDuration = useCallback((seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      return '—';
+    }
+
+    const minutes = Math.round(seconds / 60);
+
+    if (minutes < 60) {
+      return `${minutes} min`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    if (remainingMinutes === 0) {
+      return `${hours} h`;
+    }
+
+    return `${hours} h ${remainingMinutes} min`;
+  }, []);
+
+  const sanitizeInstruction = useCallback((instruction: string) => {
+    return instruction
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -363,8 +439,13 @@ export default function MapSection({
       updateVisibleSpotsRef.current();
     };
 
+    const handleMapClick = () => {
+      setSelectedSpot(null);
+    };
+
     mapInstance.on('moveend', handleViewportChange);
     mapInstance.on('zoomend', handleViewportChange);
+    mapInstance.on('click', handleMapClick);
 
     if (!mapInstance.loaded()) {
       mapInstance.once('load', () => {
@@ -392,6 +473,7 @@ export default function MapSection({
       resizeObserver.disconnect();
       mapInstance.off('moveend', handleViewportChange);
       mapInstance.off('zoomend', handleViewportChange);
+      mapInstance.off('click', handleMapClick);
       clearRoute();
       if (userLocationMarkerRef.current) {
         userLocationMarkerRef.current.remove();
@@ -732,6 +814,13 @@ export default function MapSection({
     [isMapAvailable],
   );
 
+  const handleRouteRequest = useCallback(
+    (spot: Spot) => {
+      void showRouteToSpot(spot);
+    },
+    [showRouteToSpot],
+  );
+
   useEffect(() => {
     if (!isMapAvailable) {
       if (focusSpotId) {
@@ -877,6 +966,9 @@ export default function MapSection({
         );
         directionsUrl.searchParams.set('geometries', 'geojson');
         directionsUrl.searchParams.set('overview', 'full');
+        directionsUrl.searchParams.set('steps', 'true');
+        directionsUrl.searchParams.set('language', 'fr');
+        directionsUrl.searchParams.set('alternatives', 'false');
         directionsUrl.searchParams.set('access_token', mapboxgl.accessToken ?? '');
 
         const response = await fetch(directionsUrl.toString());
@@ -885,11 +977,10 @@ export default function MapSection({
           throw new Error(`Échec de la récupération de l'itinéraire (${response.status})`);
         }
 
-        const data: {
-          routes?: Array<{ geometry?: LineString }>;
-        } = await response.json();
+        const data: MapboxRouteResponse = await response.json();
 
-        const routeGeometry = data.routes?.[0]?.geometry;
+        const firstRoute = data.routes?.[0];
+        const routeGeometry = firstRoute?.geometry;
 
         if (!routeGeometry || !Array.isArray(routeGeometry.coordinates) || routeGeometry.coordinates.length === 0) {
           throw new Error('Aucun itinéraire disponible');
@@ -942,31 +1033,41 @@ export default function MapSection({
           maxZoom: 15.5,
         });
 
+        const steps = firstRoute?.legs?.[0]?.steps
+          ?.map((step) => ({
+            instruction: sanitizeInstruction(step.maneuver?.instruction ?? ''),
+            distance: step.distance ?? 0,
+            duration: step.duration ?? 0,
+          }))
+          .filter((step) => step.instruction.length > 0) ?? [];
+
+        setRouteDetails({
+          spotId: spot.id,
+          spotName: spot.name,
+          distance: firstRoute?.distance ?? 0,
+          duration: firstRoute?.duration ?? 0,
+          steps,
+        });
+
         setActiveRouteSpotId(spot.id);
       } catch (error) {
         console.error('Error fetching route:', error);
         clearRoute();
-        setActiveRouteSpotId(null);
         alert('Impossible de calculer l\'itinéraire jusqu\'à ce spot.');
       } finally {
         setIsRouteLoading(false);
       }
     },
-    [clearRoute, isMapAvailable, requestUserLocation],
+    [clearRoute, isMapAvailable, requestUserLocation, sanitizeInstruction],
   );
 
   useEffect(() => {
-    if (!selectedSpot) {
-      if (activeRouteSpotId) {
-        clearRoute();
-        setActiveRouteSpotId(null);
-      }
+    if (!selectedSpot || !activeRouteSpotId) {
       return;
     }
 
-    if (activeRouteSpotId && activeRouteSpotId !== selectedSpot.id) {
+    if (activeRouteSpotId !== selectedSpot.id) {
       clearRoute();
-      setActiveRouteSpotId(null);
     }
   }, [selectedSpot, activeRouteSpotId, clearRoute]);
 
@@ -1230,7 +1331,7 @@ export default function MapSection({
                   {selectedSpot && (
                     <button
                       onClick={() => {
-                        void showRouteToSpot(selectedSpot);
+                        handleRouteRequest(selectedSpot);
                       }}
                       disabled={isRouteLoading}
                       className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-black/50 transition-colors hover:border-orange-500/50 hover:bg-dark-800/90 ${
@@ -1245,6 +1346,65 @@ export default function MapSection({
                     </button>
                   )}
                 </div>
+
+                {routeDetails && (
+                  <div className="absolute right-4 top-4 z-30 w-[min(22rem,calc(100%-2rem))] rounded-2xl border border-dark-700 bg-dark-900/85 p-4 text-gray-200 shadow-2xl shadow-black/40 backdrop-blur">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">Itinéraire</p>
+                        <h3 className="mt-1 text-lg font-semibold text-white leading-tight">{routeDetails.spotName}</h3>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1">
+                            <Route size={14} className="text-orange-400" />
+                            {formatDistance(routeDetails.distance)}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1">
+                            <Clock size={14} className="text-orange-400" />
+                            {formatDuration(routeDetails.duration)}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearRoute}
+                        className="rounded-full p-1 text-gray-400 transition-colors hover:bg-dark-800/70 hover:text-white"
+                        title="Fermer l'itinéraire"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="mt-3 max-h-64 space-y-3 overflow-y-auto pr-1">
+                      {routeDetails.steps.length > 0 ? (
+                        <ol className="space-y-3 text-sm text-gray-200">
+                          {routeDetails.steps.map((step, index) => (
+                            <li
+                              key={`${routeDetails.spotId}-step-${index}`}
+                              className="rounded-xl bg-dark-800/70 p-3 shadow-inner shadow-black/20"
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-500/20 text-xs font-semibold text-orange-200">
+                                  {index + 1}
+                                </span>
+                                <div className="flex-1">
+                                  <p className="font-medium leading-snug text-white">{step.instruction}</p>
+                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                                    <span>{formatDistance(step.distance)}</span>
+                                    <span>•</span>
+                                    <span>{formatDuration(step.duration)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p className="text-sm text-gray-400">
+                          Itinéraire détaillé indisponible pour ce trajet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <button
                   onClick={() => setShowAddModal(true)}
@@ -1312,6 +1472,7 @@ export default function MapSection({
                   spots={mapVisibleSpots}
                   onSpotClick={flyToSpot}
                   coverPhotos={spotCoverPhotos}
+                  onRouteRequest={handleRouteRequest}
                 />
               )}
             </div>
@@ -1323,6 +1484,7 @@ export default function MapSection({
         <SpotDetailModal
           spot={selectedSpot}
           onClose={() => setSelectedSpot(null)}
+          onRequestRoute={handleRouteRequest}
         />
       )}
 

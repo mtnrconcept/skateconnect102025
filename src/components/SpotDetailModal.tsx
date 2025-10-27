@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, MapPin, Star, Users, Upload, Heart, MessageCircle, Loader2 } from 'lucide-react';
+import { X, MapPin, Star, Users, Upload, Heart, MessageCircle, Loader2, Route } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { uploadFile } from '../lib/storage.js';
 import LazyImage from './LazyImage';
@@ -15,11 +15,12 @@ import { fetchSpotRatingsPage } from '../lib/spotRatingsApi.ts';
 interface SpotDetailModalProps {
   spot: Spot;
   onClose: () => void;
+  onRequestRoute?: (spot: Spot) => void;
 }
 
 const RATINGS_PAGE_SIZE = 5;
 
-export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps) {
+export default function SpotDetailModal({ spot, onClose, onRequestRoute }: SpotDetailModalProps) {
   const [media, setMedia] = useState<SpotMedia[]>([]);
   const [coverPhoto, setCoverPhoto] = useState<SpotMedia | null>(null);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -354,7 +355,22 @@ export default function SpotDetailModal({ spot, onClose }: SpotDetailModalProps)
                 <MapPin size={16} />
                 Adresse
               </h3>
-              <p className="text-slate-800">{spot.address || 'Adresse non spécifiée'}</p>
+              <div className="flex flex-wrap items-center gap-3 text-slate-800">
+                <p>{spot.address || 'Adresse non spécifiée'}</p>
+                {onRequestRoute && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRequestRoute(spot);
+                      onClose();
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-600 transition-colors hover:border-blue-300 hover:bg-blue-100"
+                  >
+                    <Route size={16} />
+                    Itinéraire
+                  </button>
+                )}
+              </div>
             </div>
 
             {spot.description && (
