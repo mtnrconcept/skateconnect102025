@@ -149,11 +149,12 @@ export async function fetchSponsorSpotlights(sponsorId: string): Promise<Sponsor
   let schemaMissing = false;
 
   const rows = await withTableFallback<SpotlightRow[] | null>(
-    supabase
-      .from('sponsor_spotlights')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('updated_at', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_spotlights')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('updated_at', { ascending: false }),
     () => {
       schemaMissing = true;
       console.info('sponsor_spotlights table is missing. Returning an empty spotlight list.');
@@ -163,6 +164,7 @@ export async function fetchSponsorSpotlights(sponsorId: string): Promise<Sponsor
       onMissing: () => {
         schemaMissing = true;
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
@@ -175,26 +177,30 @@ export async function fetchSponsorSpotlights(sponsorId: string): Promise<Sponsor
 
 export async function createSponsorSpotlight(payload: SpotlightPayload): Promise<SponsorSpotlight> {
   const row = await withTableFallback<SpotlightRow | null>(
-    supabase
-      .from('sponsor_spotlights')
-      .insert({
-        sponsor_id: payload.sponsor_id,
-        title: payload.title,
-        description: payload.description ?? '',
-        media_url: payload.media_url ?? null,
-        call_to_action: payload.call_to_action ?? null,
-        call_to_action_url: payload.call_to_action_url ?? null,
-        status: payload.status ?? 'draft',
-        start_date: payload.start_date ?? null,
-        end_date: payload.end_date ?? null,
-      })
-      .select('*')
-      .single(),
+    () =>
+      supabase
+        .from('sponsor_spotlights')
+        .insert({
+          sponsor_id: payload.sponsor_id,
+          title: payload.title,
+          description: payload.description ?? '',
+          media_url: payload.media_url ?? null,
+          call_to_action: payload.call_to_action ?? null,
+          call_to_action_url: payload.call_to_action_url ?? null,
+          status: payload.status ?? 'draft',
+          start_date: payload.start_date ?? null,
+          end_date: payload.end_date ?? null,
+        })
+        .select('*')
+        .single(),
     () => {
       console.info(
         'sponsor_spotlights table is missing. Creating a local-only spotlight placeholder instead.',
       );
       return createLocalSpotlightRow(payload);
+    },
+    {
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 

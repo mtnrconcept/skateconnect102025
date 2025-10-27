@@ -72,13 +72,14 @@ export async function fetchLatestCommunityAnalytics(
   sponsorId: string,
 ): Promise<CommunityAnalyticsSnapshot | null> {
   const snapshot = await withTableFallback<CommunityAnalyticsSnapshot | null>(
-    supabase
-      .from('sponsor_community_metrics')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('metric_date', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    () =>
+      supabase
+        .from('sponsor_community_metrics')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('metric_date', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     () => buildCommunityAnalyticsFallback(sponsorId),
     {
       onMissing: () => {
@@ -86,6 +87,7 @@ export async function fetchLatestCommunityAnalytics(
           'sponsor_community_metrics table is missing. Returning synthesised analytics data instead.',
         );
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
@@ -96,11 +98,12 @@ export async function fetchCommunityAnalyticsHistory(
   sponsorId: string,
 ): Promise<CommunityAnalyticsSnapshot[]> {
   const history = await withTableFallback<CommunityAnalyticsSnapshot[] | null>(
-    supabase
-      .from('sponsor_community_metrics')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('metric_date', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_community_metrics')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('metric_date', { ascending: false }),
     async () => {
       const fallback = await buildCommunityAnalyticsFallback(sponsorId);
       return fallback ? [fallback] : [];
@@ -109,6 +112,7 @@ export async function fetchCommunityAnalyticsHistory(
       onMissing: () => {
         console.info('sponsor_community_metrics table is missing. Returning fallback history.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 

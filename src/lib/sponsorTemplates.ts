@@ -67,16 +67,18 @@ function isUniqueViolation(error: PostgrestError | null): boolean {
 
 export async function listSponsorTemplates(sponsorId: string): Promise<SponsorTemplate[]> {
   const rows = await withTableFallback<SponsorTemplate[] | null>(
-    supabase
-      .from('sponsor_templates')
-      .select('*')
-      .eq('sponsor_id', sponsorId)
-      .order('updated_at', { ascending: false }),
+    () =>
+      supabase
+        .from('sponsor_templates')
+        .select('*')
+        .eq('sponsor_id', sponsorId)
+        .order('updated_at', { ascending: false }),
     () => [],
     {
       onMissing: () => {
         console.info('sponsor_templates table is missing. Returning an empty template list.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 
@@ -85,12 +87,13 @@ export async function listSponsorTemplates(sponsorId: string): Promise<SponsorTe
 
 export async function getSponsorTemplate(id: string): Promise<SponsorTemplate | null> {
   const row = await withTableFallback<SponsorTemplate | null>(
-    supabase.from('sponsor_templates').select('*').eq('id', id).maybeSingle(),
+    () => supabase.from('sponsor_templates').select('*').eq('id', id).maybeSingle(),
     () => null,
     {
       onMissing: () => {
         console.info('sponsor_templates table is missing. Returning null.');
       },
+      retry: { attempts: 2, delayMs: 500 },
     },
   );
 

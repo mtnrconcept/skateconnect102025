@@ -116,12 +116,13 @@ export async function fetchCommunityEvents(): Promise<CommunityEvent[]> {
   let rows: CommunityEventRow[] | null;
 
   try {
-    const request = (supabase as any)
-      .from('community_events')
-      .select(
-        'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
-      )
-      .order('event_date', { ascending: true });
+    const request = () =>
+      (supabase as any)
+        .from('community_events')
+        .select(
+          'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
+        )
+        .order('event_date', { ascending: true });
 
     rows = await withTableFallback<CommunityEventRow[] | null>(
       request,
@@ -130,6 +131,7 @@ export async function fetchCommunityEvents(): Promise<CommunityEvent[]> {
         onMissing: () => {
           console.info('community_events table is missing. Returning an empty community events list.');
         },
+        retry: { attempts: 2, delayMs: 500 },
       },
     );
   } catch (error) {
@@ -186,13 +188,14 @@ export async function createCommunityEvent(input: CommunityEventInput): Promise<
   let data: CommunityEventRow | null;
 
   try {
-    const request = (supabase as any)
-      .from('community_events')
-      .insert(payload)
-      .select(
-        'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
-      )
-      .single();
+    const request = () =>
+      (supabase as any)
+        .from('community_events')
+        .insert(payload)
+        .select(
+          'id, title, description, event_date, event_time, location, event_type, attendees_count, is_sponsor_event, sponsor_name',
+        )
+        .single();
 
     data = await withTableFallback<CommunityEventRow | null>(
       request,
@@ -205,6 +208,7 @@ export async function createCommunityEvent(input: CommunityEventInput): Promise<
             'community_events table is missing. Throwing a descriptive error for community event creation.',
           );
         },
+        retry: { attempts: 2, delayMs: 500 },
       },
     );
   } catch (error) {
