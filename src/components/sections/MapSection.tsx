@@ -14,6 +14,26 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const ROUTE_SOURCE_ID = 'map-section-route-source';
 const ROUTE_LAYER_ID = 'map-section-route-layer';
 
+type RouteMode = 'driving' | 'transit' | 'walking';
+
+const routeModeProfiles: Record<RouteMode, string> = {
+  driving: 'mapbox/driving',
+  transit: 'mapbox/driving-traffic',
+  walking: 'mapbox/walking',
+};
+
+const routeModeLabels: Record<RouteMode, string> = {
+  driving: 'Voiture',
+  transit: 'Transports en commun',
+  walking: 'À pied',
+};
+
+const routeModeOptions: Array<{ id: RouteMode; label: string }> = [
+  { id: 'driving', label: routeModeLabels.driving },
+  { id: 'transit', label: routeModeLabels.transit },
+  { id: 'walking', label: routeModeLabels.walking },
+];
+
 interface MapboxRouteResponse {
   routes?: Array<{
     geometry?: LineString;
@@ -78,6 +98,7 @@ export default function MapSection({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapVisibleSpots, setMapVisibleSpots] = useState<Spot[]>([]);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const [routeMode, setRouteMode] = useState<RouteMode>('walking');
   const [activeRouteSpotId, setActiveRouteSpotId] = useState<string | null>(null);
   const [routeDetails, setRouteDetails] = useState<{
     spotId: string;
@@ -85,6 +106,7 @@ export default function MapSection({
     distance: number;
     duration: number;
     steps: RouteStep[];
+    mode: RouteMode;
   } | null>(null);
 
   const filterControlsRef = useRef<HTMLDivElement | null>(null);
@@ -954,8 +976,9 @@ export default function MapSection({
           throw new Error('Carte non disponible');
         }
 
+        const profile = routeModeProfiles[routeMode] ?? routeModeProfiles.walking;
         const directionsUrl = new URL(
-          `https://api.mapbox.com/directions/v5/mapbox/walking/${userCoords[0]},${userCoords[1]};${spot.longitude},${spot.latitude}`,
+          `https://api.mapbox.com/directions/v5/${profile}/${userCoords[0]},${userCoords[1]};${spot.longitude},${spot.latitude}`,
         );
         directionsUrl.searchParams.set('geometries', 'geojson');
         directionsUrl.searchParams.set('overview', 'full');
@@ -1040,6 +1063,7 @@ export default function MapSection({
           distance: firstRoute?.distance ?? 0,
           duration: firstRoute?.duration ?? 0,
           steps,
+          mode: routeMode,
         });
 
         setActiveRouteSpotId(spot.id);
@@ -1051,7 +1075,7 @@ export default function MapSection({
         setIsRouteLoading(false);
       }
     },
-    [clearRoute, isMapAvailable, requestUserLocation, sanitizeInstruction],
+    [clearRoute, isMapAvailable, requestUserLocation, routeMode, sanitizeInstruction],
   );
 
   const handleRouteRequest = useCallback(
@@ -1070,6 +1094,12 @@ export default function MapSection({
       clearRoute();
     }
   }, [selectedSpot, activeRouteSpotId, clearRoute]);
+
+  useEffect(() => {
+    if (routeDetails) {
+      clearRoute();
+    }
+  }, [routeMode, routeDetails, clearRoute]);
 
   const filterButtons: { id: Spot['spot_type'] | 'all'; label: string }[] = [
     { id: 'all', label: 'Tous' },
@@ -1328,6 +1358,24 @@ export default function MapSection({
                     <Navigation size={18} className="text-orange-400" />
                     <span>Ma position</span>
                   </button>
+                  <div className="inline-flex items-stretch gap-1 rounded-xl border border-dark-700 bg-dark-900/80 p-1 text-xs font-semibold text-gray-300 shadow-lg shadow-black/50">
+                    {routeModeOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setRouteMode(option.id)}
+                        disabled={isRouteLoading}
+                        className={`rounded-lg px-3 py-1.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 ${
+                          routeMode === option.id
+                            ? 'bg-orange-500/20 text-orange-100 shadow-inner shadow-orange-900/20'
+                            : 'text-gray-300 hover:bg-dark-800/70'
+                        } ${isRouteLoading ? 'cursor-not-allowed opacity-70' : ''}`}
+                        aria-pressed={routeMode === option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                   {selectedSpot && (
                     <button
                       onClick={() => {
@@ -1354,6 +1402,9 @@ export default function MapSection({
                         <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">Itinéraire</p>
                         <h3 className="mt-1 text-lg font-semibold text-white leading-tight">{routeDetails.spotName}</h3>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1 text-orange-200">
+                            {routeModeLabels[routeDetails.mode]}
+                          </span>
                           <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1">
                             <Route size={14} className="text-orange-400" />
                             {formatDistance(routeDetails.distance)}
