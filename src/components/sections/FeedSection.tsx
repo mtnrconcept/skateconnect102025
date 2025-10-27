@@ -28,7 +28,7 @@ import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId, fakeLeaderboardE
 import { eventsCatalog } from '../../data/eventsCatalog';
 import { createFallbackChallenges } from '../../data/challengesCatalog';
 import type { FakeProfileDetails } from '../../data/fakeFeed';
-import type { Comment, Post, Profile } from '../../types';
+import type { Comment, Post, Profile, Section, ContentNavigationOptions } from '../../types';
 
 type FeedPost = Post & {
   liked_by_user?: boolean;
@@ -43,9 +43,10 @@ type FeedComment = Comment & {
 interface FeedSectionProps {
   currentUser: Profile | null;
   onOpenConversation?: (profileId: string, options?: { synthetic?: boolean }) => void;
+  onNavigateToSection?: (section: Section, options?: ContentNavigationOptions) => void;
 }
 
-export default function FeedSection({ currentUser, onOpenConversation }: FeedSectionProps) {
+export default function FeedSection({ currentUser, onOpenConversation, onNavigateToSection }: FeedSectionProps) {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [newPostContent, setNewPostContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -80,6 +81,13 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
     [],
   );
   const topAthletes = useMemo(() => fakeLeaderboardEntries.slice(0, 3), []);
+
+  const navigateToSection = useCallback(
+    (section: Section, options?: ContentNavigationOptions) => {
+      onNavigateToSection?.(section, options);
+    },
+    [onNavigateToSection],
+  );
 
   const formatNumber = (value: number) => new Intl.NumberFormat('fr-FR').format(value);
 
@@ -1001,33 +1009,40 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
             </div>
             <ul className="mt-4 space-y-4">
               {upcomingEvents.map((event) => (
-                <li key={event.id} className="rounded-xl border border-dark-700/70 bg-dark-900/50 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-white">{event.title}</p>
-                    {event.is_sponsor_event && (
-                      <span className="rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-200">
-                        Sponsor
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-400">{event.date}</p>
-                  <div className="mt-3 flex flex-col gap-2 text-xs text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} className="text-orange-400" />
-                      <span>{event.location}</span>
+                <li key={event.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigateToSection('events', { scrollToId: `event-${event.id}` })}
+                    className="w-full rounded-xl border border-dark-700/70 bg-dark-900/50 p-4 text-left transition-colors hover:border-orange-500/40 hover:bg-dark-900/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-900"
+                    aria-label={`Voir la page événements pour ${event.title}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-white">{event.title}</p>
+                      {event.is_sponsor_event && (
+                        <span className="rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-200">
+                          Sponsor
+                        </span>
+                      )}
                     </div>
-                    {event.time && (
+                    <p className="mt-1 text-xs text-gray-400">{event.date}</p>
+                    <div className="mt-3 flex flex-col gap-2 text-xs text-gray-400">
                       <div className="flex items-center gap-2">
-                        <Clock size={14} className="text-orange-400" />
-                        <span>{event.time}</span>
+                        <MapPin size={14} className="text-orange-400" />
+                        <span>{event.location}</span>
                       </div>
-                    )}
-                    <div className="flex items-center gap-2 text-white/80">
-                      <Users size={14} className="text-orange-400" />
-                      <span className="font-medium">{formatNumber(event.attendees)}</span>
-                      <span className="text-gray-500">participants</span>
+                      {event.time && (
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} className="text-orange-400" />
+                          <span>{event.time}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-white/80">
+                        <Users size={14} className="text-orange-400" />
+                        <span className="font-medium">{formatNumber(event.attendees)}</span>
+                        <span className="text-gray-500">participants</span>
+                      </div>
                     </div>
-                  </div>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -1043,22 +1058,34 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
               {sponsorChallenges.map((challenge) => {
                 const deadlineLabel = formatChallengeDeadline(challenge.end_date);
                 return (
-                  <li key={challenge.id} className="rounded-xl border border-dark-700/70 bg-dark-900/50 p-4">
-                    <p className="text-sm font-semibold text-white">{challenge.title}</p>
-                    <p className="mt-1 text-xs text-gray-400">{challenge.description}</p>
-                    <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
-                      <span className="flex items-center gap-1 text-gray-300">
-                        <Users size={14} className="text-orange-400" />
-                        {formatNumber(challenge.participants_count ?? 0)} participants
-                      </span>
-                      <span className="rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-200">
-                        Récompense
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xs font-semibold text-orange-300">{challenge.prize}</p>
-                    {deadlineLabel && (
-                      <p className="mt-2 text-[11px] uppercase tracking-wide text-gray-500">{deadlineLabel}</p>
-                    )}
+                  <li key={challenge.id}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigateToSection('challenges', {
+                          challengeTab: 'community',
+                          scrollToId: `challenge-${challenge.id}`,
+                        })
+                      }
+                      className="w-full rounded-xl border border-dark-700/70 bg-dark-900/50 p-4 text-left transition-colors hover:border-orange-500/40 hover:bg-dark-900/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-900"
+                      aria-label={`Voir le défi sponsor ${challenge.title}`}
+                    >
+                      <p className="text-sm font-semibold text-white">{challenge.title}</p>
+                      <p className="mt-1 text-xs text-gray-400">{challenge.description}</p>
+                      <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                        <span className="flex items-center gap-1 text-gray-300">
+                          <Users size={14} className="text-orange-400" />
+                          {formatNumber(challenge.participants_count ?? 0)} participants
+                        </span>
+                        <span className="rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-orange-200">
+                          Récompense
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-orange-300">{challenge.prize}</p>
+                      {deadlineLabel && (
+                        <p className="mt-2 text-[11px] uppercase tracking-wide text-gray-500">{deadlineLabel}</p>
+                      )}
+                    </button>
                   </li>
                 );
               })}
@@ -1077,7 +1104,16 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
                 return (
                   <li
                     key={entry.user_id}
-                    className="flex items-start gap-3 rounded-xl border border-dark-700/70 bg-dark-900/40 p-4"
+                    className="flex items-start gap-3 rounded-xl border border-dark-700/70 bg-dark-900/40 p-4 transition-colors hover:border-orange-500/40 hover:bg-dark-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-900 cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigateToSection('leaderboard')}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        navigateToSection('leaderboard');
+                      }
+                    }}
                   >
                     <div className="flex h-9 w-9 items-center justify-center rounded-full border border-orange-500/40 text-sm font-semibold text-orange-300">
                       #{index + 1}
@@ -1085,7 +1121,15 @@ export default function FeedSection({ currentUser, onOpenConversation }: FeedSec
                     <div className="flex items-start gap-3">
                       <button
                         type="button"
-                        onClick={() => openProfile(entry.profile.id, { isFake: entry.user_id.startsWith('fake-') })}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openProfile(entry.profile.id, { isFake: entry.user_id.startsWith('fake-') });
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.stopPropagation();
+                          }
+                        }}
                         className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                         aria-label={`Voir le profil de ${getUserDisplayName(entry.profile)}`}
                       >
