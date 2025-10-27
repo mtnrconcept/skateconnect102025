@@ -14,6 +14,77 @@ interface UseMessagesOptions {
 }
 
 const DEFAULT_PAGE_SIZE = 20;
+const HISTORY_STORAGE_PREFIX = 'skateconnect:messaging:history:';
+const MAX_CACHED_MESSAGES = 200;
+
+interface StoredMessagePayload {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  media_url: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+function parseStoredMessages(value: unknown): MessageWithSender[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const restored: MessageWithSender[] = [];
+
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object') {
+      continue;
+    }
+
+    const { id, conversation_id, sender_id, content, media_url, is_read, created_at } =
+      candidate as Partial<StoredMessagePayload>;
+
+    if (
+      typeof id !== 'string' ||
+      typeof conversation_id !== 'string' ||
+      typeof sender_id !== 'string' ||
+      typeof content !== 'string' ||
+      typeof created_at !== 'string'
+    ) {
+      continue;
+    }
+
+    restored.push({
+      id,
+      conversation_id,
+      sender_id,
+      content,
+      media_url: typeof media_url === 'string' ? media_url : null,
+      is_read:
+        typeof is_read === 'boolean' ? is_read : is_read === undefined || is_read === null ? false : Boolean(is_read),
+      created_at,
+      sender_profile: null,
+    });
+  }
+
+  return restored;
+}
+
+function serializeMessagesForStorage(messages: MessageWithSender[]): StoredMessagePayload[] {
+  const sanitized = messages.map((message) => ({
+    id: message.id,
+    conversation_id: message.conversation_id,
+    sender_id: message.sender_id,
+    content: message.content,
+    media_url: message.media_url ?? null,
+    is_read: Boolean(message.is_read),
+    created_at: message.created_at,
+  }));
+
+  if (sanitized.length > MAX_CACHED_MESSAGES) {
+    return sanitized.slice(-MAX_CACHED_MESSAGES);
+  }
+
+  return sanitized;
+}
 
 export function useMessages({ conversationId, viewerId, pageSize = DEFAULT_PAGE_SIZE }: UseMessagesOptions) {
   const [messages, setMessages] = useState<MessageWithSender[]>([]);
@@ -107,8 +178,45 @@ export function useMessages({ conversationId, viewerId, pageSize = DEFAULT_PAGE_
       setHasMore(false);
       return;
     }
+
+    setHasMore(false);
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(`${HISTORY_STORAGE_PREFIX}${conversationId}`);
+        if (raw) {
+          const parsed = parseStoredMessages(JSON.parse(raw));
+          if (parsed.length) {
+            setMessages(parsed);
+            knownMessageIdsRef.current = new Set(parsed.map((message) => message.id));
+          } else {
+            setMessages([]);
+          }
+        } else {
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('Impossible de restaurer la discussion locale :', error);
+        setMessages([]);
+      }
+    } else {
+      setMessages([]);
+    }
     loadPage(0, false);
   }, [conversationId, loadPage]);
+
+  useEffect(() => {
+    if (!conversationId || typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const payload = serializeMessagesForStorage(messages);
+      window.localStorage.setItem(`${HISTORY_STORAGE_PREFIX}${conversationId}`, JSON.stringify(payload));
+    } catch (error) {
+      console.error('Impossible de sauvegarder la discussion locale :', error);
+    }
+  }, [conversationId, messages]);
 
   const loadMore = useCallback(() => {
     if (!conversationId || !hasMore || isLoadingMore) {
