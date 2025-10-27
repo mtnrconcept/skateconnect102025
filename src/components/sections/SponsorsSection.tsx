@@ -284,6 +284,9 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
           })}${event.event_time ? ` · ${event.event_time}` : ''}`
         : 'Date à confirmer';
       const eventTags = Array.isArray(event.tags) ? event.tags : [];
+      const combinedEventTags = Array.from(
+        new Set([...eventTags, 'Sponsor', 'Networking'].filter(Boolean)),
+      ) as string[];
 
       return {
         id: event.id,
@@ -299,7 +302,7 @@ export default function SponsorsSection({ profile }: SponsorsSectionProps) {
         reward: undefined,
         highlight: event.event_type ?? undefined,
         coverImage: event.cover_image_url ?? FALLBACK_COVER,
-        tags: [...eventTags, 'Sponsor', 'Networking'].filter(Boolean) as string[],
+        tags: combinedEventTags,
         participantsLabel: 'Participants',
         participantsCount: event.attendees + (registeredEventSet.has(event.id) ? 1 : 0),
         actionLabel: registeredEventSet.has(event.id)
