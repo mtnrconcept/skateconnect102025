@@ -32,6 +32,7 @@ import SubscriptionUpgradeNotice from './components/subscription/SubscriptionUpg
 import { SubscriptionProvider, type RestrictionNotice } from './contexts/SubscriptionContext';
 import { SponsorProvider } from './contexts/SponsorContext';
 import { RealtimeProvider } from './contexts/RealtimeContext';
+import LoginIntroOverlay from './components/LoginIntroOverlay';
 import {
   DEFAULT_SUBSCRIPTION_PLAN,
   SUBSCRIPTION_STORAGE_KEY,
@@ -97,6 +98,7 @@ function App() {
     query: '',
     results: [],
   }));
+  const [showLoginIntro, setShowLoginIntro] = useState(false);
 
   const { location, navigate } = useRouter();
   const isSearchRoute = location.pathname === '/search';
@@ -166,6 +168,12 @@ function App() {
       setProfileMode('sponsor');
     }
   }, [profile?.role]);
+
+  useEffect(() => {
+    if (!session) {
+      setShowLoginIntro(false);
+    }
+  }, [session]);
 
   useEffect(() => {
     let isMounted = true;
@@ -328,6 +336,8 @@ function App() {
   };
 
   const handleAuthSuccess = () => {
+    setShowLoginIntro(true);
+    setCurrentSection('feed');
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
@@ -339,6 +349,11 @@ function App() {
         clearPersistedSession();
       }
     });
+  };
+
+  const handleIntroComplete = () => {
+    setShowLoginIntro(false);
+    setCurrentSection('feed');
   };
 
   const handlePlanChange = (plan: SubscriptionPlan) => {
@@ -689,6 +704,7 @@ function App() {
           onViewPricing={() => handleNavigateToContent('pricing')}
         />
       )}
+      {showLoginIntro && <LoginIntroOverlay onComplete={handleIntroComplete} />}
       {content}
     </SubscriptionProvider>
   );
