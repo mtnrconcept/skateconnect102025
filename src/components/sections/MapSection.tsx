@@ -1443,7 +1443,7 @@ export default function MapSection({
                 </div>
 
                 {routeDetails && (
-                  <div className="absolute right-4 top-4 z-30 w-[min(22rem,calc(100%-2rem))] rounded-2xl border border-dark-700 bg-dark-900/85 p-4 text-gray-200 shadow-2xl shadow-black/40 backdrop-blur">
+                  <div className="absolute right-4 top-4 z-30 hidden w-[min(22rem,calc(100%-2rem))] rounded-2xl border border-dark-700 bg-dark-900/85 p-4 text-gray-200 shadow-2xl shadow-black/40 backdrop-blur lg:block">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">Itinéraire</p>
@@ -1531,6 +1531,68 @@ export default function MapSection({
               </div>
             )}
           </div>
+
+          {routeDetails && (
+            <div className="mt-4 rounded-2xl border border-dark-700 bg-dark-900/85 p-4 text-gray-200 shadow-2xl shadow-black/40 backdrop-blur lg:hidden">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">Itinéraire</p>
+                  <h3 className="mt-1 text-lg font-semibold leading-tight text-white">{routeDetails.spotName}</h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1 text-orange-200">
+                      {routeModeLabels[routeDetails.mode]}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1">
+                      <Route size={14} className="text-orange-400" />
+                      {formatDistance(routeDetails.distance)}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1">
+                      <Clock size={14} className="text-orange-400" />
+                      {formatDuration(routeDetails.duration)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearRoute}
+                  className="rounded-full p-1 text-gray-400 transition-colors hover:bg-dark-800/70 hover:text-white"
+                  title="Fermer l'itinéraire"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="mt-3 max-h-64 space-y-3 overflow-y-auto pr-1">
+                {routeDetails.steps.length > 0 ? (
+                  <ol className="space-y-3 text-sm text-gray-200">
+                    {routeDetails.steps.map((step, index) => (
+                      <li
+                        key={`${routeDetails.spotId}-step-${index}`}
+                        className="rounded-xl bg-dark-800/70 p-3 shadow-inner shadow-black/20"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-500/20 text-xs font-semibold text-orange-200">
+                            {index + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="font-medium leading-snug text-white">{step.instruction}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                              <span>{formatDistance(step.distance)}</span>
+                              <span>•</span>
+                              <span>{formatDuration(step.duration)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Itinéraire détaillé indisponible pour ce trajet.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div
             className="relative flex h-[360px] min-h-0 flex-col overflow-hidden bg-dark-900/80 lg:h-full lg:min-h-0 lg:border-l lg:border-dark-800"
