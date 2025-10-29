@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
-  CheckCircle2,
   Filter,
   Loader2,
-  Package2,
+  Search,
   ShieldCheck,
   ShoppingBag,
   ShoppingCart,
-  Sparkles,
   Store,
-  Truck,
 } from 'lucide-react';
 import type { Profile, ShopFrontItem, ShopFrontVariant } from '../../types';
 import { createShopCheckoutSession, fetchPublicShopCatalog } from '../../lib/shopfront';
@@ -20,11 +17,7 @@ interface ShopSectionProps {
   profile: Profile | null;
 }
 
-interface CheckoutState {
-  loading: boolean;
-  error: string | null;
-  success: string | null;
-}
+type SortOption = 'featured' | 'price-asc' | 'price-desc' | 'availability';
 
 function formatCurrency(value: number, currency: string) {
   return (value / 100).toLocaleString('fr-FR', {
@@ -32,6 +25,14 @@ function formatCurrency(value: number, currency: string) {
     currency,
     minimumFractionDigits: 2,
   });
+}
+
+function pickInitialVariant(item: ShopFrontItem): string | null {
+  if (item.variants.length === 0) {
+    return null;
+  }
+  const available = item.variants.find((variant) => (variant.stock ?? 0) > 0);
+  return available?.id ?? item.variants[0]?.id ?? null;
 }
 
 function computeVariantPrice(item: ShopFrontItem, variantId: string | null): number {
@@ -42,30 +43,7 @@ function computeVariantPrice(item: ShopFrontItem, variantId: string | null): num
   return variant?.priceCents ?? item.priceCents;
 }
 
-function pickInitialVariant(item: ShopFrontItem): string | null {
-  if (item.variants.length === 0) {
-    return null;
-  }
-  const inStock = item.variants.find((variant) => (variant.stock ?? 0) > 0);
-  return inStock?.id ?? item.variants[0]?.id ?? null;
-}
-
-function canSell(item: ShopFrontItem, variantId: string | null, quantity: number): boolean {
-  if (variantId) {
-    const variant = item.variants.find((entry) => entry.id === variantId);
-    if (!variant) {
-      return false;
-    }
-    if (variant.stock != null && quantity > variant.stock) {
-      return false;
-    }
-  } else if (item.stock != null && quantity > item.stock) {
-    return false;
-  }
-  return true;
-}
-
-function availabilityBadge(item: ShopFrontItem) {
+function getAvailabilityMessage(item: ShopFrontItem) {
   const now = new Date();
   const from = item.availableFrom ? new Date(item.availableFrom) : null;
   const until = item.availableUntil ? new Date(item.availableUntil) : null;
@@ -85,14 +63,14 @@ export default function ShopSection({ profile }: ShopSectionProps) {
   const [catalog, setCatalog] = useState<ShopFrontItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [brandFilter, setBrandFilter] = useState<string>('all');
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [checkoutState, setCheckoutState] = useState<CheckoutState>({ loading: false, error: null, success: null });
-  const [stripeReady, setStripeReady] = useState<boolean>(false);
+  const [sortOption, setSortOption] = useState<SortOption>('featured');
+  const [variantSelections, setVariantSelections] = useState<Record<string, string | null>>({});
+  const [stripeReady, setStripeReady] = useState(false);
   const [stripeMessage, setStripeMessage] = useState<string | null>(null);
+  const [pendingCheckoutId, setPendingCheckoutId] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -104,11 +82,6 @@ export default function ShopSection({ profile }: ShopSectionProps) {
           return;
         }
         setCatalog(items);
-        if (items.length > 0) {
-          const first = items[0];
-          setSelectedItemId(first.id);
-          setSelectedVariantId(pickInitialVariant(first));
-        }
       })
       .catch((cause) => {
         console.error('Unable to load shop catalog', cause);
@@ -129,17 +102,16 @@ export default function ShopSection({ profile }: ShopSectionProps) {
   }, []);
 
   useEffect(() => {
-    if (!selectedItemId) {
-      return;
-    }
-    const item = catalog.find((entry) => entry.id === selectedItemId);
-    if (!item) {
-      return;
-    }
-    if (!item.variants.some((variant) => variant.id === selectedVariantId)) {
-      setSelectedVariantId(pickInitialVariant(item));
-    }
-  }, [catalog, selectedItemId, selectedVariantId]);
+    setVariantSelections((current) => {
+      const next: Record<string, string | null> = {};
+      catalog.forEach((item) => {
+        const existing = current[item.id];
+        const stillValid = existing ? item.variants.some((variant) => variant.id === existing) : false;
+        next[item.id] = stillValid ? existing : pickInitialVariant(item);
+      });
+      return next;
+    });
+  }, [catalog]);
 
   useEffect(() => {
     if (!isStripeEnabled()) {
@@ -151,8 +123,9 @@ export default function ShopSection({ profile }: ShopSectionProps) {
     }
     getStripeClient()
       .then((client) => {
-        setStripeReady(Boolean(client));
-        if (!client) {
+        const ready = Boolean(client);
+        setStripeReady(ready);
+        if (!ready) {
           setStripeMessage(
             "Impossible de charger Stripe.js. Vérifie ta connexion réseau ou les restrictions de contenu.",
           );
@@ -179,7 +152,7 @@ export default function ShopSection({ profile }: ShopSectionProps) {
   }, [catalog]);
 
   const filteredCatalog = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    const normalizedSearch = searchQuery.trim().toLowerCase();
     return catalog.filter((item) => {
       if (brandFilter !== 'all' && item.sponsorId !== brandFilter) {
         return false;
@@ -198,49 +171,52 @@ export default function ShopSection({ profile }: ShopSectionProps) {
         .toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [brandFilter, catalog, search]);
+  }, [brandFilter, catalog, searchQuery]);
 
-  const selectedItem = useMemo<ShopFrontItem | null>(() => {
-    if (!selectedItemId) {
+  const sortedCatalog = useMemo(() => {
+    const items = [...filteredCatalog];
+    switch (sortOption) {
+      case 'price-asc':
+        return items.sort((a, b) => a.priceCents - b.priceCents);
+      case 'price-desc':
+        return items.sort((a, b) => b.priceCents - a.priceCents);
+      case 'availability':
+        return items.sort((a, b) => {
+          const aStock = a.stock ?? a.variants.reduce((total, variant) => total + (variant.stock ?? 0), 0);
+          const bStock = b.stock ?? b.variants.reduce((total, variant) => total + (variant.stock ?? 0), 0);
+          return (bStock ?? 0) - (aStock ?? 0);
+        });
+      default:
+        return items;
+    }
+  }, [filteredCatalog, sortOption]);
+
+  const currentSelection = (item: ShopFrontItem): ShopFrontVariant | null => {
+    const variantId = variantSelections[item.id] ?? null;
+    if (!variantId) {
       return null;
     }
-    return filteredCatalog.find((item) => item.id === selectedItemId) ?? catalog.find((item) => item.id === selectedItemId) ?? null;
-  }, [catalog, filteredCatalog, selectedItemId]);
-
-  const selectedVariant: ShopFrontVariant | null = useMemo(() => {
-    if (!selectedItem) {
-      return null;
-    }
-    if (!selectedVariantId) {
-      return null;
-    }
-    return selectedItem.variants.find((variant) => variant.id === selectedVariantId) ?? null;
-  }, [selectedItem, selectedVariantId]);
-
-  const handleSelectItem = (item: ShopFrontItem) => {
-    setSelectedItemId(item.id);
-    setSelectedVariantId(pickInitialVariant(item));
-    setQuantity(1);
-    setCheckoutState({ loading: false, error: null, success: null });
+    return item.variants.find((variant) => variant.id === variantId) ?? null;
   };
 
-  const handleCheckout = async () => {
-    if (!selectedItem) {
-      return;
-    }
-    const valid = canSell(selectedItem, selectedVariantId, quantity);
-    if (!valid) {
-      setCheckoutState({ loading: false, error: "Stock insuffisant pour cette configuration.", success: null });
+  const handleCheckout = async (item: ShopFrontItem) => {
+    const variantId = variantSelections[item.id] ?? null;
+    const stock = variantId
+      ? item.variants.find((variant) => variant.id === variantId)?.stock
+      : item.stock;
+    if (stock != null && stock <= 0) {
+      setCheckoutError('Stock insuffisant pour ce produit.');
       return;
     }
 
-    setCheckoutState({ loading: true, error: null, success: null });
+    setPendingCheckoutId(item.id);
+    setCheckoutError(null);
 
     try {
       const payload = {
-        itemId: selectedItem.id,
-        variantId: selectedVariantId,
-        quantity,
+        itemId: item.id,
+        variantId,
+        quantity: 1,
         customerEmail: profile?.sponsor_contact?.email ?? profile?.payout_email ?? null,
         successUrl: typeof window !== 'undefined' ? `${window.location.origin}/shop?checkout=success` : undefined,
         cancelUrl: typeof window !== 'undefined' ? `${window.location.origin}/shop?checkout=cancel` : undefined,
@@ -264,87 +240,44 @@ export default function ShopSection({ profile }: ShopSectionProps) {
         mode === 'external'
           ? "Lien produit Amazon introuvable pour ce modèle."
           : 'Redirection Stripe indisponible.';
-      setCheckoutState({ loading: false, error: fallbackError, success: null });
+      setCheckoutError(fallbackError);
     } catch (cause) {
       console.error('Unable to start checkout', cause);
-      setCheckoutState({ loading: false, error: "Impossible de lancer le paiement. Réessaie dans un instant.", success: null });
+      setCheckoutError("Impossible de lancer le paiement. Réessaie dans un instant.");
+    } finally {
+      setPendingCheckoutId(null);
     }
   };
 
-  const inventoryCard = (item: ShopFrontItem) => {
-    const price = formatCurrency(item.priceCents, item.currency);
+  const handleVariantChange = (itemId: string, variantId: string | null) => {
+    setVariantSelections((current) => ({ ...current, [itemId]: variantId }));
+    setCheckoutError(null);
+  };
+
+  const renderVariantSelector = (item: ShopFrontItem) => {
+    if (item.variants.length === 0) {
+      return null;
+    }
+    const activeVariantId = variantSelections[item.id] ?? null;
     return (
-      <button
-        key={item.id}
-        type="button"
-        onClick={() => handleSelectItem(item)}
-        className={`flex flex-col gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
-          selectedItemId === item.id
-            ? 'border-orange-500/70 bg-orange-500/10 text-white'
-            : 'border-slate-800/70 bg-slate-900/60 text-slate-200 hover:border-orange-500/50'
-        }`}
+      <select
+        value={activeVariantId ?? ''}
+        onChange={(event) => handleVariantChange(item.id, event.target.value || null)}
+        className="w-full rounded-xl border border-slate-800/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 focus:border-orange-500 focus:outline-none"
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/70"
-              style={{
-                background: item.sponsor.primaryColor ? `${item.sponsor.primaryColor}22` : undefined,
-                color: item.sponsor.primaryColor ?? undefined,
-              }}
-            >
-              <ShoppingBag size={18} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">{item.name}</p>
-              <p className="text-xs text-slate-400">{item.sponsor.brandName ?? 'Marque partenaire'}</p>
-            </div>
-          </div>
-          <span className="text-sm font-medium text-slate-100">{price}</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <Package2 size={14} />
-          <span>{availabilityBadge(item)}</span>
-        </div>
-      </button>
-    );
-  };
-
-  const renderVariantPicker = () => {
-    if (!selectedItem) {
-      return null;
-    }
-    if (selectedItem.variants.length === 0) {
-      return null;
-    }
-    return (
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Variantes</p>
-        <div className="flex flex-wrap gap-2">
-          {selectedItem.variants.map((variant) => {
-            const isActive = selectedVariantId === variant.id;
-            const disabled = (variant.stock ?? 0) <= 0;
-            return (
-              <button
-                key={variant.id}
-                type="button"
-                onClick={() => setSelectedVariantId(variant.id)}
-                disabled={disabled}
-                className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                  isActive ? 'border-orange-500 text-orange-200' : 'border-slate-700 text-slate-200 hover:border-orange-400'
-                } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <span>{variant.name}</span>
-                {variant.priceCents != null && variant.priceCents !== selectedItem.priceCents && (
-                  <span className="ml-2 text-[11px] text-slate-400">
-                    {formatCurrency(variant.priceCents, selectedItem.currency)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        {item.variants.map((variant) => {
+          const disabled = (variant.stock ?? 0) <= 0;
+          return (
+            <option key={variant.id} value={variant.id} disabled={disabled}>
+              {variant.name}
+              {variant.priceCents != null && variant.priceCents !== item.priceCents
+                ? ` • ${formatCurrency(variant.priceCents, item.currency)}`
+                : ''}
+              {disabled ? ' (épuisé)' : ''}
+            </option>
+          );
+        })}
+      </select>
     );
   };
 
@@ -355,8 +288,7 @@ export default function ShopSection({ profile }: ShopSectionProps) {
           <div>
             <h1 className="text-2xl font-bold text-white">Marketplace SkateConnect</h1>
             <p className="mt-1 text-sm text-slate-300">
-              Découvre les drops officiels des shops et marques partenaires. Paiement sécurisé via Stripe Connect, commission
-              reversée à la plateforme.
+              Une sélection simple et efficace des drops officiels des shops et marques partenaires.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
@@ -364,10 +296,10 @@ export default function ShopSection({ profile }: ShopSectionProps) {
               <ShieldCheck size={14} /> Paiement sécurisé
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 px-3 py-1">
-              <Truck size={14} /> Expédition par la marque
+              <ShoppingBag size={14} /> Sélection premium
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 px-3 py-1">
-              <Sparkles size={14} /> Commission SkateConnect incluse
+              <ShoppingCart size={14} /> Commande en un clic
             </span>
           </div>
         </div>
@@ -379,194 +311,151 @@ export default function ShopSection({ profile }: ShopSectionProps) {
       </header>
 
       <section className="rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6">
-        <div className="flex flex-col gap-4 lg:flex-row">
-          <div className="w-full lg:w-1/3">
-            <div className="flex flex-col gap-4">
-              <div className="relative">
-                <Filter className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Rechercher un produit ou une marque"
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-900 py-2 pl-10 pr-3 text-sm text-white focus:border-orange-500 focus:outline-none"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBrandFilter('all')}
-                  className={`rounded-full border px-3 py-1 text-xs ${
-                    brandFilter === 'all'
-                      ? 'border-orange-500 text-orange-200'
-                      : 'border-slate-700 text-slate-300 hover:border-orange-500/60'
-                  }`}
-                >
-                  Toutes les marques
-                </button>
-                {brands.map((brand) => (
-                  <button
-                    key={brand.id}
-                    type="button"
-                    onClick={() => setBrandFilter(brand.id)}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      brandFilter === brand.id
-                        ? 'border-orange-500 text-orange-200'
-                        : 'border-slate-700 text-slate-300 hover:border-orange-500/60'
-                    }`}
-                  >
-                    {brand.label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-3">
-                {loading && (
-                  <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-800/60 bg-slate-900/60 py-6 text-slate-300">
-                    <Loader2 className="animate-spin" size={18} /> Chargement de la boutique...
-                  </div>
-                )}
-                {!loading && error && (
-                  <div className="rounded-2xl border border-rose-500/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                    {error}
-                  </div>
-                )}
-                {!loading && !error && filteredCatalog.length === 0 && (
-                  <div className="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-4 py-6 text-sm text-slate-300">
-                    Aucun produit ne correspond à la recherche.
-                  </div>
-                )}
-                {filteredCatalog.map((item) => inventoryCard(item))}
-              </div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="w-full max-w-xl">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Rechercher un produit, une marque..."
+                className="w-full rounded-2xl border border-slate-800 bg-slate-900 py-2 pl-11 pr-3 text-sm text-white focus:border-orange-500 focus:outline-none"
+              />
             </div>
           </div>
-
-          <div className="w-full lg:w-2/3">
-            {!selectedItem ? (
-              <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-2xl border border-slate-800/60 bg-slate-900/60 text-slate-300">
-                <Store size={32} className="mb-2" />
-                Sélectionne un produit pour voir les détails.
-              </div>
-            ) : (
-              <div className="flex h-full flex-col gap-5 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6">
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-widest text-slate-400">
-                        {selectedItem.sponsor.brandName ?? 'Marque partenaire'}
-                      </p>
-                      <h2 className="text-2xl font-semibold text-white">{selectedItem.name}</h2>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-400">Prix unitaire</p>
-                      <p className="text-xl font-semibold text-white">
-                        {formatCurrency(computeVariantPrice(selectedItem, selectedVariantId), selectedItem.currency)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                    <Sparkles size={14} />
-                    <span>{availabilityBadge(selectedItem)}</span>
-                    <span>•</span>
-                    <ShoppingCart size={14} />
-                    <span>
-                      {(selectedVariant?.stock ?? selectedItem.stock ?? 0) > 0
-                        ? `${selectedVariant?.stock ?? selectedItem.stock} en stock`
-                        : 'Stock limité'}
-                    </span>
-                  </div>
-                </div>
-
-                {selectedItem.description && (
-                  <p className="text-sm leading-relaxed text-slate-300">{selectedItem.description}</p>
-                )}
-
-                {renderVariantPicker()}
-
-                <div className="flex flex-col gap-3 rounded-2xl border border-slate-800/60 bg-slate-950/50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quantité</p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setQuantity((value) => Math.max(1, value - 1))}
-                      className="h-10 w-10 rounded-full border border-slate-700 text-lg text-white hover:border-orange-500"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      value={quantity}
-                      onChange={(event) => setQuantity(Math.max(1, Number.parseInt(event.target.value, 10) || 1))}
-                      className="w-16 rounded-xl border border-slate-700 bg-slate-900 py-2 text-center text-sm text-white focus:border-orange-500 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setQuantity((value) => value + 1)}
-                      className="h-10 w-10 rounded-full border border-slate-700 text-lg text-white hover:border-orange-500"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Total estimé :{' '}
-                    <span className="font-semibold text-white">
-                      {formatCurrency(
-                        computeVariantPrice(selectedItem, selectedVariantId) * quantity,
-                        selectedItem.currency,
-                      )}
-                    </span>
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800/60 bg-slate-950/50 p-4 text-sm text-slate-300">
-                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
-                    <ShieldCheck size={14} /> Processus de paiement
-                  </p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5">
-                    <li>Paiement traité via Stripe Connect pour sécuriser les transactions.</li>
-                    <li>La marque expédie directement le produit. SkateConnect conserve sa commission.</li>
-                    <li>Un reçu est envoyé à l'adresse associée à ton compte.</li>
-                  </ul>
-                </div>
-
-                {checkoutState.error && (
-                  <div className="rounded-2xl border border-rose-500/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                    {checkoutState.error}
-                  </div>
-                )}
-                {checkoutState.success && (
-                  <div className="rounded-2xl border border-emerald-500/60 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                    <CheckCircle2 className="mr-2 inline" size={16} /> {checkoutState.success}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <ShoppingCart size={14} />
-                    <span>{stripeReady ? 'Paiement Stripe prêt' : "Lien de paiement disponible"}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCheckout}
-                    disabled={checkoutState.loading}
-                    className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-100 transition-colors hover:bg-orange-500/20 disabled:opacity-50"
-                  >
-                    {checkoutState.loading ? (
-                      <>
-                        <Loader2 className="animate-spin" size={16} />
-                        Redirection Stripe...
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingCart size={16} />
-                        Procéder au paiement
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="flex flex-wrap gap-3 text-sm text-slate-300">
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-orange-400" />
+              <select
+                value={brandFilter}
+                onChange={(event) => setBrandFilter(event.target.value)}
+                className="rounded-2xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 focus:border-orange-500 focus:outline-none"
+              >
+                <option value="all">Toutes les marques</option>
+                {brands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wide text-slate-500">Trier</span>
+              <select
+                value={sortOption}
+                onChange={(event) => setSortOption(event.target.value as SortOption)}
+                className="rounded-2xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 focus:border-orange-500 focus:outline-none"
+              >
+                <option value="featured">En avant</option>
+                <option value="price-asc">Prix: croissant</option>
+                <option value="price-desc">Prix: décroissant</option>
+                <option value="availability">Disponibilité</option>
+              </select>
+            </div>
           </div>
         </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
+          <span>
+            <span className="font-semibold text-white">{sortedCatalog.length}</span> produit(s) disponible(s)
+          </span>
+          {checkoutError && (
+            <span className="rounded-full border border-rose-500/60 bg-rose-500/10 px-3 py-1 text-xs text-rose-100">
+              {checkoutError}
+            </span>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="mt-10 flex items-center justify-center gap-3 text-slate-300">
+            <Loader2 className="h-5 w-5 animate-spin" /> Chargement de la boutique...
+          </div>
+        ) : error ? (
+          <div className="mt-10 rounded-2xl border border-rose-500/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            {error}
+          </div>
+        ) : sortedCatalog.length === 0 ? (
+          <div className="mt-10 rounded-2xl border border-slate-800/60 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-300">
+            Aucun produit ne correspond à la recherche.
+          </div>
+        ) : (
+          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {sortedCatalog.map((item) => {
+              const variant = currentSelection(item);
+              const price = formatCurrency(computeVariantPrice(item, variantSelections[item.id] ?? null), item.currency);
+              const stock = variant?.stock ?? item.stock;
+              return (
+                <div
+                  key={item.id}
+                  className="group flex h-full flex-col overflow-hidden rounded-2xl border border-purple-500/10 bg-slate-900/70 transition hover:border-purple-400/40 hover:shadow-xl hover:shadow-purple-500/10"
+                >
+                  <div className="relative aspect-video overflow-hidden bg-slate-950/60">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-slate-600">
+                        <Store size={40} />
+                      </div>
+                    )}
+                    <div className="absolute left-3 top-3 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-200">
+                      {item.sponsor.brandName ?? item.sponsor.displayName ?? 'Marque partenaire'}
+                    </div>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-4 p-5">
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-semibold text-white line-clamp-2 group-hover:text-purple-200 transition">
+                        {item.name}
+                      </h3>
+                      {item.description && (
+                        <p className="text-sm text-slate-300 line-clamp-3">{item.description}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {renderVariantSelector(item)}
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <ShoppingBag size={14} />
+                        <span>{getAvailabilityMessage(item)}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto flex items-end justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Prix</p>
+                        <p className="text-2xl font-semibold text-white">{price}</p>
+                        <p className="text-xs text-slate-500">
+                          {stock != null ? `${stock} article(s) restant(s)` : 'Stock disponible'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCheckout(item)}
+                        disabled={pendingCheckoutId === item.id}
+                        className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-100 transition hover:bg-orange-500/20 disabled:opacity-50"
+                      >
+                        {pendingCheckoutId === item.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Redirection...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart size={16} />
+                            Acheter
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );
