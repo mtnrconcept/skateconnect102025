@@ -53,6 +53,7 @@ import {
 } from './lib/messages.js';
 import { useRouter } from './lib/router';
 import SearchPage from './components/search/SearchPage';
+import SponsorAdsManager from './pages/SponsorAdsManager';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const isMapAvailable = typeof mapboxToken === 'string' && mapboxToken.trim().length > 0;
@@ -102,6 +103,7 @@ function App() {
 
   const { location, navigate } = useRouter();
   const isSearchRoute = location.pathname === '/search';
+  const isSponsorAdsRoute = location.pathname === '/sponsor/ads';
   const realtimeUserId = profile?.id ?? session?.user?.id ?? null;
 
   const sectionDisplayNames = useMemo<Record<Section, string>>(
@@ -608,7 +610,7 @@ function App() {
             }}
           />
           <div className={dimmedClass}>
-            {!isSearchRoute && (
+            {!isSearchRoute && !isSponsorAdsRoute && (
               <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />
             )}
           </div>
@@ -616,6 +618,8 @@ function App() {
           <main className={`flex-1 pt-16 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
             {isSearchRoute ? (
               <SearchPage onNavigateToContent={handleNavigateToContent} currentPlan={subscriptionPlan} />
+            ) : isSponsorAdsRoute ? (
+              <SponsorAdsManager profile={activeProfile} />
             ) : (
               <>
                 {currentSection === 'map' && (
