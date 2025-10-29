@@ -4,21 +4,25 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  CheckCircle,
+  Clock,
   Copy,
+  DollarSign,
   Download,
   KanbanSquare,
   KeyRound,
   Mail,
   Megaphone,
+  Package,
   Pencil,
   PlusCircle,
   Phone,
   RefreshCw,
   Store,
-  Tag,
-  Users,
+  TrendingUp,
   X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useSponsorContext } from '../../contexts/SponsorContext';
 import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
 import SponsorOpportunitiesView from './opportunities/SponsorOpportunitiesView';
@@ -36,6 +40,43 @@ import type { ShopItemPayload } from '../../lib/sponsorShop';
 import SponsorSpotlightModal, {
   type SponsorSpotlightFormValues,
 } from './spotlights/SponsorSpotlightModal';
+
+const currencyFormatter = new Intl.NumberFormat('fr-FR', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 2,
+});
+
+const numberFormatter = new Intl.NumberFormat('fr-FR');
+
+const formatCurrency = (value: number) => currencyFormatter.format(value);
+const formatNumber = (value: number) => numberFormatter.format(value);
+
+const spotlightStatusMeta: Record<
+  SponsorSpotlight['status'],
+  { label: string; className: string; Icon: LucideIcon }
+> = {
+  draft: {
+    label: 'Brouillon',
+    className: 'bg-slate-500/10 text-slate-200 border border-slate-500/30',
+    Icon: Clock,
+  },
+  scheduled: {
+    label: 'Programmé',
+    className: 'bg-blue-500/10 text-blue-200 border border-blue-500/30',
+    Icon: CalendarDays,
+  },
+  active: {
+    label: 'Actif',
+    className: 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30',
+    Icon: CheckCircle,
+  },
+  completed: {
+    label: 'Terminé',
+    className: 'bg-purple-500/10 text-purple-200 border border-purple-500/30',
+    Icon: TrendingUp,
+  },
+};
 
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
@@ -241,11 +282,13 @@ export default function SponsorDashboard() {
   };
 
   const openCreateShopItemModal = () => {
+    setShopModalMode('create');
     setShopItemBeingEdited(null);
     setIsShopModalOpen(true);
   };
 
   const openEditShopItemModal = (item: SponsorShopItem) => {
+    setShopModalMode('edit');
     setShopItemBeingEdited(item);
     setIsShopModalOpen(true);
   };
@@ -253,6 +296,7 @@ export default function SponsorDashboard() {
   const closeShopItemModal = () => {
     setIsShopModalOpen(false);
     setShopItemBeingEdited(null);
+    setShopModalMode('create');
   };
 
   const handlePlannerStatusChange = useCallback(
@@ -291,28 +335,87 @@ export default function SponsorDashboard() {
     [permissions.canManageOpportunities, updateOpportunityOwner],
   );
 
-  const overviewCards = useMemo(
-    () => [
-      {
-        icon: Users,
-        title: 'Portée communautaire',
-        value: analytics?.reach ? analytics.reach.toLocaleString('fr-FR') : '—',
-        description: "Nombre total de riders touchés sur la période.",
-      },
-      {
-        icon: Tag,
-        title: 'Taux engagement',
-        value: analytics?.engagement_rate ? `${analytics.engagement_rate.toFixed(2)} %` : '—',
-        description: "Interactions moyennes par activation.",
-      },
-      {
-        icon: Megaphone,
-        title: 'Activations',
-        value: analytics?.activation_count ? analytics.activation_count.toString() : '—',
-        description: 'Spotlight et campagnes actives.',
-      },
-    ],
-    [analytics],
+  const overviewMetrics = useMemo(() => {
+    const parseMetricDate = (value: string) => {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
+    };
+
+    const history = shopAnalyticsHistory
+      .map((entry) => ({ ...entry, parsedDate: parseMetricDate(entry.metricDate) }))
+      .sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
+
+    const today = new Date();
+    const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+    const computeRange = (days: number) => {
+      const rangeEnd = todayUtc;
+      const rangeStart = new Date(rangeEnd);
+      rangeStart.setUTCDate(rangeStart.getUTCDate() - (days - 1));
+
+      const previousEnd = new Date(rangeStart);
+      previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+      const previousStart = new Date(previousEnd);
+      previousStart.setUTCDate(previousStart.getUTCDate() - (days - 1));
+
+      return history.reduce(
+        (acc, entry) => {
+          const timestamp = entry.parsedDate.getTime();
+          if (timestamp >= rangeStart.getTime() && timestamp <= rangeEnd.getTime()) {
+            acc.current.revenue += entry.revenueCents;
+            acc.current.orders += entry.orders;
+          } else if (timestamp >= previousStart.getTime() && timestamp <= previousEnd.getTime()) {
+            acc.previous.revenue += entry.revenueCents;
+            acc.previous.orders += entry.orders;
+          }
+          return acc;
+        },
+        {
+          current: { revenue: 0, orders: 0 },
+          previous: { revenue: 0, orders: 0 },
+        },
+      );
+    };
+
+    const computeTrend = (current: number, previous: number) => {
+      if (previous <= 0) {
+        return current > 0 ? null : 0;
+      }
+      return ((current - previous) / previous) * 100;
+    };
+
+    const dayRange = computeRange(1);
+    const weekRange = computeRange(7);
+    const monthRange = computeRange(30);
+
+    const toEuros = (value: number) => value / 100;
+
+    const lowStockThreshold = 5;
+    const pendingActivations = spotlights.filter((spotlight) => spotlight.status === 'draft' || spotlight.status === 'scheduled').length;
+    const activeActivations = spotlights.filter((spotlight) => spotlight.status === 'active').length;
+
+    return {
+      todaySales: toEuros(dayRange.current.revenue),
+      todayOrders: dayRange.current.orders,
+      todayTrend: computeTrend(dayRange.current.revenue, dayRange.previous.revenue),
+      weekSales: toEuros(weekRange.current.revenue),
+      weekTrend: computeTrend(weekRange.current.revenue, weekRange.previous.revenue),
+      monthSales: toEuros(monthRange.current.revenue),
+      monthTrend: computeTrend(monthRange.current.revenue, monthRange.previous.revenue),
+      totalProducts: shopItems.length,
+      lowStock: shopItems.filter((item) => item.stock <= lowStockThreshold).length,
+      pendingActivations,
+      activeActivations,
+      averageEngagement: analytics?.engagement_rate ?? null,
+    };
+  }, [analytics?.engagement_rate, shopAnalyticsHistory, shopItems, spotlights]);
+
+  const recentSpotlights = useMemo(
+    () =>
+      [...spotlights]
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 4),
+    [spotlights],
   );
 
   const handleCreateApiKey = async () => {
@@ -410,23 +513,6 @@ export default function SponsorDashboard() {
       spotlightModalMode,
     ],
   );
-
-  const closeShopModal = useCallback(() => {
-    setIsShopModalOpen(false);
-    setShopItemBeingEdited(null);
-  }, []);
-
-  const handleOpenCreateShopItem = useCallback(() => {
-    setShopModalMode('create');
-    setShopItemBeingEdited(null);
-    setIsShopModalOpen(true);
-  }, []);
-
-  const handleOpenEditShopItem = useCallback((item: SponsorShopItem) => {
-    setShopModalMode('edit');
-    setShopItemBeingEdited(item);
-    setIsShopModalOpen(true);
-  }, []);
 
   const handleShopItemSubmit = useCallback(
     async (values: SponsorShopItemFormValues) => {
@@ -636,52 +722,320 @@ export default function SponsorDashboard() {
     }
   }, [spotlights]);
 
-  const renderOverview = () => (
-    <div className="space-y-8">
-      <div
-        className="rounded-3xl border border-slate-700/60 overflow-hidden"
-        style={{ boxShadow: `0 25px 45px -20px ${primaryColor}40` }}
-      >
+  const scrollToAnalyticsSection = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      document.getElementById('sponsor-analytics-section')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, []);
+
+  const renderOverview = () => {
+    const engagementHelper =
+      overviewMetrics.averageEngagement != null
+        ? `Engagement moyen ${overviewMetrics.averageEngagement.toFixed(1)} %`
+        : 'Performance détaillée';
+
+    return (
+      <div className="space-y-8">
         <div
-          className="p-8 text-white"
-          style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+          className="overflow-hidden rounded-3xl border border-slate-800/60 bg-slate-950/80"
+          style={{ boxShadow: `0 40px 90px -45px ${primaryColor}55` }}
         >
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <p className="uppercase tracking-widest text-sm text-white/70">Profil sponsor</p>
-              <h1 className="text-3xl font-bold mt-2">{branding?.brand_name ?? 'Marque partenaire'}</h1>
-              {branding?.tagline && <p className="mt-2 text-white/80">{branding.tagline}</p>}
+          <div
+            className="relative px-8 py-10 text-white md:px-10"
+            style={{ background: `linear-gradient(135deg, ${secondaryColor}, ${primaryColor})` }}
+          >
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{ background: 'radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 55%)' }}
+            />
+            <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div className="max-w-xl">
+                <p className="text-xs uppercase tracking-[0.35em] text-white/70">Sponsor cockpit</p>
+                <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl">
+                  Pilotage des activations
+                </h1>
+                <p className="mt-3 text-sm text-white/80">
+                  {branding?.tagline ?? 'Campagnes créatives pour rider la scène.'}
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 md:items-end">
+                <button
+                  type="button"
+                  onClick={openCreateShopItemModal}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white/25"
+                >
+                  <PlusCircle size={18} />
+                  Ajouter un produit
+                </button>
+                <div className="flex flex-col gap-1 text-sm text-white/80">
+                  {contactEmail && (
+                    <span className="inline-flex items-center gap-2">
+                      <Mail size={16} />
+                      {contactEmail}
+                    </span>
+                  )}
+                  {contactPhone && (
+                    <span className="inline-flex items-center gap-2">
+                      <Phone size={16} />
+                      {contactPhone}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col gap-2 text-sm text-white/80">
-              {contactEmail && (
-                <span className="inline-flex items-center gap-2"><Mail size={16} /> {contactEmail}</span>
-              )}
-              {contactPhone && (
-                <span className="inline-flex items-center gap-2"><Phone size={16} /> {contactPhone}</span>
-              )}
+          </div>
+          <div className="bg-slate-950/80 px-6 py-8 md:px-10">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="rounded-xl bg-emerald-500/15 p-3 text-emerald-300">
+                    <DollarSign size={20} />
+                  </span>
+                  <TrendBadge value={overviewMetrics.todayTrend} />
+                </div>
+                <p className="text-sm text-slate-400">CA du jour</p>
+                <p className="mt-2 text-3xl font-semibold text-white">
+                  {formatCurrency(overviewMetrics.todaySales)}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {formatNumber(overviewMetrics.todayOrders)} commande(s)
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="rounded-xl bg-purple-500/15 p-3 text-purple-300">
+                    <TrendingUp size={20} />
+                  </span>
+                  <TrendBadge value={overviewMetrics.monthTrend} />
+                </div>
+                <p className="text-sm text-slate-400">CA 30 derniers jours</p>
+                <p className="mt-2 text-3xl font-semibold text-white">
+                  {formatCurrency(overviewMetrics.monthSales)}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">Comparé au mois précédent</p>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="rounded-xl bg-sky-500/15 p-3 text-sky-300">
+                    <Megaphone size={20} />
+                  </span>
+                  <span className="text-xs font-medium uppercase tracking-widest text-slate-400">
+                    Activations
+                  </span>
+                </div>
+                <p className="text-sm text-slate-400">Spotlights actifs</p>
+                <p className="mt-2 text-3xl font-semibold text-white">
+                  {formatNumber(overviewMetrics.activeActivations)}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {formatNumber(overviewMetrics.pendingActivations)} à lancer
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="rounded-xl bg-blue-500/15 p-3 text-blue-300">
+                    <Package size={20} />
+                  </span>
+                  <span className="text-xs font-medium uppercase tracking-widest text-slate-400">
+                    Catalogue
+                  </span>
+                </div>
+                <p className="text-sm text-slate-400">Produits actifs</p>
+                <p className="mt-2 text-3xl font-semibold text-white">
+                  {formatNumber(overviewMetrics.totalProducts)}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {formatNumber(overviewMetrics.lowStock)} stock critique
+                </p>
+              </div>
             </div>
           </div>
         </div>
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-3 p-6 bg-slate-900/80">
-          {overviewCards.map((card) => (
-            <div
-              key={card.title}
-              className="rounded-2xl border border-slate-700/70 bg-slate-900/60 px-6 py-5"
+
+        <div className="rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-white">Actions rapides</h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <button
+              type="button"
+              onClick={openCreateShopItemModal}
+              className="group rounded-2xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 via-purple-500/10 to-purple-500/0 p-5 text-left transition hover:border-purple-400/60 hover:bg-purple-500/15"
             >
-              <div className="flex items-center justify-between mb-4">
-                <card.icon className="text-slate-300" size={20} />
-                <span className="text-xs uppercase tracking-widest text-slate-500">{card.title}</span>
-              </div>
-              <p className="text-3xl font-semibold text-white">{card.value}</p>
-              <p className="text-sm text-slate-400 mt-2">{card.description}</p>
+              <span className="flex items-center justify-between">
+                <span className="rounded-xl bg-purple-500/20 p-3 text-purple-200">
+                  <PlusCircle className="h-6 w-6" />
+                </span>
+              </span>
+              <p className="mt-4 text-base font-semibold text-white">Ajouter un produit</p>
+              <p className="mt-1 text-sm text-slate-400">Optimise ton catalogue boutique.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('spotlights')}
+              className="group rounded-2xl border border-sky-400/30 bg-gradient-to-br from-sky-500/20 via-sky-500/10 to-sky-500/0 p-5 text-left transition hover:border-sky-400/60 hover:bg-sky-500/15"
+            >
+              <span className="flex items-center justify-between">
+                <span className="rounded-xl bg-sky-500/20 p-3 text-sky-200">
+                  <Megaphone className="h-6 w-6" />
+                </span>
+              </span>
+              <p className="mt-4 text-base font-semibold text-white">Piloter les activations</p>
+              <p className="mt-1 text-sm text-slate-400">
+                {formatNumber(overviewMetrics.pendingActivations)} campagne(s) à préparer
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={scrollToAnalyticsSection}
+              className="group rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-emerald-500/0 p-5 text-left transition hover:border-emerald-400/60 hover:bg-emerald-500/15"
+            >
+              <span className="flex items-center justify-between">
+                <span className="rounded-xl bg-emerald-500/20 p-3 text-emerald-200">
+                  <BarChart3 className="h-6 w-6" />
+                </span>
+              </span>
+              <p className="mt-4 text-base font-semibold text-white">Analyser les performances</p>
+              <p className="mt-1 text-sm text-slate-400">{engagementHelper}</p>
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6 md:p-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Activations récentes</h2>
+              <p className="text-sm text-slate-400">Suivi temps réel de tes dernières campagnes Spotlight.</p>
             </div>
-          ))}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openCreateSpotlightModal}
+                className="inline-flex items-center gap-2 rounded-full border border-purple-400/60 px-4 py-2 text-sm text-purple-200 transition hover:border-purple-300 hover:bg-purple-500/10"
+              >
+                <PlusCircle size={16} />
+                Nouveau Spotlight
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('spotlights')}
+                className="text-sm font-medium text-purple-300 transition hover:text-purple-200"
+              >
+                Voir tout →
+              </button>
+            </div>
+          </div>
+          <div className="mt-6 space-y-4">
+            {recentSpotlights.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 px-6 py-6 text-sm text-slate-300">
+                Aucune activation récente. Lance ton premier Spotlight pour apparaître ici.
+              </div>
+            ) : (
+              recentSpotlights.map((spotlight) => {
+                const meta = spotlightStatusMeta[spotlight.status];
+                const last7Days = spotlight.performance?.last7Days;
+                const impressions = last7Days?.impressions ?? 0;
+                const clicks = last7Days?.clicks ?? 0;
+                const ctr =
+                  last7Days && last7Days.impressions > 0
+                    ? (last7Days.clicks / last7Days.impressions) * 100
+                    : null;
+
+                return (
+                  <div
+                    key={spotlight.id}
+                    className="flex flex-col gap-4 rounded-2xl border border-slate-800/70 bg-slate-900/60 px-5 py-4 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div className="flex-1">
+                      <p className="text-base font-semibold text-white">{spotlight.title}</p>
+                      <p className="text-sm text-slate-400">
+                        {spotlight.start_date
+                          ? new Date(spotlight.start_date).toLocaleDateString('fr-FR')
+                          : 'Début à définir'}
+                        {spotlight.end_date
+                          ? ` → ${new Date(spotlight.end_date).toLocaleDateString('fr-FR')}`
+                          : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-3 text-sm text-slate-300 md:flex-row md:items-center md:gap-6">
+                      <div className="text-left md:text-right">
+                        <p className="text-xs uppercase tracking-widest text-slate-500">Impressions 7j</p>
+                        <p className="text-base font-semibold text-white">{formatNumber(impressions)}</p>
+                      </div>
+                      <div className="text-left md:text-right">
+                        <p className="text-xs uppercase tracking-widest text-slate-500">Clics 7j</p>
+                        <p className="text-base font-semibold text-white">{formatNumber(clicks)}</p>
+                      </div>
+                      <div className="text-left md:text-right">
+                        <p className="text-xs uppercase tracking-widest text-slate-500">CTR 7j</p>
+                        <p className="text-base font-semibold text-white">
+                          {ctr == null ? '—' : `${ctr.toFixed(1)} %`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${meta.className}`}
+                      >
+                        <meta.Icon size={14} />
+                        {meta.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openEditSpotlightModal(spotlight)}
+                        className="rounded-full border border-slate-700/70 p-2 text-slate-300 transition hover:border-slate-500 hover:text-white"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div
+          id="sponsor-analytics-section"
+          className="rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6 md:p-8"
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Analyses détaillées</h2>
+              <p className="text-sm text-slate-400">
+                Explore la performance complète de ta boutique et de tes activations.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={refreshShopAnalytics}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
+              >
+                <RefreshCw size={16} />
+                Actualiser
+              </button>
+              {shopAnalyticsExportUrl && (
+                <a
+                  href={shopAnalyticsExportUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
+                >
+                  <Download size={16} />
+                  Export CSV
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="mt-6">
+            <SponsorAnalyticsSection />
+          </div>
         </div>
       </div>
-
-      <SponsorAnalyticsSection />
-    </div>
-  );
+    );
+  };
 
   const renderSpotlights = () => (
     <div className="space-y-6">
@@ -937,7 +1291,7 @@ export default function SponsorDashboard() {
               </button>
               <button
                 type="button"
-                onClick={handleOpenCreateShopItem}
+                onClick={openCreateShopItemModal}
                 className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-100 hover:border-sky-400 hover:bg-sky-500/10"
               >
                 <PlusCircle size={18} /> Ajouter un produit
@@ -1384,7 +1738,7 @@ export default function SponsorDashboard() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => handleOpenEditShopItem(item)}
+                      onClick={() => openEditShopItemModal(item)}
                       className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-3 py-1 text-sm text-slate-200 hover:border-slate-400 hover:text-white"
                     >
                       <Pencil size={16} /> Modifier
@@ -1616,7 +1970,7 @@ export default function SponsorDashboard() {
         <SponsorShopItemModal
           mode={shopModalMode}
           item={shopItemBeingEdited ?? undefined}
-          onClose={closeShopModal}
+          onClose={closeShopItemModal}
           onSubmit={handleShopItemSubmit}
         />
       )}
