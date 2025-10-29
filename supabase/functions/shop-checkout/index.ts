@@ -29,7 +29,14 @@ function buildCorsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("origin");
   const headers: HeadersInit = {
     "access-control-allow-methods": "POST,OPTIONS",
-    "access-control-allow-headers": "authorization, content-type",
+    "access-control-allow-headers": [
+      "authorization",
+      "content-type",
+      "apikey",
+      "x-client-info",
+      "x-supabase-api-version",
+      "x-requested-with",
+    ].join(", "),
   };
 
   if (!origin) {
