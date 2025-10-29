@@ -37,6 +37,7 @@ import SponsorShopItemModal, {
   type SponsorShopItemFormValues,
 } from './shop/SponsorShopItemModal';
 import type { ShopItemPayload } from '../../lib/sponsorShop';
+import { useRouter } from '../../lib/router';
 import SponsorSpotlightModal, {
   type SponsorSpotlightFormValues,
 } from './spotlights/SponsorSpotlightModal';
@@ -241,6 +242,7 @@ export default function SponsorDashboard() {
     updateOpportunityStatus,
     updateOpportunityOwner,
   } = useSponsorContext();
+  const { navigate } = useRouter();
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyScopes, setApiKeyScopes] = useState<string[]>(['analytics:read']);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
@@ -762,14 +764,24 @@ export default function SponsorDashboard() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 md:items-end">
-                <button
-                  type="button"
-                  onClick={openCreateShopItemModal}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white/25"
-                >
-                  <PlusCircle size={18} />
-                  Ajouter un produit
-                </button>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/sponsor/ads')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-white/20 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white/30"
+                  >
+                    <Megaphone size={18} />
+                    Planifier une campagne
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openCreateShopItemModal}
+                    className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white/25"
+                  >
+                    <PlusCircle size={18} />
+                    Ajouter un produit
+                  </button>
+                </div>
                 <div className="flex flex-col gap-1 text-sm text-white/80">
                   {contactEmail && (
                     <span className="inline-flex items-center gap-2">
