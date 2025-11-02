@@ -1,169 +1,315 @@
-import { useState, useEffect } from "react";
-import { CheckCircle2, XCircle, Send, Settings, Crown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CheckCircle2,
+  XCircle,
+  Send,
+  Settings,
+  Crown,
+  Sparkles,
+  MessageSquare,
+  Info,
+} from "lucide-react";
 
 const LETTERS = ["S", "H", "R", "E", "D"];
 
-function ShredLetters({ value }: { value: number }) {
-  return (
-    <div className="flex gap-3 justify-center">
-      {LETTERS.map((l, i) => (
-        <div
-          key={l}
-          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg border-2 ${
-            i < value
-              ? "bg-orange-500 border-orange-400 text-black shadow-[0_0_12px_rgba(255,138,0,0.8)]"
-              : "border-gray-600 text-gray-500"
-          }`}
-        >
-          {l}
-        </div>
-      ))}
-    </div>
-  );
-}
+const Letters = ({ value }: { value: number }) => (
+  <div className="flex gap-2">
+    {LETTERS.map((letter, idx) => (
+      <span
+        key={letter}
+        className={`w-9 h-9 grid place-items-center rounded-full border text-base font-semibold transition-colors shadow-[0_0_14px_rgba(0,0,0,0.35)]
+        ${
+          idx < value
+            ? "bg-orange-500 border-orange-400 text-black shadow-[0_0_18px_rgba(255,138,0,0.6)]"
+            : "border-white/10 text-white/50"
+        }`}
+      >
+        {letter}
+      </span>
+    ))}
+  </div>
+);
 
-function ChatBox() {
-  const [messages, setMessages] = useState([
-    { id: 1, from: "A", text: "Ready?", time: "10:30" },
-    { id: 2, from: "B", text: "Let's go!", time: "10:31" },
+type LocalMessage = {
+  id: number;
+  from: "A" | "B" | null;
+  kind: "text" | "system";
+  text: string;
+  createdAt: string;
+};
+
+export default function GameOfSkateLiveMock() {
+  const [timer, setTimer] = useState(45);
+  const [turn, setTurn] = useState<"A" | "B">("A");
+  const [lettersA, setLettersA] = useState(2);
+  const [lettersB, setLettersB] = useState(3);
+  const [rule, setRule] = useState("Game of Skate");
+  const [trick, setTrick] = useState("360 Flip");
+  const [messages, setMessages] = useState<LocalMessage[]>(() => [
+    { id: 1, from: "A", kind: "text", text: "Ready?", createdAt: new Date().toLocaleTimeString() },
+    { id: 2, from: "B", kind: "text", text: "Let’s go!", createdAt: new Date().toLocaleTimeString() },
+    { id: 3, from: null, kind: "system", text: "Match démarré. Rider A commence.", createdAt: new Date().toLocaleTimeString() },
   ]);
   const [input, setInput] = useState("");
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    setMessages((m) => [
-      ...m,
-      { id: Date.now(), from: "A", text: input.trim(), time: new Date().toLocaleTimeString() },
-    ]);
+  useEffect(() => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - start) / 1000;
+      const remaining = Math.max(0, 45 - elapsed);
+      setTimer(Math.round(remaining * 10) / 10);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [turn]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  const postMessage = (text: string) => {
+    if (!text.trim()) return;
+    const msg: LocalMessage = {
+      id: Date.now(),
+      from: "A",
+      kind: "text",
+      text: text.trim(),
+      createdAt: new Date().toLocaleTimeString(),
+    };
+    setMessages((prev) => [...prev, msg]);
     setInput("");
   };
 
+  const addLetterTo = (side: "A" | "B") => {
+    if (side === "A") {
+      setLettersA((prev) => Math.min(prev + 1, LETTERS.length));
+    } else {
+      setLettersB((prev) => Math.min(prev + 1, LETTERS.length));
+    }
+  };
+
+  const handleAccept = () => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        from: null,
+        kind: "system",
+        text: `${turn} valide son set. L’adversaire doit copier.`,
+        createdAt: new Date().toLocaleTimeString(),
+      },
+    ]);
+    setTurn((prev) => (prev === "A" ? "B" : "A"));
+  };
+
+  const handleRefuse = () => {
+    const loser: "A" | "B" = turn === "A" ? "B" : "A";
+    addLetterTo(loser);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        from: null,
+        kind: "system",
+        text: `${loser} échoue la copie → +1 lettre`,
+        createdAt: new Date().toLocaleTimeString(),
+      },
+    ]);
+    setTurn((prev) => (prev === "A" ? "B" : "A"));
+  };
+
+  const ruleOptions = useMemo(() => ["Game of Skate", "Best Trick", "Mort subite"], []);
+
   return (
-    <div className="flex flex-col h-72 bg-[#0e1117] rounded-xl border border-white/10 p-3 w-full">
-      <div className="flex-1 overflow-y-auto space-y-2">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`max-w-[70%] p-2 rounded-lg text-sm ${
-              m.from === "A" ? "bg-orange-500/20 text-orange-200 self-start" : "bg-white/10 text-white self-end"
-            }`}
-          >
-            <span className="block text-[10px] opacity-60">{m.time}</span>
-            {m.text}
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Écris un message…"
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          className="flex-1 bg-transparent text-white placeholder:text-gray-500 outline-none border-b border-gray-600 focus:border-orange-400 transition-colors"
-        />
-        <button onClick={sendMessage} className="p-2 rounded-lg bg-orange-500 hover:bg-orange-400 text-black">
-          <Send size={18} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function GameOfSkateLiveMock() {
-  const [timer, setTimer] = useState(30);
-
-  useEffect(() => {
-    const i = setInterval(() => setTimer((t) => (t > 0 ? Math.round((t - 0.1) * 10) / 10 : 0)), 100);
-    return () => clearInterval(i);
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-[#0a0c10] text-white p-6 font-sans">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="min-h-screen bg-[#05070b] px-4 py-8 text-white">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px_minmax(0,1fr)]">
         {/* Rider A */}
-        <section className="flex flex-col items-center gap-4 border border-white/10 bg-[#11151C]/90 rounded-2xl p-4">
-          <div className="text-xl font-semibold">MTNR Concept</div>
-          <ShredLetters value={2} />
-          <div className="w-full h-48 bg-black rounded-lg mt-3 grid place-items-center text-gray-400">Vidéo Rider A</div>
-          <div className="flex justify-between w-full text-xs mt-2 text-gray-400">
+        <section className="flex flex-col rounded-3xl border border-white/10 bg-[#0f131b]/85 p-6 shadow-[0_20px_45px_rgba(5,7,11,0.6)]">
+          <div className="flex items-center justify-between text-xs uppercase tracking-[0.28em] text-white/40">
+            <span>MTNR Concept</span>
+            <span
+              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.3em] transition-colors ${
+                turn === "A" ? "bg-orange-500 text-black shadow-[0_0_14px_rgba(255,138,0,0.5)]" : "bg-white/5 text-white/50"
+              }`}
+            >
+              {turn === "A" ? "À toi" : "En attente"}
+            </span>
+          </div>
+          <div className="mt-6 flex justify-center">
+            <Letters value={lettersA} />
+          </div>
+          <div className="mt-6 flex-1 rounded-2xl border border-white/10 bg-black/60">
+            <div className="grid h-full place-items-center text-sm text-white/40">Vidéo Rider A</div>
+          </div>
+          <div className="mt-4 flex items-center text-[11px] text-white/40">
             <span>Latence A</span>
-            <div className="flex-1 mx-2 h-2 bg-gray-700 rounded-full">
-              <div className="w-3/4 h-2 bg-emerald-400 rounded-full"></div>
+            <div className="mx-3 h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+              <div className="h-2 w-3/4 rounded-full bg-emerald-400/90"></div>
             </div>
             <span>Latence B−</span>
           </div>
-          <ChatBox />
-        </section>
 
-        {/* Arbitre / HUD */}
-        <section className="border border-white/10 bg-[#11151C]/90 rounded-2xl p-4 flex flex-col items-center">
-          <h2 className="text-lg font-bold mb-2">Arbitre du jeu</h2>
-          <div className="text-4xl font-extrabold text-orange-400 mb-2">{timer.toFixed(1)}</div>
-          <div className="flex gap-3 mb-4">
-            <button className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-medium rounded-lg flex items-center gap-2">
-              <CheckCircle2 size={18} /> Trick accepté
-            </button>
-            <button className="px-4 py-2 bg-red-500 hover:bg-red-400 text-black font-medium rounded-lg flex items-center gap-2">
-              <XCircle size={18} /> Trick refusé
-            </button>
-          </div>
-
-          <div className="w-full mt-3 p-3 rounded-lg bg-white/5 border border-white/10 text-center">
-            <Settings size={16} className="inline-block mr-2 text-orange-400" />
-            <span className="text-sm text-gray-300">Règles du jeu</span>
-          </div>
-
-          <div className="mt-4 w-full">
-            <h3 className="text-center text-orange-300 font-semibold mb-1">Choix de la règle</h3>
-            <select className="w-full bg-[#0c0f15] border border-white/10 rounded-md p-2 text-sm text-white">
-              <option>Game of Skate</option>
-              <option>Best Trick</option>
-              <option>Mort Subite</option>
-            </select>
-          </div>
-
-          <div className="mt-4 w-full">
-            <h3 className="text-center text-orange-300 font-semibold mb-1">Trick à faire</h3>
-            <div className="flex gap-2">
+          <div className="mt-6 flex h-80 flex-col rounded-2xl border border-white/10 bg-black/40">
+            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/50">
+              <MessageSquare className="h-4 w-4" /> Live Chat
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm" role="log" aria-live="polite">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex flex-col ${
+                    message.kind !== "text" ? "items-center" : message.from === "A" ? "items-start" : "items-end"
+                  }`}
+                >
+                  {message.kind !== "text" ? (
+                    <div className="max-w-[85%] rounded-md bg-white/5 px-3 py-2 text-xs text-white/60">
+                      <span className="block text-[10px] text-white/30">{message.createdAt}</span>
+                      {message.text}
+                    </div>
+                  ) : (
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-[0_0_18px_rgba(0,0,0,0.35)] ${
+                        message.from === "A" ? "bg-orange-500/20 text-orange-100" : "bg-white/10 text-white"
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-white/40">
+                        <span>{message.from === "A" ? "MTNR Concept" : "Nyjah Huston"}</span>
+                        <span>•</span>
+                        <span>{message.createdAt}</span>
+                      </div>
+                      {message.text}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+            <div className="flex items-center gap-2 border-t border-white/10 px-4 py-3">
               <input
-                type="text"
-                placeholder="Nom du trick"
-                className="flex-1 bg-[#0c0f15] border border-white/10 rounded-md p-2 text-sm text-white placeholder:text-gray-500"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && postMessage(input)}
+                placeholder="Écris un message…"
+                className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 outline-none"
               />
-              <button className="px-3 py-2 rounded-md bg-white/10 hover:bg-white/20 text-white flex items-center gap-1 text-sm">
-                Comment faire
+              <button
+                onClick={() => postMessage(input)}
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-black transition hover:bg-orange-400"
+              >
+                <Send className="h-3.5 w-3.5" /> Send
               </button>
             </div>
           </div>
         </section>
 
+        {/* HUD */}
+        <section className="flex flex-col items-center gap-5 rounded-3xl border border-white/10 bg-[#10141d]/90 p-6 text-center shadow-[0_20px_45px_rgba(5,7,11,0.6)]">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/40">
+            <Sparkles className="h-4 w-4 text-orange-400" /> Arbitre du jeu
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.4em] text-white/30">Temps restant</div>
+            <div className="mt-2 text-5xl font-bold text-orange-400 drop-shadow-[0_0_20px_rgba(255,138,0,0.5)]">{timer.toFixed(1)}</div>
+          </div>
+
+          <div className="flex w-full flex-col gap-3">
+            <button
+              onClick={handleAccept}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/90 px-5 py-3 text-sm font-semibold uppercase tracking-[0.35em] text-black transition hover:bg-emerald-400"
+            >
+              <CheckCircle2 className="h-4 w-4" /> Trick accepté
+            </button>
+            <button
+              onClick={handleRefuse}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-red-500/80 px-5 py-3 text-sm font-semibold uppercase tracking-[0.35em] text-black transition hover:bg-red-500"
+            >
+              <XCircle className="h-4 w-4" /> Trick refusé
+            </button>
+          </div>
+
+          <div className="flex w-full flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-left">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/50">
+              <Settings className="h-4 w-4 text-orange-400" /> Règles du jeu
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.35em] text-white/30">Choix de la règle</div>
+                <select
+                  value={rule}
+                  onChange={(event) => setRule(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-[#0b0e13] px-3 py-2 text-sm text-white outline-none transition hover:border-orange-400"
+                >
+                  {ruleOptions.map((item) => (
+                    <option key={item} className="bg-[#0b0e13] text-white">
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.35em] text-white/30">Trick à faire</div>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    value={trick}
+                    onChange={(event) => setTrick(event.target.value)}
+                    placeholder="Nom du trick"
+                    className="flex-1 rounded-lg border border-white/10 bg-[#0b0e13] px-3 py-2 text-sm text-white placeholder:text-white/30 outline-none transition hover:border-orange-400"
+                  />
+                  <button className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/20">
+                    Comment faire ?
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex w-full items-start gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-left text-xs text-white/60">
+            <Info className="mt-0.5 h-4 w-4 text-orange-300" />
+            <p>
+              Tour de {turn === "A" ? "MTNR Concept" : "Nyjah Huston"}. Utilise les boutons pour valider ou refuser et observe la mise à jour instantanée.
+            </p>
+          </div>
+        </section>
+
         {/* Rider B */}
-        <section className="flex flex-col items-center gap-4 border border-white/10 bg-[#11151C]/90 rounded-2xl p-4">
-          <div className="text-xl font-semibold">Nyjah Huston</div>
-          <ShredLetters value={3} />
-          <div className="w-full h-48 bg-black rounded-lg mt-3 grid place-items-center text-gray-400">Vidéo Rider B</div>
-          <div className="flex justify-between w-full text-xs mt-2 text-gray-400">
+        <section className="flex flex-col rounded-3xl border border-white/10 bg-[#0f131b]/85 p-6 shadow-[0_20px_45px_rgba(5,7,11,0.6)]">
+          <div className="flex items-center justify-between text-xs uppercase tracking-[0.28em] text-white/40">
+            <span>Nyjah Huston</span>
+            <span
+              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.3em] transition-colors ${
+                turn === "B" ? "bg-orange-500 text-black shadow-[0_0_14px_rgba(255,138,0,0.5)]" : "bg-white/5 text-white/50"
+              }`}
+            >
+              {turn === "B" ? "À toi" : "En attente"}
+            </span>
+          </div>
+          <div className="mt-6 flex justify-center">
+            <Letters value={lettersB} />
+          </div>
+          <div className="mt-6 flex-1 rounded-2xl border border-white/10 bg-black/60">
+            <div className="grid h-full place-items-center text-sm text-white/40">Vidéo Rider B</div>
+          </div>
+          <div className="mt-4 flex items-center text-[11px] text-white/40">
             <span>Latence A</span>
-            <div className="flex-1 mx-2 h-2 bg-gray-700 rounded-full">
-              <div className="w-2/3 h-2 bg-emerald-400 rounded-full"></div>
+            <div className="mx-3 h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+              <div className="h-2 w-2/3 rounded-full bg-emerald-400/90"></div>
             </div>
             <span>Latence B−</span>
           </div>
-          <div className="mt-4 text-xs text-gray-300 text-center leading-relaxed">
-            Deux riders s’affrontent : le premier impose une figure, l’autre doit la reproduire.
-            Chaque échec donne une lettre du mot <b className="text-orange-400">S.H.R.E.D</b>. Le dernier sans toutes les lettres gagne.
+
+          <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-relaxed text-white/70">
+            Deux riders s’affrontent : le premier impose une figure, l’autre doit la reproduire. Chaque échec ajoute une lettre du mot
+            <span className="font-semibold text-orange-400"> S.H.R.E.D</span>. Celui qui évite les cinq lettres remporte la partie.
           </div>
-          <button className="mt-auto px-6 py-3 rounded-lg bg-orange-500 hover:bg-orange-400 text-black font-semibold flex items-center gap-2">
-            ▶ Lancer le Stream
+
+          <button className="mt-auto rounded-2xl bg-orange-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-black transition hover:bg-orange-400">
+            LAN CER LE STREAM
           </button>
         </section>
       </div>
 
-      <div className="max-w-7xl mx-auto mt-6">
-        <div className="rounded-xl border border-white/10 bg-[#11151C]/90 p-3 flex items-center justify-center gap-2 text-sm text-white/80">
-          <Crown className="w-4 h-4 text-amber-300" />
-          MTNR Concept vs Nyjah Huston — Exhibition Match
-        </div>
+      <div className="mx-auto mt-8 flex max-w-7xl items-center justify-center gap-3 rounded-3xl border border-white/10 bg-[#0f131b]/85 px-5 py-3 text-sm text-white/70">
+        <Crown className="h-4 w-4 text-amber-300" /> MTNR Concept vs Nyjah Huston — Exhibition Match
       </div>
     </div>
   );
