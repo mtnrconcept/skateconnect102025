@@ -128,8 +128,11 @@ export default function LiveSkateRoom() {
   const [meLetters, setMeLetters] = useState<string>('');
   const [opponentLetters, setOpponentLetters] = useState<string>('');
 
-  // Turn owner (userId du joueur dont c’est le tour)
+  // Turn owner (userId du joueur dont c'est le tour)
   const [turnOwner, setTurnOwner] = useState<string | null>(null);
+
+  // NOUVEAU: État pour suivre qui a cliqué en dernier
+  const [lastClickedBy, setLastClickedBy] = useState<string | null>(null);
 
   // AV
   const [muted, setMuted] = useState(false);
@@ -143,7 +146,7 @@ export default function LiveSkateRoom() {
 
   const nextTurnIndexRef = useRef(0);
 
-  // Minimal turn struct (conserve ta structure existante)
+  // Minimal turn struct
   const [currentTurn, setCurrentTurn] = useState<{
     id: string;
     turn_index: number;
@@ -223,21 +226,17 @@ export default function LiveSkateRoom() {
       onRemoteStream: (ms) => setRemoteStream(ms),
       onPeersChange: async (ids) => {
         setPeers(ids);
-        // Premier arrivé décide du tour initial (plus petit uid)
         if (ids.length >= 2) {
           const sorted = [...ids].sort();
           const initialTurn = sorted[0];
-          // si turnOwner pas encore fixé, initialise et broadcast
           setTurnOwner((prev) => {
             if (!prev) {
-              // broadcast init (idempotent côté receveur)
               channel.send({ type: 'broadcast', event: 'turn:init', payload: { owner: initialTurn } });
               return initialTurn;
             }
             return prev;
           });
 
-          // DB seed (facultatif)
           if (dbAvailableRef.current) {
             const player_a = sorted[0];
             const player_b = sorted[1];
@@ -282,7 +281,7 @@ export default function LiveSkateRoom() {
     pcRef.current = pc;
     channelRef.current = channel;
 
-    // ==== Realtime broadcast handlers ====
+    // Realtime broadcast handlers
     channel
       .on('broadcast', { event: 'turn:init' }, ({ payload }) => {
         if (!payload?.owner) return;
@@ -293,9 +292,16 @@ export default function LiveSkateRoom() {
         setTurnOwner(String(payload.owner));
       })
       .on('broadcast', { event: 'letters' }, ({ payload }) => {
-        // doublon de initSignaling handler déjà branché — gardé pour robustesse
         if (!payload?.letters || !payload?.from) return;
         if (payload.from !== userId) setOpponentLetters(String(payload.letters));
+      })
+      .on('broadcast', { event: 'player:first-miss' }, ({ payload }) => {
+        if (!payload?.player) return;
+        setLastClickedBy(String(payload.player));
+      })
+      .on('broadcast', { event: 'player:double-miss' }, ({ payload }) => {
+        if (!payload?.player) return;
+        setLastClickedBy(null);
       })
       .on('broadcast', { event: 'chat:msg' }, ({ payload }) => {
         if (!payload?.text || !payload?.from) return;
@@ -304,7 +310,6 @@ export default function LiveSkateRoom() {
           { id: crypto.randomUUID(), from: String(payload.from), text: String(payload.text), ts: Number(payload.ts) || Date.now() },
         ]);
       })
-      // legacy events: conserve ton flux existant
       .on('broadcast', { event: 'turn:propose' }, ({ payload }) => setCurrentTurn(payload.turn as any))
       .on('broadcast', { event: 'turn:respond' }, ({ payload }) =>
         setCurrentTurn((t) => (t && t.id === payload.turnId ? { ...t, status: 'responded', responder: payload.responder, responderResult: payload.result } : t))
@@ -325,7 +330,7 @@ export default function LiveSkateRoom() {
     };
   }, [roomId, userId]);
 
-  // Broadcast my letters on change + persist optionnel
+  // Broadcast my letters on change
   useEffect(() => {
     if (!channelRef.current || !userId) return;
     channelRef.current.send({ type: 'broadcast', event: 'letters', payload: { from: userId, letters: meLetters } });
@@ -342,7 +347,7 @@ export default function LiveSkateRoom() {
     }
   }, [meLetters]);
 
-  // Persist finish (optionnel)
+  // Persist finish
   useEffect(() => {
     if (!roomId || peers.length < 2) return;
     if (!meLost && !oppLost) return;
@@ -362,7 +367,7 @@ export default function LiveSkateRoom() {
     return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [currentTurn?.deadlineAt]);
 
-  // === AV controls ===
+  // AV controls
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -376,34 +381,68 @@ export default function LiveSkateRoom() {
   const toggleMute = () => { const next = !muted; setMuted(next); localStream?.getAudioTracks().forEach((t) => (t.enabled = !next)); };
   const toggleCamera = () => { const next = !cameraOn; setCameraOn(next); localStream?.getVideoTracks().forEach((t) => (t.enabled = next)); };
 
-  // === Tour & lettres ===
   const sortedPeers = useMemo(() => [...peers].sort(), [peers]);
   const myOpponent = useMemo(() => (userId && sortedPeers.find((p) => p !== userId)) || null, [sortedPeers, userId]);
 
   const itIsMyTurn = !!(turnOwner && userId && turnOwner === userId);
 
-  // Setter (joueur au tour) clique "Je rate" => ajoute lettre à lui-même + bascule tour
-  const onSetterFailed = () => {
-    if (!itIsMyTurn) return;
-    markMissMe(); // j’ajoute une lettre à moi
-    switchTurnTo(myOpponent || null);
+  // NOUVELLES FONCTIONS: Gestion des clics sur "Trick raté"
+  const handleMyTrickMissed = () => {
+    if (!userId) return;
+    
+    if (lastClickedBy === userId) {
+      // Double-clic: j'ajoute une lettre à MOI-MÊME
+      markMissMe();
+      setLastClickedBy(null);
+      
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'player:double-miss',
+        payload: { player: userId, letters: meLetters }
+      });
+    } else {
+      // Premier clic: je passe le tour
+      setLastClickedBy(userId);
+      switchTurnTo(myOpponent || null);
+      
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'player:first-miss',
+        payload: { player: userId }
+      });
+    }
   };
 
-  // Aide: bascule de tour (broadcast + persistance optionnelle)
+  const handleOpponentTrickMissed = () => {
+    if (!userId || !myOpponent) return;
+    
+    if (lastClickedBy === myOpponent) {
+      // Double-clic adversaire: il reçoit une lettre
+      markMissOpp();
+      setLastClickedBy(null);
+      
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'player:double-miss',
+        payload: { player: myOpponent, letters: opponentLetters }
+      });
+    } else {
+      // Premier clic adversaire: il passe le tour
+      setLastClickedBy(myOpponent);
+      switchTurnTo(userId);
+      
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'player:first-miss',
+        payload: { player: myOpponent }
+      });
+    }
+  };
+
   const switchTurnTo = (owner: string | null) => {
     if (!owner) return;
     setTurnOwner(owner);
     channelRef.current?.send({ type: 'broadcast', event: 'turn:switch', payload: { owner } });
-    // optionnel: enregistrer un "switch" en DB via skate_turns si tu veux tracer
-  };
-
-  // Répondre quand c’est *pas* mon tour et je considère que l’adversaire a raté (cas copie échouée)
-  const onResponderFailed = () => {
-    if (itIsMyTurn) return; // seul le non-setter valide l’échec de copie de l’autre
-    markMissOpp();
-    // Ici on *conserve* le tour au setter si tu joues en mode "set réussi, l’autre a raté la copie"
-    // Si tu veux que le tour passe après une copie ratée, décommente :
-    // switchTurnTo(userId!);
   };
 
   const markMissMe = () => {
@@ -416,6 +455,7 @@ export default function LiveSkateRoom() {
       }
     }
   };
+  
   const markMissOpp = () => {
     const have = new Set(opponentLetters.split(''));
     for (const ch of LETTERS) {
@@ -432,7 +472,7 @@ export default function LiveSkateRoom() {
       if (!dbAvailableRef.current || peers.length < 2 || !roomId) return;
       const me = userId ?? sortedPeers[0];
       const opponent = sortedPeers.find((p) => p !== me) ?? sortedPeers[1];
-      const proposer = side === 'me' ? opponent : me; // si JE rate, alors l’autre avait proposé
+      const proposer = side === 'me' ? opponent : me;
 
       const turn_index = nextTurnIndexRef.current++;
       await withTableFallback(
@@ -460,20 +500,19 @@ export default function LiveSkateRoom() {
     } catch { /* optional */ }
   }
 
-  // === Chat live (broadcast only) ===
+  // Chat
   const sendChat = () => {
     const t = chatInput.trim();
     if (!t || !channelRef.current || !userId) return;
     setChatInput('');
     const msg: ChatMsg = { id: crypto.randomUUID(), from: userId, text: t, ts: Date.now() };
-    setChatMsgs((prev) => [...prev, msg]); // optimiste
+    setChatMsgs((prev) => [...prev, msg]);
     channelRef.current.send({ type: 'broadcast', event: 'chat:msg', payload: msg });
   };
 
-  // === Turn proposer / respond/validate (legacy conservé) ===
+  // Legacy turn management
   const [trickInput, setTrickInput] = useState('');
   const [difficultyInput, setDifficultyInput] = useState<number>(2);
-
   const isLeader = useMemo(() => sortedPeers.length >= 2 && userId === sortedPeers[0], [sortedPeers, userId]);
 
   const handlePropose = async () => {
@@ -548,12 +587,12 @@ export default function LiveSkateRoom() {
     }
   };
 
-  // Reset
   const resetMatch = () => {
     setPhase('idle');
     setMeLetters('');
     setOpponentLetters('');
     setTurnOwner(null);
+    setLastClickedBy(null);
     if (pcRef.current) {
       pcRef.current.getSenders().forEach((s) => s.track && s.track.stop());
       pcRef.current.close();
@@ -576,7 +615,7 @@ export default function LiveSkateRoom() {
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-white">Game of S.H.R.E.D — Live</h1>
-            <p className="text-xs text-gray-400">Salle vidéo en direct, score SHRED, **tour en temps réel** et chat live</p>
+            <p className="text-xs text-gray-400">Salle vidéo en direct, score SHRED, tour en temps réel et chat live</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -615,7 +654,7 @@ export default function LiveSkateRoom() {
         </div>
       </div>
 
-      {/* Bandeau d’état Realtime / Tour */}
+      {/* Bandeau d'état */}
       <div className="mb-4 flex items-center gap-3 rounded-xl border border-white/10 bg-[#0B0E13] px-3 py-2 text-sm text-white/80">
         <MessageSquare className="w-4 h-4 text-white/60" />
         Chat & Tour live
@@ -626,6 +665,23 @@ export default function LiveSkateRoom() {
           {rtState === 'subscribed' ? null : <><WifiOff className="w-4 h-4" /> Realtime offline</>}
         </span>
       </div>
+
+      {/* Alerte double-clic */}
+      {lastClickedBy && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm text-orange-200 animate-pulse">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <div className="font-semibold">
+              {lastClickedBy === userId ? 'ATTENTION : Vous avez raté une fois' : "L'adversaire a raté une fois"}
+            </div>
+            <div className="text-xs text-orange-300/80">
+              {lastClickedBy === userId 
+                ? "Cliquez encore sur 'Trick raté' pour recevoir une lettre"
+                : "Si l'adversaire rate encore, il recevra une lettre"}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         {/* Local video */}
@@ -646,9 +702,13 @@ export default function LiveSkateRoom() {
             <ShredWordLarge
               label="Votre score"
               value={meLetters}
-              onClick={onSetterFailed}
-              disabled={!itIsMyTurn}
-              hint={itIsMyTurn ? 'Vous êtes le setter : “Je rate” => +1 lettre pour vous et le tour passe' : 'Vous n’êtes pas au tour'}
+              onClick={handleMyTrickMissed}
+              disabled={false}
+              hint={
+                lastClickedBy === userId
+                  ? "⚠️ Cliquez encore pour ajouter une lettre à VOUS"
+                  : "Cliquez 1x = passer tour | 2x = lettre pour vous"
+              }
             />
           </div>
         </div>
@@ -678,9 +738,13 @@ export default function LiveSkateRoom() {
             <ShredWordLarge
               label="Score adversaire"
               value={opponentLetters}
-              onClick={onResponderFailed}
-              disabled={itIsMyTurn}
-              hint={!itIsMyTurn ? "L'adversaire est setter : s'il rate et tu le constates -> +1 lettre pour lui (copie échouée)" : 'C’est à toi, tu ne peux pas marquer une lettre adverse ici'}
+              onClick={handleOpponentTrickMissed}
+              disabled={false}
+              hint={
+                lastClickedBy === myOpponent
+                  ? "⚠️ L'adversaire va recevoir une lettre au prochain clic"
+                  : "Marquer l'échec de l'adversaire"
+              }
             />
           </div>
         </div>
@@ -692,12 +756,20 @@ export default function LiveSkateRoom() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-white/90">Score — Vous</h2>
             <button
-              onClick={onSetterFailed}
-              disabled={!itIsMyTurn}
-              className={`text-xs px-3 py-1.5 rounded-md border ${itIsMyTurn ? 'bg-red-600/20 text-red-300 border-red-500/40 hover:bg-red-600/30' : 'bg-dark-700 text-gray-500 border-dark-500 cursor-not-allowed'}`}
-              title={itIsMyTurn ? 'Trick refusé' : 'Pas votre tour'}
+              onClick={handleMyTrickMissed}
+              disabled={false}
+              className={`text-xs px-3 py-1.5 rounded-md border ${
+                lastClickedBy === userId
+                  ? 'bg-orange-600/20 text-orange-300 border-orange-500/40 animate-pulse'
+                  : 'bg-red-600/20 text-red-300 border-red-500/40 hover:bg-red-600/30'
+              }`}
+              title={
+                lastClickedBy === userId
+                  ? "⚠️ Cliquez encore = lettre pour VOUS"
+                  : "Trick raté (1er clic = passe tour, 2e clic = lettre)"
+              }
             >
-              Trick refusé (setter)
+              {lastClickedBy === userId ? '⚠️ Confirmer lettre' : 'Trick raté'}
             </button>
           </div>
           <ShredLetters label="SHRED" value={meLetters} onToggle={setMeLetters} />
@@ -707,19 +779,27 @@ export default function LiveSkateRoom() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-white/90">Score — Adversaire</h2>
             <button
-              onClick={onResponderFailed}
-              disabled={itIsMyTurn}
-              className={`text-xs px-3 py-1.5 rounded-md border ${!itIsMyTurn ? 'bg-red-600/20 text-red-300 border-red-500/40 hover:bg-red-600/30' : 'bg-dark-700 text-gray-500 border-dark-500 cursor-not-allowed'}`}
-              title={!itIsMyTurn ? 'Copie échouée détectée' : "C'est votre tour"}
+              onClick={handleOpponentTrickMissed}
+              disabled={false}
+              className={`text-xs px-3 py-1.5 rounded-md border ${
+                lastClickedBy === myOpponent
+                  ? 'bg-orange-600/20 text-orange-300 border-orange-500/40 animate-pulse'
+                  : 'bg-red-600/20 text-red-300 border-red-500/40 hover:bg-red-600/30'
+              }`}
+              title={
+                lastClickedBy === myOpponent
+                  ? "⚠️ Prochain clic = lettre pour adversaire"
+                  : "Adversaire rate (marquer son échec)"
+              }
             >
-              Copie échouée (responder)
+              {lastClickedBy === myOpponent ? '⚠️ Adversaire rate' : 'Adversaire rate'}
             </button>
           </div>
           <ShredLetters label="SHRED" value={opponentLetters} onToggle={setOpponentLetters} />
         </div>
       </div>
 
-      {/* Turn info + legacy controls (proposition/validate conservés) */}
+      {/* Turn info + legacy controls */}
       <div className="mt-6 rounded-xl bg-dark-800/60 border border-dark-600 p-4">
         <div className="flex items-center gap-2 text-white/80">
           <TimerReset className="w-4 h-4" />
@@ -811,7 +891,7 @@ export default function LiveSkateRoom() {
               <span className="text-white/90">{m.text}</span>
             </div>
           ))}
-          {chatMsgs.length === 0 && <div className="text-white/40 text-sm">Aucun message pour l’instant.</div>}
+          {chatMsgs.length === 0 && <div className="text-white/40 text-sm">Aucun message pour l'instant.</div>}
         </div>
         <div className="p-3 border-t border-white/10 flex items-center gap-2">
           <input
@@ -864,7 +944,7 @@ async function awardExperience(points: number) {
   } catch { /* optional */ }
 }
 
-// --- Signaling + P2P helpers ---
+// Signaling + P2P helpers
 function initSignaling(
   args: {
     roomId: string;
