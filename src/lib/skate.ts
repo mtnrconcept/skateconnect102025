@@ -1,5 +1,4 @@
 import { supabase } from './supabase.js';
-import { withTableFallback } from './postgrest';
 import type {
   MatchMode,
   MatchStatus,
@@ -9,12 +8,6 @@ import type {
 } from '../types';
 
 function nowIso() { return new Date().toISOString(); }
-
-// Fallback in-memory mocks (for dev without schema)
-const mock: { matches: SkateMatchRow[]; turns: SkateTurnRow[] } = {
-  matches: [],
-  turns: [],
-};
 
 export async function createMatch(params: { mode: MatchMode; opponent_id: string }, userId: string): Promise<SkateMatchRow> {
   const row: SkateMatchRow = {
@@ -31,24 +24,22 @@ export async function createMatch(params: { mode: MatchMode; opponent_id: string
     finished_at: null,
   };
 
-  return withTableFallback(
-    supabase.from('skate_matches').insert(row).select('*').single(),
-    () => {
-      mock.matches.push(row);
-      return row;
-    },
-  );
+  const { data, error } = await supabase.from('skate_matches').insert(row).select('*').single();
+  if (error) throw error;
+  if (!data) throw new Error('Failed to create match');
+  return data;
 }
 
 export async function startMatch(matchId: string): Promise<SkateMatchRow> {
-  return withTableFallback(
-    supabase.from('skate_matches').update({ status: 'active', started_at: nowIso() }).eq('id', matchId).select('*').single(),
-    () => {
-      const m = mock.matches.find((x) => x.id === matchId);
-      if (m) { m.status = 'active'; m.started_at = nowIso(); }
-      return m as SkateMatchRow;
-    },
-  );
+  const { data, error } = await supabase
+    .from('skate_matches')
+    .update({ status: 'active', started_at: nowIso() })
+    .eq('id', matchId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  if (!data) throw new Error('Failed to start match');
+  return data;
 }
 
 export async function createTurn(params: {
@@ -58,7 +49,14 @@ export async function createTurn(params: {
   difficulty?: number;
   mode: MatchMode;
 }): Promise<SkateTurnRow> {
-  const idx = mock.turns.filter((t) => t.match_id === params.match_id).length;
+  const { data: lastTurn, error: fetchError } = await supabase
+    .from('skate_turns')
+    .select('turn_index')
+    .eq('match_id', params.match_id)
+    .order('turn_index', { ascending: false })
+    .limit(1);
+  if (fetchError) throw fetchError;
+  const idx = (lastTurn?.[0]?.turn_index ?? -1) + 1;
   const row: SkateTurnRow = {
     id: crypto.randomUUID(),
     match_id: params.match_id,
@@ -75,36 +73,35 @@ export async function createTurn(params: {
     created_at: nowIso(),
   };
 
-  return withTableFallback(
-    supabase.from('skate_turns').insert(row).select('*').single(),
-    () => {
-      mock.turns.push(row);
-      return row;
-    },
-  );
+  const { data, error } = await supabase.from('skate_turns').insert(row).select('*').single();
+  if (error) throw error;
+  if (!data) throw new Error('Failed to create turn');
+  return data;
 }
 
 export async function respondTurn(turnId: string, videoUrl: string): Promise<SkateTurnRow> {
-  return withTableFallback(
-    supabase.from('skate_turns').update({ video_b_url: videoUrl, status: 'responded' as TurnStatus }).eq('id', turnId).select('*').single(),
-    () => {
-      const t = mock.turns.find((x) => x.id === turnId);
-      if (t) { t.video_b_url = videoUrl; t.status = 'responded'; }
-      return t as SkateTurnRow;
-    },
-  );
+  const { data, error } = await supabase
+    .from('skate_turns')
+    .update({ video_b_url: videoUrl, status: 'responded' as TurnStatus })
+    .eq('id', turnId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  if (!data) throw new Error('Failed to respond to turn');
+  return data;
 }
 
 export async function resolveMatch(matchId: string, winnerId: string | null): Promise<SkateMatchRow> {
   const patch: Partial<SkateMatchRow> = { status: 'finished' as MatchStatus, finished_at: nowIso(), winner: winnerId };
-  return withTableFallback(
-    supabase.from('skate_matches').update(patch).eq('id', matchId).select('*').single(),
-    () => {
-      const m = mock.matches.find((x) => x.id === matchId);
-      if (m) { m.status = 'finished'; m.finished_at = nowIso(); m.winner = winnerId; }
-      return m as SkateMatchRow;
-    },
-  );
+  const { data, error } = await supabase
+    .from('skate_matches')
+    .update(patch)
+    .eq('id', matchId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  if (!data) throw new Error('Failed to resolve match');
+  return data;
 }
 
 const LETTERS = ['S','K','A','T','E'] as const;

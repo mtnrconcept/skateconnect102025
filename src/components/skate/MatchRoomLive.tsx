@@ -87,15 +87,12 @@ export default function MatchRoomLive({ matchId, profile }: MatchRoomLiveProps) 
     return <div className="text-gray-400">Chargement du match…</div>;
   }
 
-  // Déterminer si l'utilisateur est A ou B
-  const iAm = profile.id === gosMatch.rider_a ? 'A' : profile.id === gosMatch.rider_b ? 'B' : 'A';
-
   return (
     <>
       {showCountdown && <CountdownAnimation onComplete={handleCountdownComplete} />}
       <div className="space-y-6">
         {/* Game of Skate Self-Ref */}
-        <GameOfSkateSelfRef matchId={gosMatch.id} me={profile.id} iAm={iAm} />
+        <GameOfSkateSelfRef matchId={gosMatch.id} me={profile.id} />
 
         {/* Blocs vidéo */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
