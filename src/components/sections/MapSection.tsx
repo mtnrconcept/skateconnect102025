@@ -388,10 +388,81 @@ export default function MapSection({
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
-      setSpots(data || []);
 
-      if (data && data.length > 0) {
-        loadCoverPhotos(data.map(spot => spot.id));
+      let merged: Spot[] = data || [];
+
+      // Also load from imported table if available
+      try {
+        const { data: imported, error: impErr } = await supabase
+          .from('spots_imported')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (impErr) {
+          // Table may not exist yet in some envs
+          // console.warn('spots_imported not available:', impErr.message);
+        } else if (Array.isArray(imported) && imported.length > 0) {
+          // Merge without duplicates (name+address)
+          const existingKeys = new Set(
+            merged.map((s) => `${(s.name || '').toLowerCase()}|${(s.address || '').toLowerCase()}`),
+          );
+          for (const s of imported as unknown as Spot[]) {
+            const key = `${(s.name || '').toLowerCase()}|${(s.address || '').toLowerCase()}`;
+            if (!existingKeys.has(key)) {
+              existingKeys.add(key);
+              merged.push(s);
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      try {
+        const resp = await fetch('/imported_spots.json', { cache: 'no-cache' });
+        if (resp.ok) {
+          const overlay: Array<Partial<Spot> & { id?: string; name?: string; address?: string; latitude?: number; longitude?: number; spot_type?: Spot['spot_type'] }> = await resp.json();
+          const existingKeys = new Set(
+            merged.map((s) => `${(s.name || '').toLowerCase()}|${(s.address || '').toLowerCase()}`),
+          );
+          const normalized = overlay
+            .filter((o) => typeof o?.latitude === 'number' && typeof o?.longitude === 'number' && (o?.name || '').trim().length > 0)
+            .filter((o) => {
+              const k = `${(o.name || '').toLowerCase()}|${(o.address || '').toLowerCase()}`;
+              if (existingKeys.has(k)) return false;
+              existingKeys.add(k);
+              return true;
+            })
+            .map((o, index) => ({
+              id: o.id || `csv:${index}`,
+              created_by: null,
+              name: o.name || 'Spot',
+              description: (o as any).description || 'Imported spot',
+              address: o.address || '',
+              latitude: o.latitude as number,
+              longitude: o.longitude as number,
+              spot_type: (o.spot_type as Spot['spot_type']) || 'skatepark',
+              difficulty: typeof (o as any).difficulty === 'number' ? (o as any).difficulty : 3,
+              surfaces: Array.isArray((o as any).surfaces) ? ((o as any).surfaces as string[]) : [],
+              modules: Array.isArray((o as any).modules) ? ((o as any).modules as string[]) : [],
+              is_verified: false,
+              likes_count: 0,
+              comments_count: 0,
+              rating_average: null,
+              rating_count: 0,
+              rating_distribution: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as Spot));
+          merged = [...merged, ...normalized];
+        }
+      } catch (err) {
+        console.warn('Overlay spots not loaded:', err);
+      }
+
+      setSpots(merged);
+
+      if (merged && merged.length > 0) {
+        loadCoverPhotos(merged.map(spot => spot.id).filter(Boolean));
       }
     } catch (error) {
       console.error('Error loading spots:', error);
@@ -592,7 +663,7 @@ export default function MapSection({
         .setLngLat([spot.longitude, spot.latitude])
         .addTo(map.current!);
 
-      const coverPhotoUrl = spotCoverPhotos[spot.id];
+      const coverPhotoUrl = spotCoverPhotos[spot.id] || (spot as any).cover_image_url || '';
       const stars = Array.from({ length: 5 }, (_, i) =>
         i < spot.difficulty ? '★' : '☆'
       ).join('');
