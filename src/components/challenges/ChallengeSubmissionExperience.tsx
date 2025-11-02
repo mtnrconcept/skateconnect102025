@@ -3,12 +3,8 @@ import { AlertTriangle } from 'lucide-react';
 import ChallengeSubmissionForm from './ChallengeSubmissionForm';
 import ChallengeSubmissionGallery, { type SubmissionViewMode } from './ChallengeSubmissionGallery';
 import ChallengeSubmissionDetailModal from './ChallengeSubmissionDetailModal';
-import {
-  fetchChallengeSubmissions,
-  toggleChallengeVote,
-  type ChallengeSubmission,
-} from '../../lib/challenges';
-import type { Challenge, Profile } from '../../types';
+import { fetchChallengeSubmissions, toggleChallengeVote } from '../../lib/challenges';
+import type { Challenge, Profile, ChallengeSubmission } from '../../types';
 
 interface ChallengeSubmissionExperienceProps {
   challenge: Challenge;
@@ -55,7 +51,7 @@ export default function ChallengeSubmissionExperience({
   }, [loadSubmissions]);
 
   const handleSubmissionCreated = (submission: ChallengeSubmission) => {
-    setSubmissions((prev) => [submission, ...prev]);
+    setSubmissions((prev: ChallengeSubmission[]) => [submission, ...prev]);
     setUserSubmission(submission);
     setSelectedSubmission(submission);
     onSubmissionCreated?.(submission);
@@ -72,7 +68,7 @@ export default function ChallengeSubmissionExperience({
       setError(null);
       setVotingSubmissionId(submission.id);
       const result = await toggleChallengeVote(submission.id, profile.id, submission.voted_by_user === true);
-      setSubmissions((prev) =>
+      setSubmissions((prev: ChallengeSubmission[]) =>
         prev.map((item) =>
           item.id === submission.id
             ? { ...item, votes_count: result.votesCount, voted_by_user: result.voted }
@@ -80,13 +76,13 @@ export default function ChallengeSubmissionExperience({
         ),
       );
 
-      setUserSubmission((prev) =>
+      setUserSubmission((prev: ChallengeSubmission | null) =>
         prev && prev.id === submission.id
           ? { ...prev, votes_count: result.votesCount, voted_by_user: result.voted }
           : prev,
       );
 
-      setSelectedSubmission((prev) =>
+      setSelectedSubmission((prev: ChallengeSubmission | null) =>
         prev && prev.id === submission.id
           ? { ...prev, votes_count: result.votesCount, voted_by_user: result.voted }
           : prev,

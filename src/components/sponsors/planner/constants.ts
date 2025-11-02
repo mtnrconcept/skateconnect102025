@@ -21,22 +21,22 @@ export const SPONSOR_PLANNER_STATUS_META: Record<
   briefing: {
     label: 'Brief',
     description: 'Alignement interne et cadrage du programme.',
-    color: 'bg-sky-900/60 border border-sky-600/40 text-sky-100',
+    color: 'bg-orange-900/60 border border-orange-600/40 text-orange-100',
   },
   production: {
     label: 'Production',
     description: 'Création des assets et préparation opérationnelle.',
-    color: 'bg-indigo-900/60 border border-indigo-600/40 text-indigo-100',
+    color: 'bg-slate-800/70 border border-slate-600/40 text-slate-100',
   },
   promotion: {
     label: 'Activation',
     description: 'Promotion auprès des riders & communautés.',
-    color: 'bg-amber-900/60 border border-amber-600/40 text-amber-100',
+    color: 'bg-orange-900/60 border border-orange-600/40 text-orange-100',
   },
   live: {
     label: 'En ligne',
     description: 'Campagne en cours auprès du public.',
-    color: 'bg-emerald-900/60 border border-emerald-600/40 text-emerald-100',
+    color: 'bg-orange-900/60 border border-orange-600/40 text-orange-100',
   },
   archived: {
     label: 'Clôturé',

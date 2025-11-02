@@ -118,3 +118,56 @@ export async function fetchCommunityAnalyticsHistory(
 
   return (history ?? []) as CommunityAnalyticsSnapshot[];
 }
+
+/**
+ * Enregistre une estimation de campagne comme point analytics communautaire.
+ * Tolère l'absence de table (schéma sponsor non déployé) en no-op.
+ */
+export async function logCampaignEstimationAsAnalytics(
+  sponsorId: string,
+  params: {
+    reach: number;
+    impressions: number;
+    clicks: number;
+    engagementRate?: number;
+    tags?: string[];
+    regions?: string[];
+    metricDate?: string;
+  },
+): Promise<void> {
+  const engagementRate =
+    typeof params.engagementRate === 'number'
+      ? params.engagementRate
+      : params.impressions > 0
+        ? params.clicks / params.impressions
+        : 0;
+
+  try {
+    const payload = {
+      sponsor_id: sponsorId,
+      metric_date: params.metricDate ?? new Date().toISOString(),
+      reach: Math.max(0, Math.round(params.reach)),
+      engagement_rate: Math.max(0, Math.min(1, engagementRate)),
+      activation_count: Math.max(0, Math.round(params.clicks)),
+      // Champs catégoriels optionnels
+      trending_tags: params.tags ?? [],
+      top_regions: params.regions ?? [],
+    } as const;
+
+    const { error } = await supabase
+      .from('sponsor_community_metrics')
+      .insert([payload]);
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        // Table manquante: on ignore silencieusement
+        return;
+      }
+      // Autres erreurs: on loggent en info pour ne pas casser le flux UI
+      console.info('logCampaignEstimationAsAnalytics failed', error);
+    }
+  } catch (cause) {
+    // Réseau ou autre: on reste résilient
+    console.info('logCampaignEstimationAsAnalytics threw', cause);
+  }
+}

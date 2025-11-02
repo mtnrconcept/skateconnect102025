@@ -166,7 +166,7 @@ export default function SponsorSpotlightModal({
               onChange={(event) =>
                 setForm((current) => ({ ...current, title: event.target.value.slice(0, 140) }))
               }
-              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               placeholder="Activation pro team – Été"
             />
           </label>
@@ -179,7 +179,7 @@ export default function SponsorSpotlightModal({
               onChange={(event) =>
                 setForm((current) => ({ ...current, description: event.target.value.slice(0, 600) }))
               }
-              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               placeholder="Détaille l'opération, les riders impliqués et les livrables attendus."
             />
           </label>
@@ -192,7 +192,7 @@ export default function SponsorSpotlightModal({
                 onChange={(event) =>
                   setForm((current) => ({ ...current, callToAction: event.target.value.slice(0, 80) }))
                 }
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                 placeholder="Rejoins la tournée"
               />
             </label>
@@ -204,7 +204,7 @@ export default function SponsorSpotlightModal({
                 onChange={(event) =>
                   setForm((current) => ({ ...current, callToActionUrl: event.target.value.slice(0, 200) }))
                 }
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                 placeholder="https://ton-site.com/landing"
               />
             </label>
@@ -220,7 +220,7 @@ export default function SponsorSpotlightModal({
                   setStartDateInput(event.target.value);
                   setForm((current) => ({ ...current, startDate: toIsoFromLocalInput(event.target.value) }));
                 }}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-slate-300">
@@ -232,7 +232,7 @@ export default function SponsorSpotlightModal({
                   setEndDateInput(event.target.value);
                   setForm((current) => ({ ...current, endDate: toIsoFromLocalInput(event.target.value) }));
                 }}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
             </label>
           </div>
@@ -244,7 +244,7 @@ export default function SponsorSpotlightModal({
               onChange={(event) =>
                 setForm((current) => ({ ...current, status: event.target.value as SponsorSpotlight['status'] }))
               }
-              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
             >
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -261,7 +261,7 @@ export default function SponsorSpotlightModal({
                 <button
                   type="button"
                   onClick={() => setForm((current) => ({ ...current, mediaUrl: null }))}
-                  className="inline-flex items-center gap-2 text-xs text-rose-300 hover:text-rose-200"
+                  className="inline-flex items-center gap-2 text-xs text-orange-300 hover:text-orange-200"
                 >
                   <Trash2 size={14} /> Retirer
                 </button>
@@ -274,7 +274,7 @@ export default function SponsorSpotlightModal({
                   href={form.mediaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sky-300 hover:text-sky-200"
+                  className="inline-flex items-center gap-2 text-orange-300 hover:text-orange-200"
                 >
                   Prévisualiser le média
                 </a>
@@ -293,12 +293,12 @@ export default function SponsorSpotlightModal({
                     disabled={uploading}
                   />
                 </label>
-                {uploadError && <p className="text-xs text-rose-300">{uploadError}</p>}
+                {uploadError && <p className="text-xs text-orange-300">{uploadError}</p>}
               </div>
             )}
           </div>
 
-          {error && <p className="text-sm text-rose-300">{error}</p>}
+          {error && <p className="text-sm text-orange-300">{error}</p>}
 
           <div className="flex flex-wrap items-center justify-end gap-3">
             <button
@@ -312,7 +312,7 @@ export default function SponsorSpotlightModal({
             <button
               type="submit"
               disabled={saving || uploading}
-              className="rounded-full border border-sky-500/70 bg-sky-500/10 px-6 py-2 text-sm font-medium text-sky-100 hover:border-sky-400 hover:bg-sky-500/20 disabled:opacity-60"
+              className="rounded-full border border-orange-500/70 bg-orange-500/10 px-6 py-2 text-sm font-medium text-orange-100 hover:border-orange-400 hover:bg-orange-500/20 disabled:opacity-60"
             >
               {saving ? 'Enregistrement...' : mode === 'create' ? 'Créer le Spotlight' : 'Mettre à jour'}
             </button>

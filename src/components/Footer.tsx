@@ -34,6 +34,16 @@ export default function Footer({ onSectionChange }: FooterProps) {
             Conditions générales
           </button>
         </div>
+        <div className="flex items-center gap-4">
+          <span className="hidden sm:inline text-gray-600">|</span>
+          <button id="returns-policy-link" type="button" onClick={() => handleNavigate('returns')} className="hover:text-orange-400 transition-colors">
+            Retours & annulations
+          </button>
+          <span className="hidden sm:inline text-gray-600">|</span>
+          <button type="button" onClick={() => handleNavigate('legal')} className="hover:text-orange-400 transition-colors">
+            Mentions l�gales
+          </button>
+        </div>
       </div>
     </footer>
   );

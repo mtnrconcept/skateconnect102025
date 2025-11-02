@@ -43,6 +43,8 @@ export interface CampaignDraft {
   startDate: string;
   endDate: string;
   placements: string[];
+  // Pages où l'annonce doit apparaître (ex: home-feed, post-detail)
+  targetPages?: string[];
   optimization: 'reach' | 'clicks' | 'conversions';
   creative: Creative;
   frequencyCap: number;

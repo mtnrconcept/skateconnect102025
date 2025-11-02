@@ -10,11 +10,13 @@ export const getPlatform = () => {
   return Capacitor.getPlatform();
 };
 
-export const capturePhoto = async () => {
+export type CapturedPhoto = { format: string; base64?: string };
+
+export const capturePhoto = async (): Promise<CapturedPhoto> => {
   throw new Error('Camera is only available on native platforms. Install @capacitor/camera to use this feature.');
 };
 
-export const pickPhoto = async () => {
+export const pickPhoto = async (): Promise<CapturedPhoto> => {
   throw new Error('Photo picker is only available on native platforms. Install @capacitor/camera to use this feature.');
 };
 

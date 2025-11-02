@@ -341,14 +341,15 @@ export default function MapSection({
       const coverMap: Record<string, string> = {};
 
       spotIds.forEach(spotId => {
-        const spotMedia = data?.filter(m => m.spot_id === spotId) || [];
+        const spotMedia = (data?.filter(m => m.spot_id === spotId) || [])
+          .filter(m => typeof m.media_url === 'string' && !m.media_url.startsWith('blob:'));
         const coverPhoto = spotMedia.find(m => m.is_cover_photo) || spotMedia[0];
         if (coverPhoto) {
           coverMap[spotId] = coverPhoto.media_url;
         }
       });
 
-      setSpotCoverPhotos(coverMap);
+      setSpotCoverPhotos((prev) => ({ ...prev, ...coverMap }));
     } catch (error) {
       console.error('Error loading cover photos:', error);
     }
@@ -357,6 +358,50 @@ export default function MapSection({
   const loadSpots = useCallback(async () => {
     setLoading(true);
     try {
+      const LOCAL_API = (import.meta as any)?.env?.VITE_LOCAL_BACKEND_URL as string | undefined;
+      let localSpots: Spot[] | null = null;
+
+      if (LOCAL_API && typeof LOCAL_API === 'string' && LOCAL_API.trim().length > 0) {
+        try {
+          const res = await fetch(`${LOCAL_API.replace(/\/$/, '')}/api/spots?limit=2000`, { cache: 'no-store' });
+          if (res.ok) {
+            const json = await res.json();
+            const items = Array.isArray(json?.items) ? json.items : [];
+            localSpots = items.map((r: any) => ({
+              id: String(r.id),
+              created_by: null,
+              name: String(r.name || 'Spot'),
+              description: r.address || '',
+              address: r.address || '',
+              latitude: typeof r.latitude === 'number' ? r.latitude : 0,
+              longitude: typeof r.longitude === 'number' ? r.longitude : 0,
+              spot_type: 'skatepark',
+              difficulty: 3,
+              surfaces: [],
+              modules: [],
+              is_verified: false,
+              likes_count: 0,
+              comments_count: 0,
+              rating_average: null,
+              rating_count: 0,
+              rating_distribution: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as Spot));
+            // Inject cover photos map for local
+            const coverMap: Record<string, string> = {};
+            for (const r of items) {
+              if (r.cover_url && typeof r.cover_url === 'string') {
+                coverMap[String(r.id)] = r.cover_url;
+              }
+            }
+            setSpotCoverPhotos((prev) => ({ ...prev, ...coverMap }));
+          }
+        } catch (e) {
+          console.warn('Local backend /api/spots unavailable, falling back to Supabase', e);
+        }
+      }
+
       let query = supabase
         .from('spots')
         .select('*, creator:profiles(*)');
@@ -389,7 +434,7 @@ export default function MapSection({
 
       if (error) throw error;
 
-      let merged: Spot[] = data || [];
+      let merged: Spot[] = localSpots ?? (data || []);
 
       // Also load from imported table if available
       try {
@@ -1376,7 +1421,7 @@ export default function MapSection({
                                   <Star
                                     key={index}
                                     size={14}
-                                    className={index < threshold ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
+                                    className={index < Number(threshold) ? 'fill-amber-300 text-amber-300' : 'text-dark-500'}
                                   />
                                 ))}
                                 <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-300">
@@ -1731,3 +1776,4 @@ export default function MapSection({
     </div>
   );
 }
+

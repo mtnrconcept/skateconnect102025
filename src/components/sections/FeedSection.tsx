@@ -13,7 +13,7 @@ import {
   Award,
   Users,
   Clock,
-} from 'lucide-react';
+  Share2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
 import { uploadFile } from '../../lib/storage';
@@ -26,6 +26,7 @@ import FakeProfileModal from '../FakeProfileModal';
 import ProfilePreviewModal from '../ProfilePreviewModal';
 import { fakeFeedPosts, fakeProfilesById, fakePostsByProfileId, fakeLeaderboardEntries } from '../../data/fakeFeed';
 import { eventsCatalog } from '../../data/eventsCatalog';
+import InlineAdCard from '../sponsors/ads/InlineAdCard';
 import { createFallbackChallenges } from '../../data/challengesCatalog';
 import type { FakeProfileDetails } from '../../data/fakeFeed';
 import type { Comment, Post, Profile, Section, ContentNavigationOptions } from '../../types';
@@ -81,6 +82,66 @@ export default function FeedSection({ currentUser, onOpenConversation, onNavigat
     [],
   );
   const topAthletes = useMemo(() => fakeLeaderboardEntries.slice(0, 3), []);
+  const [activeCampaign, setActiveCampaign] = useState<null | {
+    sponsorName: string;
+    draft: any;
+    estimation: any;
+    publishedAt: string;
+    status: string;
+  }>(null);
+  const [postClickCount, setPostClickCount] = useState(0);
+  const [showInterstitial, setShowInterstitial] = useState(false);
+  const [activePostModal, setActivePostModal] = useState<FeedPost | null>(null);
+  const [modalShowComments, setModalShowComments] = useState(false);
+  const [showPostViewer, setShowPostViewer] = useState(false);
+  const [postViewerIndex, setPostViewerIndex] = useState(0);
+  const [postViewerMediaIndex, setPostViewerMediaIndex] = useState(0);
+  const [interstitialCampaign, setInterstitialCampaign] = useState<any | null>(null);
+
+  useEffect(() => {
+    const pickNextFeedAd = () => {
+      try {
+        const rawOne = localStorage.getItem('activeAdCampaign');
+        const rawMany = localStorage.getItem('activeAdCampaigns');
+        const list = Array.isArray(rawMany ? JSON.parse(rawMany) : []) ? JSON.parse(rawMany!) : [];
+        const maybeOne = rawOne ? [JSON.parse(rawOne)] : [];
+        const all = (list.length ? list : maybeOne).filter(Boolean);
+        const now = Date.now();
+        const candidates = all.filter((c: any) => {
+          const statusOk = (c?.status ?? 'active') === 'active';
+          const startOk = c?.draft?.startDate ? new Date(c.draft.startDate).getTime() <= now : true;
+          const endOk = c?.draft?.endDate ? new Date(c.draft.endDate).getTime() >= now : true;
+          const placementOk = Array.isArray(c?.draft?.targetPages) && c.draft.targetPages.includes('home-feed');
+          return statusOk && startOk && endOk && placementOk;
+        });
+        if (candidates.length === 0) {
+          setActiveCampaign(null);
+          return;
+        }
+        const key = 'feedAdRotationIndex';
+        const rotation = Number(localStorage.getItem(key) || 0);
+        const chosen = candidates[rotation % candidates.length];
+        setActiveCampaign(chosen);
+        localStorage.setItem(key, String((rotation + 1) % candidates.length));
+      } catch {
+        setActiveCampaign(null);
+      }
+    };
+
+    pickNextFeedAd();
+    const interval = window.setInterval(pickNextFeedAd, 30000);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') pickNextFeedAd();
+    };
+    const onCampaignsUpdated = () => pickNextFeedAd();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('adCampaignsUpdated', onCampaignsUpdated as EventListener);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('adCampaignsUpdated', onCampaignsUpdated as EventListener);
+    };
+  }, []);
 
   const navigateToSection = useCallback(
     (section: Section, options?: ContentNavigationOptions) => {
@@ -150,6 +211,13 @@ export default function FeedSection({ currentUser, onOpenConversation, onNavigat
   useEffect(() => {
     loadPosts();
   }, [currentUser?.id]);
+
+  // Interstitiel pub sur clic post-detail
+  useEffect(() => {
+    if (!showInterstitial) return undefined;
+    const timer = window.setTimeout(() => setShowInterstitial(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [showInterstitial]);
 
   const sortPostsByDateDesc = (data: FeedPost[]) =>
     [...data].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -590,13 +658,82 @@ export default function FeedSection({ currentUser, onOpenConversation, onNavigat
     }
   };
 
+  const handlePostCardClick = (post: FeedPost) => {
+    const index = posts.findIndex((p) => p.id === post.id);
+    setPostViewerIndex(index >= 0 ? index : 0);
+    setPostViewerMediaIndex(0);
+    setShowPostViewer(true);
+    setActivePostModal(post);
+    setModalShowComments(false);
+    setPostClickCount((prev) => prev + 1);
+    try {
+      const now = Date.now();
+      const last = Number(localStorage.getItem('adLastShownAt') || 0);
+      const canShowByTime = now - last >= 2 * 60 * 1000; // 2 min
+      // Prépare liste pour alternance
+      const rawMany = localStorage.getItem('activeAdCampaigns');
+      const many = rawMany ? (JSON.parse(rawMany) as any[]) : [];
+      const fallback = activeCampaign ? [activeCampaign] : [];
+      const candidates = (many.length ? many : fallback)
+        .filter((c) => (c?.status ?? 'active') === 'active')
+        .filter((c) => Boolean(c?.draft?.targetPages?.includes('post-detail')));
+      if (canShowByTime && candidates.length > 0) {
+        const rotation = Number(localStorage.getItem('adRotationIndex') || 0);
+        const chosen = candidates[rotation % candidates.length];
+        setInterstitialCampaign(chosen);
+        setShowInterstitial(true);
+        window.setTimeout(() => setShowInterstitial(false), 5000);
+        localStorage.setItem('adRotationIndex', String((rotation + 1) % candidates.length));
+        localStorage.setItem('adLastShownAt', String(now));
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+  const handleSharePost = (post: FeedPost) => {
+    const shareUrl = `${window.location.origin}?post=${(post as any).id ?? ''}`;
+    const text = (post as any).content ?? '';
+    if ((navigator as any).share) {
+      (navigator as any).share({ title: 'Shredloc', text, url: shareUrl }).catch(() => void 0);
+    } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      void navigator.clipboard.writeText(shareUrl);
+    }
+  };
+
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6">
-      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex flex-col gap-6">
+    <div className="mx-auto w-full max-w-[1600px] px-2 xl:px-4 py-12">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(200px,340px)_minmax(0,1fr)_minmax(200px,320px)] xl:grid-cols-[minmax(260px,360px)_minmax(0,1fr)_minmax(240px,340px)]">
+        {/* Colonne gauche: Publicité (centrée verticalement au niveau du flux) */}
+        <div className="hidden lg:block lg:self-start">
+          {activeCampaign?.draft?.targetPages?.includes('home-feed') && (
+            <div
+              className="mx-auto aspect-[3/4]"
+              style={{
+                width: 'clamp(200px, calc(340px * (100vw / 1920)), 340px)',
+              }}
+            >
+              <InlineAdCard aspect="3/4" splitTwoThirds
+                sponsorName={activeCampaign.sponsorName}
+                headline={activeCampaign.draft.creative.headline}
+                subheadline={activeCampaign.draft.creative.subheadline}
+                message={activeCampaign.draft.creative.message}
+                callToAction={activeCampaign.draft.creative.callToAction}
+                landingUrl={activeCampaign.draft.creative.landingUrl}
+                mediaUrl={activeCampaign.draft.creative.mediaUrl}
+                format={activeCampaign.draft.creative.format}
+                primaryColor={activeCampaign.draft.creative.primaryColor}
+                accentColor={activeCampaign.draft.creative.accentColor}
+                placementsCount={activeCampaign.draft.placements?.length ?? 1}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Colonne centrale: stories + flux de posts */}
+        <div className="flex flex-col gap-3 items-stretch">
           <div className="rounded-2xl border border-dark-700/80 bg-dark-900/60 p-4 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.85)] backdrop-blur-lg">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-6">
                 <span className="rounded-full bg-orange-500/10 p-2 text-orange-400">
                   <Users size={18} />
                 </span>
@@ -790,19 +927,23 @@ export default function FeedSection({ currentUser, onOpenConversation, onNavigat
           </div>
 
           <div className="rounded-2xl border border-dark-700/80 bg-dark-900/60 p-4 shadow-[0_18px_45px_-30px_rgba(0,0,0,0.9)]">
-            {loading ? (
-              <div className="flex min-h-[200px] items-center justify-center text-gray-400">
-                <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-              </div>
-            ) : posts.length === 0 ? (
-              <div className="space-y-2 py-12 text-center text-gray-400">
-                <p className="text-lg font-semibold text-white/80">Aucun post pour le moment</p>
-                <p className="text-sm text-gray-500">Soyez le premier à partager quelque chose!</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {posts.map((post) => (
-                  <div key={post.id} className="overflow-hidden rounded-xl border border-dark-700/70 bg-dark-800/80">
+              {loading ? (
+                <div className="flex min-h-[200px] items-center justify-center text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                </div>
+              ) : posts.length === 0 ? (
+                <div className="space-y-2 py-12 text-center text-gray-400">
+                  <p className="text-lg font-semibold text-white/80">Aucun post pour le moment</p>
+                  <p className="text-sm text-gray-500">Soyez le premier à partager quelque chose!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {posts.map((post) => (
+                  <div
+                    key={post.id}
+                    className="overflow-hidden rounded-xl border border-dark-700/70 bg-dark-800/80"
+                    onClick={() => handlePostCardClick(post)}
+                  >
                     <div className="p-4">
                       <div className="mb-3 flex items-start gap-3">
                         <button
@@ -992,8 +1133,8 @@ export default function FeedSection({ currentUser, onOpenConversation, onNavigat
                 ))}
               </div>
             )}
+              </div>
           </div>
-        </div>
         <aside className="hidden lg:flex lg:flex-col lg:gap-6">
           <section className="rounded-2xl border border-orange-500/10 bg-gradient-to-br from-dark-900/80 via-dark-900/60 to-dark-900/30 p-5 shadow-[0_18px_50px_-35px_rgba(0,0,0,0.9)]">
             <div className="flex items-center justify-between">
@@ -1167,12 +1308,133 @@ export default function FeedSection({ currentUser, onOpenConversation, onNavigat
         </aside>
       </div>
 
+      {showInterstitial && (interstitialCampaign || activeCampaign) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm aspect-[3/4]">
+            <InlineAdCard aspect="3/4" splitTwoThirds
+              sponsorName={(interstitialCampaign || activeCampaign).sponsorName}
+              headline={(interstitialCampaign || activeCampaign).draft.creative.headline}
+              subheadline={(interstitialCampaign || activeCampaign).draft.creative.subheadline}
+              message={(interstitialCampaign || activeCampaign).draft.creative.message}
+              callToAction={(interstitialCampaign || activeCampaign).draft.creative.callToAction}
+              landingUrl={(interstitialCampaign || activeCampaign).draft.creative.landingUrl}
+              mediaUrl={(interstitialCampaign || activeCampaign).draft.creative.mediaUrl}
+              format={(interstitialCampaign || activeCampaign).draft.creative.format}
+              primaryColor={(interstitialCampaign || activeCampaign).draft.creative.primaryColor}
+              accentColor={(interstitialCampaign || activeCampaign).draft.creative.accentColor}
+              placementsCount={(interstitialCampaign || activeCampaign).draft.placements?.length ?? 1}
+            />
+          </div>
+        </div>
+      )}
+
+      {activePostModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => setActivePostModal(null)}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-dark-700/70 bg-dark-900/90 p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-white">{getUserDisplayName(activePostModal.user)}</span>
+                <span className="text-xs text-gray-500">{formatDate(activePostModal.created_at)}</span>
+              </div>
+              <button type="button" className="rounded-full bg-white/10 px-3 py-1 text-sm text-white hover:bg-white/20" onClick={() => setActivePostModal(null)}>Fermer</button>
+            </div>
+            {activePostModal.media_urls?.length ? (
+              <div className="mb-3 grid gap-2">
+                {activePostModal.media_urls.map((url, i) => (
+                  <div key={i} className="w-full overflow-hidden rounded-lg bg-black/30">{isVideoUrl(url) ? (<video src={url} className="max-h-[70vh] w-full h-auto object-contain" controls playsInline />) : (<img src={url} alt="media" className="max-h-[70vh] w-full h-auto object-contain" />)}</div>
+                ))}
+              </div>
+            ) : null}
+            {activePostModal.content && (
+              <p className="text-sm text-gray-200 whitespace-pre-wrap">{activePostModal.content}</p>
+            )}
+
+            <div className="mt-3 flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() => handleLike(activePostModal.id)}
+                className={`transition-colors ${activePostModal?.liked_by_user ? 'text-orange-500' : 'text-gray-400 hover:text-orange-500'}`}
+              >
+                <Heart size={22} className={activePostModal?.liked_by_user ? 'fill-current' : ''} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalShowComments((v) => !v)}
+                className="text-gray-400 transition-colors hover:text-orange-500"
+              >
+                <MessageCircle size={22} />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSharePost(activePostModal)}
+                className="text-gray-400 transition-colors hover:text-orange-500"
+              >
+                <Share2 size={20} />
+              </button>
+            </div>
+
+            {activePostModal && modalShowComments && (
+              <div className="mt-3 border-t border-dark-700 pt-3">
+                {activePostModal.isFake ? (
+                  <FakeCommentSection
+                    comments={fakeCommentsMap[activePostModal.id] ?? []}
+                    currentUser={currentUser}
+                    onAddComment={(content) => handleFakeCommentAdd(activePostModal.id, content)}
+                    onDeleteComment={(commentId) => handleFakeCommentDelete(activePostModal.id, commentId)}
+                    onProfileClick={(profileId) => openProfile(profileId, { isFake: true })}
+                  />
+                ) : (
+                  <CommentSection
+                    postId={activePostModal.id}
+                    currentUser={currentUser}
+                    onCommentCountChange={() => void 0}
+                    onProfileClick={(profileId) => openProfile(profileId)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showInterstitial && activeCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm aspect-[3/4]">
+            <InlineAdCard aspect="3/4" splitTwoThirds
+              sponsorName={activeCampaign.sponsorName}
+              headline={activeCampaign.draft.creative.headline}
+              subheadline={activeCampaign.draft.creative.subheadline}
+              message={activeCampaign.draft.creative.message}
+              callToAction={activeCampaign.draft.creative.callToAction}
+              landingUrl={activeCampaign.draft.creative.landingUrl}
+              mediaUrl={activeCampaign.draft.creative.mediaUrl}
+              format={activeCampaign.draft.creative.format}
+              primaryColor={activeCampaign.draft.creative.primaryColor}
+              accentColor={activeCampaign.draft.creative.accentColor}
+              placementsCount={activeCampaign.draft.placements?.length ?? 1}
+            />
+          </div>
+        </div>
+      )}
+
       {showStoryViewer && storyPosts.length > 0 && (
         <PostMediaViewer
           posts={storyPosts}
           initialPostIndex={activeStoryIndex}
           initialMediaIndex={activeStoryMediaIndex}
           onClose={() => setShowStoryViewer(false)}
+          onLike={handleLike}
+          currentUser={currentUser}
+          onCommentCountChange={handleCommentCountChange}
+          onProfileClick={(profileId, options) => openProfile(profileId, options)}
+        />
+      )}
+      {showPostViewer && posts.length > 0 && (
+        <PostMediaViewer
+          posts={posts}
+          initialPostIndex={postViewerIndex}
+          initialMediaIndex={postViewerMediaIndex}
+          onClose={() => setShowPostViewer(false)}
           onLike={handleLike}
           currentUser={currentUser}
           onCommentCountChange={handleCommentCountChange}
@@ -1219,3 +1481,21 @@ export default function FeedSection({ currentUser, onOpenConversation, onNavigat
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

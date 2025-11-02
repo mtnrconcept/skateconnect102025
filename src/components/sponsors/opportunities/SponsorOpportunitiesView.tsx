@@ -321,7 +321,7 @@ export default function SponsorOpportunitiesView() {
   if (!canManageOpportunities) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-6 text-amber-100">
+        <div className="rounded-2xl border border-orange-500/40 bg-orange-950/30 p-6 text-orange-100">
           Ta marque n'a pas encore accès à la gestion des opportunités sponsor. Contacte ton
           chargé de compte pour activer le module.
         </div>
@@ -351,7 +351,7 @@ export default function SponsorOpportunitiesView() {
             type="button"
             onClick={handleCreate}
             disabled={!sponsorId}
-            className="inline-flex items-center gap-2 rounded-full border border-sky-500/60 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-full border border-orange-500/60 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-100 hover:bg-orange-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Plus size={16} /> Nouvelle opportunité
           </button>
@@ -361,7 +361,7 @@ export default function SponsorOpportunitiesView() {
               onClick={() => setViewMode('kanban')}
               className={`rounded-full px-3 py-1 text-xs font-medium ${
                 viewMode === 'kanban'
-                  ? 'bg-slate-800 text-sky-100'
+                  ? 'bg-slate-800 text-orange-100'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -372,7 +372,7 @@ export default function SponsorOpportunitiesView() {
               onClick={() => setViewMode('list')}
               className={`rounded-full px-3 py-1 text-xs font-medium ${
                 viewMode === 'list'
-                  ? 'bg-slate-800 text-sky-100'
+                  ? 'bg-slate-800 text-orange-100'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -392,7 +392,7 @@ export default function SponsorOpportunitiesView() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Recherche titre, sponsor, localisation, tag..."
-                className="w-full rounded-2xl border border-slate-800 bg-slate-900/60 py-3 pl-10 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-sky-500/60 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                className="w-full rounded-2xl border border-slate-800 bg-slate-900/60 py-3 pl-10 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-orange-500/60 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
               />
             </div>
           </div>
@@ -411,7 +411,7 @@ export default function SponsorOpportunitiesView() {
                 onClick={() => setTypeFilter(filterItem.value)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                   isActive
-                    ? 'bg-sky-500 text-white border-sky-400'
+                    ? 'bg-orange-500 text-white border-orange-400'
                     : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-600'
                 }`}
               >
@@ -423,7 +423,7 @@ export default function SponsorOpportunitiesView() {
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as SponsorOpportunityStatus | 'all')}
-              className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 focus:border-sky-500/60 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+              className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 focus:border-orange-500/60 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
             >
               {STATUS_FILTER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -434,7 +434,7 @@ export default function SponsorOpportunitiesView() {
             <select
               value={dateFilter}
               onChange={(event) => setDateFilter(event.target.value as SponsorOpportunityDateFilter)}
-              className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 focus:border-sky-500/60 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+              className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 focus:border-orange-500/60 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
             >
               {SPONSOR_OPPORTUNITY_DATE_FILTERS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -529,7 +529,7 @@ export default function SponsorOpportunitiesView() {
                               void handleDeleted(record.type as SponsorEditableOpportunityType, record.record.id);
                             }}
                             disabled={deletingId === record.record.id}
-                            className="rounded-full border border-slate-700/60 p-2 text-slate-300 hover:border-rose-500 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-full border border-slate-700/60 p-2 text-slate-300 hover:border-orange-500 hover:text-orange-200 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -540,20 +540,20 @@ export default function SponsorOpportunitiesView() {
                       </p>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
                         <span className="inline-flex items-center gap-1">
-                          <Calendar size={14} className="text-sky-400" />
+                          <Calendar size={14} className="text-orange-400" />
                           {dateLabel}
                         </span>
                         <span className="inline-flex items-center gap-1">
-                          <MapPin size={14} className="text-sky-400" />
+                          <MapPin size={14} className="text-orange-400" />
                           {getOpportunityLocation(record)}
                         </span>
                         <span className="inline-flex items-center gap-1">
-                          <Users size={14} className="text-sky-400" />
+                          <Users size={14} className="text-orange-400" />
                           {participantsLabel}: {participantsCount}
                         </span>
                         {relativeDate && (
                           <span className="inline-flex items-center gap-1">
-                            <Clock size={14} className="text-sky-400" />
+                            <Clock size={14} className="text-orange-400" />
                             {relativeDate}
                           </span>
                         )}
@@ -565,7 +565,7 @@ export default function SponsorOpportunitiesView() {
                               key={tag}
                               className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs text-slate-300"
                             >
-                              <TagIcon size={14} className="text-sky-400" />
+                              <TagIcon size={14} className="text-orange-400" />
                               {tag}
                             </span>
                           ))}
@@ -648,7 +648,7 @@ export default function SponsorOpportunitiesView() {
                               void handleDeleted(record.type as SponsorEditableOpportunityType, record.record.id);
                             }}
                             disabled={deletingId === record.record.id}
-                            className="rounded-full border border-slate-700/60 p-2 text-slate-300 hover:border-rose-500 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-full border border-slate-700/60 p-2 text-slate-300 hover:border-orange-500 hover:text-orange-200 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <Trash2 size={16} />
                           </button>

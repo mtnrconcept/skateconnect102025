@@ -743,4 +743,71 @@ export type Section =
   | 'badges'
   | 'settings'
   | 'privacy'
-  | 'terms';
+  | 'terms'
+  | 'returns'
+  | 'legal'
+  | 'marketplace';
+
+// ---- Game of S.K.A.T.E types (client-side) ----
+export type MatchMode = 'live' | 'remote';
+export type MatchStatus = 'pending' | 'active' | 'review' | 'finished' | 'canceled';
+export type TurnStatus = 'proposed' | 'responded' | 'validated' | 'failed' | 'timeout' | 'disputed';
+
+export interface RiderProfileRow {
+  user_id: string;
+  handle: string;
+  country: string | null;
+  elo: number;
+  xp: number;
+  skatecoins: number;
+  created_at: string;
+}
+
+export interface SkateMatchRow {
+  id: string;
+  mode: MatchMode;
+  player_a: string;
+  player_b: string;
+  status: MatchStatus;
+  letters_a: string;
+  letters_b: string;
+  winner: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface SkateTurnRow {
+  id: string;
+  match_id: string;
+  turn_index: number;
+  proposer: string;
+  trick_name: string | null;
+  difficulty: number | null; // 1..5
+  video_a_url: string | null;
+  video_b_url: string | null;
+  status: TurnStatus;
+  remote_deadline: string | null;
+  meta_a: Record<string, unknown>;
+  meta_b: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TurnReviewRow {
+  id: string;
+  turn_id: string;
+  reviewer: string;
+  decision: 'valid' | 'invalid';
+  reason: string | null;
+  created_at: string;
+}
+
+export interface RiderRewardRow {
+  id: string;
+  user_id: string;
+  match_id: string | null;
+  kind: 'xp' | 'elo' | 'coin';
+  delta: number;
+  reason: string | null;
+  created_at: string;
+}

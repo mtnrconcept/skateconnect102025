@@ -159,7 +159,7 @@ const tiers: Tier[] = [
     featureGroups: [
       {
         label: 'Visibilité',
-        items: ['Défis sponsorisés géolocalisés', 'Pins et placements « ShredMap Spotlight »'],
+        items: ['Défis sponsorisés géolocalisés'],
       },
       {
         label: 'Performance',

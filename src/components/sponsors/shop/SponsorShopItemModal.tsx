@@ -512,7 +512,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                 onChange={(event) =>
                   setForm((current) => ({ ...current, name: event.target.value.slice(0, 120) }))
                 }
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                 placeholder="Pack ambassadeur Q3"
               />
             </label>
@@ -525,7 +525,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                   setPriceInput(inputValue);
                   setForm((current) => ({ ...current, priceCents: parsePriceInput(inputValue) }));
                 }}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                 placeholder="249,90"
               />
             </label>
@@ -536,7 +536,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                 onChange={(event) =>
                   setForm((current) => ({ ...current, currency: event.target.value }))
                 }
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               >
                 {AVAILABLE_CURRENCIES.map((currency) => (
                   <option key={currency.code} value={currency.code}>
@@ -554,7 +554,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                 onChange={(event) =>
                   setForm((current) => ({ ...current, stock: Number.parseInt(event.target.value, 10) || 0 }))
                 }
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
             </label>
           </div>
@@ -567,7 +567,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                 setForm((current) => ({ ...current, description: event.target.value.slice(0, 600) }))
               }
               rows={4}
-              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               placeholder="Précise les bénéfices du pack, les contreparties, la mécanique d'activation..."
             />
           </label>
@@ -586,7 +586,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                     availableFrom: value ? toIsoFromLocalInput(value) : null,
                   }));
                 }}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
               <span className="text-xs text-slate-500">
                 Laisse vide pour publier immédiatement.
@@ -605,7 +605,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                     availableUntil: value ? toIsoFromLocalInput(value) : null,
                   }));
                 }}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
               <span className="text-xs text-slate-500">
                 Programme l'arrêt automatique des ventes.
@@ -624,7 +624,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                     <button
                       type="button"
                       onClick={() => setForm((current) => ({ ...current, imageUrl: null }))}
-                      className="text-rose-300 hover:text-rose-200"
+                      className="text-orange-300 hover:text-orange-200"
                     >
                       Retirer
                     </button>
@@ -641,7 +641,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                   {uploading ? 'Téléversement...' : 'Téléverser un média'}
                 </label>
                 <span>PNG, JPG ou WEBP • 10 Mo max</span>
-                {uploadError && <span className="text-rose-300">{uploadError}</span>}
+                {uploadError && <span className="text-orange-300">{uploadError}</span>}
               </div>
             </div>
             <label className="flex flex-col gap-2 text-sm text-slate-300">
@@ -651,7 +651,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                 onChange={(event) =>
                   setForm((current) => ({ ...current, isActive: event.target.value === 'active' }))
                 }
-                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
               >
                 <option value="active">Actif</option>
                 <option value="inactive">En pause</option>
@@ -701,7 +701,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             event.stopPropagation();
                             removeVariant(index);
                           }}
-                          className="rounded-full border border-rose-500/40 px-2 py-0.5 text-rose-200 hover:border-rose-400 hover:text-rose-100"
+                          className="rounded-full border border-orange-500/40 px-2 py-0.5 text-orange-200 hover:border-orange-400 hover:text-orange-100"
                         >
                           Supprimer
                         </button>
@@ -716,7 +716,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateVariant(index, { name: event.target.value.slice(0, 100) })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="Taille M / Bleu"
                           />
                         </label>
@@ -727,7 +727,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateVariant(index, { sku: event.target.value.slice(0, 60) || null })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="SKU-M-BLEU"
                           />
                         </label>
@@ -742,7 +742,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 stock: Number.parseInt(event.target.value, 10) || 0,
                               })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                         <label className="flex flex-col gap-1">
@@ -752,7 +752,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateVariant(index, { is_active: event.target.value === 'active' })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           >
                             <option value="active">Active</option>
                             <option value="inactive">En pause</option>
@@ -767,7 +767,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateVariant(index, { size: event.target.value.slice(0, 40) || null })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="M"
                           />
                         </label>
@@ -778,7 +778,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateVariant(index, { color: event.target.value.slice(0, 40) || null })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="Bleu nuit"
                           />
                         </label>
@@ -800,7 +800,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 price_cents: Number.isNaN(parsed) ? null : Math.round(parsed * 100),
                               });
                             }}
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="Laisser vide pour hériter du prix principal"
                           />
                         </label>
@@ -813,7 +813,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 image_url: event.target.value.trim() ? event.target.value.trim() : null,
                               })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="https://..."
                           />
                         </label>
@@ -829,7 +829,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 availability_start: toIsoFromLocalInput(event.target.value) ?? null,
                               })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                         <label className="flex flex-col gap-1">
@@ -842,7 +842,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 availability_end: toIsoFromLocalInput(event.target.value) ?? null,
                               })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                       </div>
@@ -893,7 +893,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             event.stopPropagation();
                             removeCoupon(index);
                           }}
-                          className="rounded-full border border-rose-500/40 px-2 py-0.5 text-rose-200 hover:border-rose-400 hover:text-rose-100"
+                          className="rounded-full border border-orange-500/40 px-2 py-0.5 text-orange-200 hover:border-orange-400 hover:text-orange-100"
                         >
                           Supprimer
                         </button>
@@ -908,7 +908,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateCoupon(index, { code: event.target.value.slice(0, 40) })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="WELCOME10"
                           />
                         </label>
@@ -919,7 +919,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateCoupon(index, { is_active: event.target.value === 'active' })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           >
                             <option value="active">Actif</option>
                             <option value="inactive">Archivé</option>
@@ -932,7 +932,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateCoupon(index, { discount_type: event.target.value as SponsorShopCouponDraft['discount_type'] })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           >
                             <option value="percentage">Pourcentage</option>
                             <option value="fixed">Montant fixe</option>
@@ -966,7 +966,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 });
                               }
                             }}
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                         <label className="flex flex-col gap-1">
@@ -982,7 +982,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                   : null,
                               })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                         <label className="flex flex-col gap-1">
@@ -996,7 +996,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 minimum_quantity: Number.parseInt(event.target.value, 10) || 1,
                               })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                       </div>
@@ -1011,7 +1011,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                               })
                             }
                             rows={2}
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                         <div className="grid gap-4 md:grid-cols-2">
@@ -1025,7 +1025,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                   starts_at: toIsoFromLocalInput(event.target.value) ?? null,
                                 })
                               }
-                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             />
                           </label>
                           <label className="flex flex-col gap-1">
@@ -1038,7 +1038,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                   expires_at: toIsoFromLocalInput(event.target.value) ?? null,
                                 })
                               }
-                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             />
                           </label>
                         </div>
@@ -1089,7 +1089,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             event.stopPropagation();
                             removeBundle(index);
                           }}
-                          className="rounded-full border border-rose-500/40 px-2 py-0.5 text-rose-200 hover:border-rose-400 hover:text-rose-100"
+                          className="rounded-full border border-orange-500/40 px-2 py-0.5 text-orange-200 hover:border-orange-400 hover:text-orange-100"
                         >
                           Supprimer
                         </button>
@@ -1104,7 +1104,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateBundle(index, { name: event.target.value.slice(0, 120) })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             placeholder="Pack ambassadeur"
                           />
                         </label>
@@ -1115,7 +1115,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                             onChange={(event) =>
                               updateBundle(index, { is_active: event.target.value === 'active' })
                             }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           >
                             <option value="active">Actif</option>
                             <option value="inactive">En pause</option>
@@ -1134,7 +1134,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                 price_cents: Number.isNaN(parsed) ? 0 : Math.round(parsed * 100),
                               });
                             }}
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                         <label className="flex flex-col gap-1">
@@ -1142,7 +1142,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                           <select
                             value={bundle.currency}
                             onChange={(event) => updateBundle(index, { currency: event.target.value })}
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           >
                             {AVAILABLE_CURRENCIES.map((currency) => (
                               <option key={`${bundle.id ?? 'new'}-${currency.code}`} value={currency.code}>
@@ -1163,7 +1163,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                               })
                             }
                             rows={2}
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                         </label>
                         <div className="grid gap-4 md:grid-cols-2">
@@ -1177,7 +1177,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                   available_from: toIsoFromLocalInput(event.target.value) ?? null,
                                 })
                               }
-                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             />
                           </label>
                           <label className="flex flex-col gap-1">
@@ -1190,7 +1190,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                   available_until: toIsoFromLocalInput(event.target.value) ?? null,
                                 })
                               }
-                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                             />
                           </label>
                         </div>
@@ -1213,7 +1213,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                   onChange={(event) =>
                                     updateBundleItem(index, itemIndex, { item_id: event.target.value })
                                   }
-                                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                                 >
                                   <option value="">Sélectionner un produit</option>
                                   {bundleItemOptions.map((option) => (
@@ -1231,12 +1231,12 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
                                       quantity: Number.parseInt(event.target.value, 10) || 1,
                                     })
                                   }
-                                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => removeBundleItem(index, itemIndex)}
-                                  className="rounded-full border border-rose-500/40 px-2 py-0.5 text-xs text-rose-200 hover:border-rose-400 hover:text-rose-100"
+                                  className="rounded-full border border-orange-500/40 px-2 py-0.5 text-xs text-orange-200 hover:border-orange-400 hover:text-orange-100"
                                 >
                                   Retirer
                                 </button>
@@ -1259,7 +1259,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
             )}
           </div>
 
-          {error && <p className="text-sm text-rose-300">{error}</p>}
+          {error && <p className="text-sm text-orange-300">{error}</p>}
 
           <div className="flex flex-wrap items-center justify-end gap-3">
             <button
@@ -1272,7 +1272,7 @@ export default function SponsorShopItemModal({ mode, item, onClose, onSubmit }: 
             <button
               type="submit"
               disabled={saving || uploading}
-              className="rounded-full border border-sky-500/70 bg-sky-500/10 px-6 py-2 text-sm font-medium text-sky-100 hover:border-sky-400 hover:bg-sky-500/20 disabled:opacity-60"
+              className="rounded-full border border-orange-500/70 bg-orange-500/10 px-6 py-2 text-sm font-medium text-orange-100 hover:border-orange-400 hover:bg-orange-500/20 disabled:opacity-60"
             >
               {saving ? 'Enregistrement...' : mode === 'create' ? 'Ajouter le produit' : 'Mettre à jour'}
             </button>

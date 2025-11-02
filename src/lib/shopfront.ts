@@ -239,3 +239,43 @@ export async function createShopCheckoutSession(payload: CheckoutInput): Promise
     return buildFallbackCheckoutResponse(payload);
   }
 }
+
+export interface OrderReceipt {
+  id: string;
+  status: 'pending' | 'paid' | 'cancelled' | string;
+  createdAt: string;
+  quantity: number;
+  currency: string;
+  amounts: {
+    subtotalCents: number;
+    shippingCents: number;
+    taxCents: number;
+    totalCents: number;
+    commissionCents: number;
+    netAmountCents: number;
+  };
+  customer: {
+    email: string | null;
+    name: string | null;
+    city: string | null;
+    country: string | null;
+  };
+  stripe: { sessionId: string; paymentIntentId: string | null };
+  item: { id: string; name: string; imageUrl: string | null; currency: string | null } | null;
+  variant: { id: string; name: string; size: string | null; color: string | null; imageUrl: string | null } | null;
+  sponsor: { id: string | null; displayName: string | null; brandName: string | null };
+}
+
+export async function fetchOrderReceipt(sessionId: string): Promise<OrderReceipt> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Fonction Supabase indisponible (configuration manquante)');
+  }
+
+  const { data, error } = await supabase.functions.invoke('order-lookup', {
+    body: { sessionId },
+  });
+  if (error) {
+    throw new Error(error.message ?? 'Impossible de charger le reçu');
+  }
+  return data as OrderReceipt;
+}

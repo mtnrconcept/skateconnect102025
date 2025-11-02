@@ -13,7 +13,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import type { Profile, ShopFrontItem, ShopFrontVariant } from '../../types';
-import { createShopCheckoutSession, fetchPublicShopCatalog } from '../../lib/shopfront';
+import { createShopCheckoutSession, fetchPublicShopCatalog, fetchOrderReceipt, type OrderReceipt } from '../../lib/shopfront';
 import { getStripeClient, isStripeEnabled } from '../../lib/stripeClient';
 
 interface ShopSectionProps {
@@ -202,6 +202,10 @@ export default function ShopSection({ profile }: ShopSectionProps) {
   const [stripeMessage, setStripeMessage] = useState<string | null>(null);
   const [pendingCheckoutId, setPendingCheckoutId] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<OrderReceipt | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -362,13 +366,15 @@ export default function ShopSection({ profile }: ShopSectionProps) {
     setCheckoutError(null);
 
     try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const payload = {
         itemId: item.id,
         variantId,
         quantity: 1,
         customerEmail: profile?.sponsor_contact?.email ?? profile?.payout_email ?? null,
-        successUrl: typeof window !== 'undefined' ? `${window.location.origin}/shop?checkout=success` : undefined,
-        cancelUrl: typeof window !== 'undefined' ? `${window.location.origin}/shop?checkout=cancel` : undefined,
+        // Include Stripe placeholder to get the session id back on success
+        successUrl: origin ? `${origin}/shop?checkout=success&session_id={CHECKOUT_SESSION_ID}` : undefined,
+        cancelUrl: origin ? `${origin}/shop?checkout=cancel` : undefined,
       };
       const { sessionId, url, mode } = await createShopCheckoutSession(payload);
       if (mode === 'stripe' && stripeReady) {
@@ -395,6 +401,43 @@ export default function ShopSection({ profile }: ShopSectionProps) {
       setCheckoutError("Impossible de lancer le paiement. Réessaie dans un instant.");
     } finally {
       setPendingCheckoutId(null);
+    }
+  };
+
+  // Checkout feedback banners (success/cancel)
+  const [checkoutStatus, setCheckoutStatus] = useState<'success' | 'cancel' | null>(null);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search || '');
+    const status = params.get('checkout');
+    const sessionId = params.get('session_id');
+    if (status === 'success') {
+      setCheckoutStatus('success');
+      setCheckoutSessionId(sessionId);
+    } else if (status === 'cancel') {
+      setCheckoutStatus('cancel');
+      setCheckoutSessionId(null);
+    } else {
+      setCheckoutStatus(null);
+      setCheckoutSessionId(null);
+    }
+  }, []);
+
+  const loadReceipt = async () => {
+    if (!checkoutSessionId) return;
+    setReceiptOpen(true);
+    setReceiptLoading(true);
+    setReceiptError(null);
+    try {
+      const data = await fetchOrderReceipt(checkoutSessionId);
+      setReceipt(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Impossible de charger votre reçu.';
+      setReceiptError(message);
+    } finally {
+      setReceiptLoading(false);
     }
   };
 
@@ -450,6 +493,29 @@ export default function ShopSection({ profile }: ShopSectionProps) {
         <div className="absolute -right-12 bottom-0 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
       </div>
       <div className="relative z-10 space-y-8 rounded-[22px] border border-white/5 bg-slate-950/70 p-8 backdrop-blur">
+        {checkoutStatus && (
+                    <div className="rounded-2xl border border-orange-500/40 bg-orange-950/40 p-4 text-orange-100">
+            {checkoutStatus === 'success' ? (
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-semibold">Commande confirmée</p>
+                <p className="text-sm">Merci pour votre achat. Un reçu Stripe a été envoyé à votre email.</p>
+                {checkoutSessionId && (
+                  <p className="text-xs text-orange-200">Référence: <span className="font-mono">{checkoutSessionId}</span></p>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                  <button type="button" onClick={() => window.print()} className="rounded-full border border-orange-500/60 px-3 py-1 text-orange-200 hover:bg-orange-500/10">Imprimer</button>
+                  <button id="returns-policy-link" type="button" className="hidden" />
+                  <a href="#retours" onClick={(e) => { e.preventDefault(); const link = document.getElementById('returns-policy-link'); if (link) (link as HTMLButtonElement).click(); }} className="text-orange-200 underline-offset-4 hover:underline">Politique retours & annulations</a>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-semibold">Paiement annulé</p>
+                <p className="text-sm">Votre paiement a été annulé. Vous pouvez réessayer la commande.</p>
+              </div>
+            )}
+          </div>
+        )}
         <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-purple-500/40 bg-purple-500/10">

@@ -1,4 +1,9 @@
 import { supabase } from './supabase.js';
+import { withTableFallback } from './postgrest';
+let CHALLENGE_TABLES_AVAILABLE = true;
+const markChallengesMissing = () => {
+  CHALLENGE_TABLES_AVAILABLE = false;
+};
 import type { ChallengeSubmission } from '../types';
 
 type SupabaseClient = typeof supabase;
@@ -24,19 +29,22 @@ export async function fetchChallengeSubmissionsWithClient(
   challengeId: string,
   currentUserId?: string,
 ): Promise<ChallengeSubmission[]> {
-  const { data, error } = await client
-    .from('challenge_submissions')
-    .select(
-      `*,
+  if (!CHALLENGE_TABLES_AVAILABLE) {
+    return [];
+  }
+  const data = await withTableFallback(
+    client
+      .from('challenge_submissions')
+      .select(
+        `*,
       user:profiles(${PROFILE_FIELDS}),
       challenge:challenges(${CHALLENGE_FIELDS})`
-    )
-    .eq('challenge_id', challengeId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw error;
-  }
+      )
+      .eq('challenge_id', challengeId)
+      .order('created_at', { ascending: false }),
+    () => [] as ChallengeSubmission[],
+    { onMissing: markChallengesMissing },
+  );
 
   const submissions = (data || []) as ChallengeSubmission[];
 
@@ -45,15 +53,11 @@ export async function fetchChallengeSubmissionsWithClient(
   }
 
   const submissionIds = submissions.map((submission) => submission.id);
-  const { data: voteRows, error: votesError } = await client
-    .from('challenge_votes')
-    .select('submission_id, user_id')
-    .in('submission_id', submissionIds);
-
-  if (votesError) {
-    console.warn('Unable to load challenge votes metadata:', votesError);
-    return submissions;
-  }
+  const voteRows = await withTableFallback(
+    client.from('challenge_votes').select('submission_id, user_id').in('submission_id', submissionIds),
+    () => [] as Array<{ submission_id: string; user_id: string }>,
+    { onMissing: markChallengesMissing },
+  );
 
   const votedSet = new Set(
     (voteRows || [])
@@ -158,19 +162,22 @@ export async function fetchSubmissionHistoryWithClient(
   client: SupabaseClient,
   userId: string,
 ): Promise<ChallengeSubmission[]> {
-  const { data, error } = await client
-    .from('challenge_submissions')
-    .select(
-      `*,
+  if (!CHALLENGE_TABLES_AVAILABLE) {
+    return [];
+  }
+  const data = await withTableFallback(
+    client
+      .from('challenge_submissions')
+      .select(
+        `*,
       user:profiles(${PROFILE_FIELDS}),
       challenge:challenges(${CHALLENGE_FIELDS})`
-    )
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw error;
-  }
+      )
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }),
+    () => [] as ChallengeSubmission[],
+    { onMissing: markChallengesMissing },
+  );
 
   return (data || []) as ChallengeSubmission[];
 }
@@ -183,42 +190,37 @@ export async function fetchChallengeWinnersWithClient(
   client: SupabaseClient,
   challengeId: string,
 ): Promise<ChallengeSubmission[]> {
-  const flaggedQuery = client
-    .from('challenge_submissions')
-    .select(`*, user:profiles(${PROFILE_FIELDS})`)
-    .eq('challenge_id', challengeId)
-    .eq('is_winner', true)
-    .order('votes_count', { ascending: false })
-    .order('created_at', { ascending: true })
-    .limit(3);
-
-  const { data: flaggedData, error: flaggedError } = await flaggedQuery;
-
-  if (flaggedError) {
-    throw flaggedError;
+  if (!CHALLENGE_TABLES_AVAILABLE) {
+    return [];
   }
-
-  const flaggedWinners = (flaggedData || []) as ChallengeSubmission[];
+  const flaggedWinners = (await withTableFallback(
+    client
+      .from('challenge_submissions')
+      .select(`*, user:profiles(${PROFILE_FIELDS})`)
+      .eq('challenge_id', challengeId)
+      .eq('is_winner', true)
+      .order('votes_count', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(3),
+    () => [] as ChallengeSubmission[],
+    { onMissing: markChallengesMissing },
+  )) as ChallengeSubmission[];
 
   if (flaggedWinners.length >= 3) {
     return flaggedWinners;
   }
 
-  const fallbackQuery = client
-    .from('challenge_submissions')
-    .select(`*, user:profiles(${PROFILE_FIELDS})`)
-    .eq('challenge_id', challengeId)
-    .order('votes_count', { ascending: false })
-    .order('created_at', { ascending: true })
-    .limit(3);
-
-  const { data: fallbackData, error: fallbackError } = await fallbackQuery;
-
-  if (fallbackError) {
-    throw fallbackError;
-  }
-
-  const fallbackWinners = (fallbackData || []) as ChallengeSubmission[];
+  const fallbackWinners = (await withTableFallback(
+    client
+      .from('challenge_submissions')
+      .select(`*, user:profiles(${PROFILE_FIELDS})`)
+      .eq('challenge_id', challengeId)
+      .order('votes_count', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(3),
+    () => [] as ChallengeSubmission[],
+    { onMissing: markChallengesMissing },
+  )) as ChallengeSubmission[];
 
   if (flaggedWinners.length === 0) {
     return fallbackWinners;

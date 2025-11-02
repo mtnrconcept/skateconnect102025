@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSponsorContext } from '../../contexts/SponsorContext';
+import { deleteSponsorSpotlight } from '../../lib/sponsorSpotlights';
 import SponsorAnalyticsSection from './analytics/SponsorAnalyticsSection';
 import SponsorOpportunitiesView from './opportunities/SponsorOpportunitiesView';
 import { SponsorPlanner } from './planner';
@@ -63,18 +64,18 @@ const spotlightStatusMeta: Record<
     Icon: Clock,
   },
   scheduled: {
-    label: 'Programmé',
-    className: 'bg-blue-500/10 text-blue-200 border border-blue-500/30',
+    label: 'ProgrammÃ©',
+    className: 'bg-orange-500/10 text-orange-200 border border-orange-500/30',
     Icon: CalendarDays,
   },
   active: {
     label: 'Actif',
-    className: 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30',
+    className: 'bg-orange-500/15 text-orange-200 border border-orange-500/40',
     Icon: CheckCircle,
   },
   completed: {
-    label: 'Terminé',
-    className: 'bg-purple-500/10 text-purple-200 border border-purple-500/30',
+    label: 'TerminÃ©',
+    className: 'bg-slate-700/20 text-slate-200 border border-slate-500/40',
     Icon: TrendingUp,
   },
 };
@@ -82,17 +83,18 @@ const spotlightStatusMeta: Record<
 const viewDefinitions = [
   { id: 'overview' as const, label: "Vue d'ensemble", icon: BarChart3 },
   { id: 'planner' as const, label: 'Planner', icon: CalendarDays },
-  { id: 'opportunities' as const, label: 'Opportunités', icon: KanbanSquare },
+  { id: 'opportunities' as const, label: 'OpportunitÃ©s', icon: KanbanSquare },
+  // Onglet Spotlights supprimÃ© pour simplification
   { id: 'spotlights' as const, label: 'Spotlight', icon: Megaphone },
   { id: 'shop' as const, label: 'Boutique', icon: Store },
-  { id: 'api-keys' as const, label: 'Clés API', icon: KeyRound },
+  { id: 'api-keys' as const, label: 'ClÃ©s API', icon: KeyRound },
 ];
 
 const statusLabels: Record<string, string> = {
   draft: 'Brouillon',
-  scheduled: 'Programmé',
+  scheduled: 'ProgrammÃ©',
   active: 'Actif',
-  completed: 'Terminé',
+  completed: 'TerminÃ©',
 };
 
 const availableScopes = [
@@ -105,9 +107,9 @@ const availableScopes = [
 function renderStatusBadge(status: string) {
   const colorMap: Record<string, string> = {
     draft: 'bg-slate-800 text-slate-200 border border-slate-600',
-    scheduled: 'bg-blue-900/60 text-blue-100 border border-blue-500/50',
-    active: 'bg-emerald-900/60 text-emerald-100 border border-emerald-500/50',
-    completed: 'bg-purple-900/60 text-purple-100 border border-purple-500/50',
+    scheduled: 'bg-orange-900/60 text-orange-100 border border-orange-500/50',
+    active: 'bg-orange-900/60 text-orange-100 border border-orange-500/60',
+    completed: 'bg-slate-800/80 text-slate-200 border border-slate-600/70',
   };
 
   return (
@@ -119,7 +121,7 @@ function renderStatusBadge(status: string) {
 
 function TrendBadge({ value }: { value: number | null }) {
   if (value === null) {
-    return <span className="text-xs text-slate-400">—</span>;
+    return <span className="text-xs text-slate-400">â€”</span>;
   }
 
   if (value === 0) {
@@ -128,7 +130,7 @@ function TrendBadge({ value }: { value: number | null }) {
 
   const isPositive = value > 0;
   const Icon = isPositive ? ArrowUpRight : ArrowDownRight;
-  const colorClass = isPositive ? 'text-emerald-300' : 'text-rose-300';
+  const colorClass = isPositive ? 'text-orange-300' : 'text-slate-300';
 
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-medium ${colorClass}`}>
@@ -169,7 +171,7 @@ function SpotlightSparkline({ points }: { points: SparklinePoint[] }) {
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
-      <path d={impressionsPath} fill="none" stroke="rgba(56,189,248,0.85)" strokeWidth={2} />
+      <path d={impressionsPath} fill="none" stroke="rgba(148,163,184,0.85)" strokeWidth={2} />
       <path d={clicksPath} fill="none" stroke="rgba(249,115,22,0.9)" strokeWidth={2} />
     </svg>
   );
@@ -209,6 +211,7 @@ export default function SponsorDashboard() {
     defaultCommissionRate,
     permissions,
     analytics,
+    analyticsBreakdowns,
     spotlights,
     shopItems,
     shopVariants,
@@ -261,8 +264,10 @@ export default function SponsorDashboard() {
   const [shopItemBeingEdited, setShopItemBeingEdited] = useState<SponsorShopItem | null>(null);
   const [isRequestingStripeLink, setIsRequestingStripeLink] = useState(false);
   const [stripeSetupError, setStripeSetupError] = useState<string | null>(null);
+  const [selectedSpotlightId, setSelectedSpotlightId] = useState<string | null>(null);
+  const [localSpotlightsVersion, setLocalSpotlightsVersion] = useState(0);
 
-  const primaryColor = branding?.primary_color ?? '#0ea5e9';
+  const primaryColor = branding?.primary_color ?? '#ff8c00';
   const secondaryColor = branding?.secondary_color ?? '#1e293b';
   const shopItemsById = useMemo(() => new Map(shopItems.map((entry) => [entry.id, entry])), [shopItems]);
 
@@ -412,13 +417,48 @@ export default function SponsorDashboard() {
     };
   }, [analytics?.engagement_rate, shopAnalyticsHistory, shopItems, spotlights]);
 
-  const recentSpotlights = useMemo(
-    () =>
-      [...spotlights]
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-        .slice(0, 4),
-    [spotlights],
-  );
+  const recentSpotlights = useMemo(() => {
+    let locals: SponsorSpotlight[] = [] as unknown as SponsorSpotlight[];
+    try {
+      const raw = localStorage.getItem('activeAdCampaigns');
+      const arr = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(arr)) {
+        locals = arr.map((c: any, idx: number) => {
+          const est = c?.estimation ?? {};
+          const impressions = Math.max(0, Math.round(est.impressions ?? 0));
+          const clicks = Math.max(0, Math.round(est.clicks ?? 0));
+          const perf: any = {
+            totals: { impressions, clicks, ctr: impressions > 0 ? (clicks / impressions) * 100 : 0 },
+            last7Days: { impressions: Math.round(impressions / 4), clicks: Math.round(clicks / 4) },
+            previous7Days: { impressions: Math.round(impressions / 5), clicks: Math.round(clicks / 5) },
+            daily: [],
+          };
+          return {
+            id: `local-${idx}`,
+            sponsor_id: profile?.id ?? 'local',
+            title: c?.draft?.creative?.headline ?? 'Campagne locale',
+            description: c?.draft?.creative?.message ?? '',
+            media_url: c?.draft?.creative?.mediaUrl ?? null,
+            call_to_action: c?.draft?.creative?.callToAction ?? null,
+            call_to_action_url: c?.draft?.creative?.landingUrl ?? null,
+            status: (c?.status ?? 'active') as SponsorSpotlight['status'],
+            start_date: c?.draft?.startDate ?? null,
+            end_date: c?.draft?.endDate ?? null,
+            performance: perf,
+            performanceInsights: null,
+            created_at: c?.publishedAt ?? new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as unknown as SponsorSpotlight;
+        });
+      }
+    } catch {
+      locals = [] as unknown as SponsorSpotlight[];
+    }
+
+    return [...locals, ...spotlights]
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, 4);
+  }, [profile?.id, spotlights]);
 
   const handleCreateApiKey = async () => {
     if (!apiKeyName.trim()) {
@@ -481,8 +521,8 @@ export default function SponsorDashboard() {
             type: isLocalPlaceholder ? 'info' : 'success',
             message: isLocalPlaceholder
               ?
-                "Spotlight créé en mode démo. Applique les migrations sponsor pour l'activer définitivement."
-              : 'Spotlight créé avec succès.',
+                "Spotlight crÃ©Ã© en mode dÃ©mo. Applique les migrations sponsor pour l'activer dÃ©finitivement."
+              : 'Spotlight crÃ©Ã© avec succÃ¨s.',
           });
           if (!isLocalPlaceholder) {
             await refreshSpotlights();
@@ -496,13 +536,13 @@ export default function SponsorDashboard() {
           if (!updated) {
             throw new Error('update-spotlight-failed');
           }
-          setSpotlightFeedback({ type: 'success', message: 'Spotlight mis à jour.' });
+          setSpotlightFeedback({ type: 'success', message: 'Spotlight mis Ã  jour.' });
           await refreshSpotlights();
         }
       } catch (cause) {
         setSpotlightFeedback({
           type: 'error',
-          message: "Impossible d'enregistrer le Spotlight. Réessaie dans quelques instants.",
+          message: "Impossible d'enregistrer le Spotlight. RÃ©essaie dans quelques instants.",
         });
         throw cause;
       }
@@ -586,7 +626,7 @@ export default function SponsorDashboard() {
       }
     } catch (cause) {
       console.error('Unable to launch Stripe onboarding', cause);
-      setStripeSetupError("Impossible de générer le lien Stripe. Réessaie dans un instant.");
+      setStripeSetupError("Impossible de gÃ©nÃ©rer le lien Stripe. RÃ©essaie dans un instant.");
     } finally {
       setIsRequestingStripeLink(false);
     }
@@ -625,14 +665,14 @@ export default function SponsorDashboard() {
 
   const handleExportSpotlights = useCallback(() => {
     if (spotlights.length === 0) {
-      setCopyFeedback('Aucune donnée à exporter pour le moment.');
+      setCopyFeedback('Aucune donnÃ©e Ã  exporter pour le moment.');
       return;
     }
 
     const headers = [
       'Titre',
       'Statut',
-      'Début',
+      'DÃ©but',
       'Fin',
       'Impressions totales',
       'Clics totaux',
@@ -663,12 +703,12 @@ export default function SponsorDashboard() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    setCopyFeedback('Export CSV généré.');
+    setCopyFeedback('Export CSV gÃ©nÃ©rÃ©.');
   }, [serializeSpotlightForExport, spotlights]);
 
   const handleCopySpotlights = useCallback(async () => {
     if (spotlights.length === 0) {
-      setCopyFeedback('Aucune donnée à copier pour le moment.');
+      setCopyFeedback('Aucune donnÃ©e Ã  copier pour le moment.');
       return;
     }
 
@@ -686,7 +726,7 @@ export default function SponsorDashboard() {
         const trend = insights?.trend;
 
         const formatTrend = (value: number | null | undefined) =>
-          value == null ? '—' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+          value == null ? 'â€”' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 
         return [
           spotlight.title,
@@ -717,10 +757,10 @@ export default function SponsorDashboard() {
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
-      setCopyFeedback('Données KPI copiées dans le presse-papier.');
+      setCopyFeedback('DonnÃ©es KPI copiÃ©es dans le presse-papier.');
     } catch (err) {
       console.error('Unable to copy spotlight metrics', err);
-      setCopyFeedback('Impossible de copier les données.');
+      setCopyFeedback('Impossible de copier les donnÃ©es.');
     }
   }, [spotlights]);
 
@@ -737,7 +777,7 @@ export default function SponsorDashboard() {
     const engagementHelper =
       overviewMetrics.averageEngagement != null
         ? `Engagement moyen ${overviewMetrics.averageEngagement.toFixed(1)} %`
-        : 'Performance détaillée';
+        : 'Performance dÃ©taillÃ©e';
 
     return (
       <div className="space-y-8">
@@ -760,7 +800,7 @@ export default function SponsorDashboard() {
                   Pilotage des activations
                 </h1>
                 <p className="mt-3 text-sm text-white/80">
-                  {branding?.tagline ?? 'Campagnes créatives pour rider la scène.'}
+                  {branding?.tagline ?? 'Campagnes crÃ©atives pour rider la scÃ¨ne.'}
                 </p>
               </div>
               <div className="flex flex-col gap-3 md:items-end">
@@ -803,7 +843,7 @@ export default function SponsorDashboard() {
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
                 <div className="mb-4 flex items-center justify-between">
-                  <span className="rounded-xl bg-emerald-500/15 p-3 text-emerald-300">
+                  <span className="rounded-xl bg-orange-500/15 p-3 text-orange-300">
                     <DollarSign size={20} />
                   </span>
                   <TrendBadge value={overviewMetrics.todayTrend} />
@@ -818,7 +858,7 @@ export default function SponsorDashboard() {
               </div>
               <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
                 <div className="mb-4 flex items-center justify-between">
-                  <span className="rounded-xl bg-purple-500/15 p-3 text-purple-300">
+                  <span className="rounded-xl bg-orange-500/15 p-3 text-orange-300">
                     <TrendingUp size={20} />
                   </span>
                   <TrendBadge value={overviewMetrics.monthTrend} />
@@ -827,11 +867,11 @@ export default function SponsorDashboard() {
                 <p className="mt-2 text-3xl font-semibold text-white">
                   {formatCurrency(overviewMetrics.monthSales)}
                 </p>
-                <p className="mt-2 text-xs text-slate-500">Comparé au mois précédent</p>
+                <p className="mt-2 text-xs text-slate-500">ComparÃ© au mois prÃ©cÃ©dent</p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
                 <div className="mb-4 flex items-center justify-between">
-                  <span className="rounded-xl bg-sky-500/15 p-3 text-sky-300">
+                  <span className="rounded-xl bg-orange-500/15 p-3 text-orange-300">
                     <Megaphone size={20} />
                   </span>
                   <span className="text-xs font-medium uppercase tracking-widest text-slate-400">
@@ -843,12 +883,12 @@ export default function SponsorDashboard() {
                   {formatNumber(overviewMetrics.activeActivations)}
                 </p>
                 <p className="mt-2 text-xs text-slate-500">
-                  {formatNumber(overviewMetrics.pendingActivations)} à lancer
+                  {formatNumber(overviewMetrics.pendingActivations)} Ã  lancer
                 </p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 shadow-inner shadow-black/40">
                 <div className="mb-4 flex items-center justify-between">
-                  <span className="rounded-xl bg-blue-500/15 p-3 text-blue-300">
+                  <span className="rounded-xl bg-orange-500/15 p-3 text-orange-300">
                     <Package size={20} />
                   </span>
                   <span className="text-xs font-medium uppercase tracking-widest text-slate-400">
@@ -873,10 +913,10 @@ export default function SponsorDashboard() {
             <button
               type="button"
               onClick={openCreateShopItemModal}
-              className="group rounded-2xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 via-purple-500/10 to-purple-500/0 p-5 text-left transition hover:border-purple-400/60 hover:bg-purple-500/15"
+              className="group rounded-2xl border border-orange-400/30 bg-gradient-to-br from-orange-500/20 via-orange-500/10 to-orange-500/0 p-5 text-left transition hover:border-orange-400/60 hover:bg-orange-500/15"
             >
               <span className="flex items-center justify-between">
-                <span className="rounded-xl bg-purple-500/20 p-3 text-purple-200">
+                <span className="rounded-xl bg-orange-500/20 p-3 text-orange-200">
                   <PlusCircle className="h-6 w-6" />
                 </span>
               </span>
@@ -886,25 +926,25 @@ export default function SponsorDashboard() {
             <button
               type="button"
               onClick={() => setActiveView('spotlights')}
-              className="group rounded-2xl border border-sky-400/30 bg-gradient-to-br from-sky-500/20 via-sky-500/10 to-sky-500/0 p-5 text-left transition hover:border-sky-400/60 hover:bg-sky-500/15"
+              className="group rounded-2xl border border-orange-400/30 bg-gradient-to-br from-orange-500/20 via-orange-500/10 to-orange-500/0 p-5 text-left transition hover:border-orange-400/60 hover:bg-orange-500/15"
             >
               <span className="flex items-center justify-between">
-                <span className="rounded-xl bg-sky-500/20 p-3 text-sky-200">
+                <span className="rounded-xl bg-orange-500/20 p-3 text-orange-200">
                   <Megaphone className="h-6 w-6" />
                 </span>
               </span>
               <p className="mt-4 text-base font-semibold text-white">Piloter les activations</p>
               <p className="mt-1 text-sm text-slate-400">
-                {formatNumber(overviewMetrics.pendingActivations)} campagne(s) à préparer
+                {formatNumber(overviewMetrics.pendingActivations)} campagne(s) Ã  prÃ©parer
               </p>
             </button>
             <button
               type="button"
               onClick={scrollToAnalyticsSection}
-              className="group rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-emerald-500/0 p-5 text-left transition hover:border-emerald-400/60 hover:bg-emerald-500/15"
+              className="group rounded-2xl border border-orange-400/30 bg-gradient-to-br from-orange-500/20 via-orange-500/10 to-orange-500/0 p-5 text-left transition hover:border-orange-400/60 hover:bg-orange-500/15"
             >
               <span className="flex items-center justify-between">
-                <span className="rounded-xl bg-emerald-500/20 p-3 text-emerald-200">
+                <span className="rounded-xl bg-orange-500/20 p-3 text-orange-200">
                   <BarChart3 className="h-6 w-6" />
                 </span>
               </span>
@@ -917,14 +957,14 @@ export default function SponsorDashboard() {
         <div className="rounded-3xl border border-slate-800/60 bg-slate-950/70 p-6 md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white">Activations récentes</h2>
-              <p className="text-sm text-slate-400">Suivi temps réel de tes dernières campagnes Spotlight.</p>
+              <h2 className="text-xl font-semibold text-white">Activations rÃ©centes</h2>
+              <p className="text-sm text-slate-400">Suivi temps rÃ©el de tes derniÃ¨res campagnes Spotlight.</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={openCreateSpotlightModal}
-                className="inline-flex items-center gap-2 rounded-full border border-purple-400/60 px-4 py-2 text-sm text-purple-200 transition hover:border-purple-300 hover:bg-purple-500/10"
+                className="inline-flex items-center gap-2 rounded-full border border-orange-400/60 px-4 py-2 text-sm text-orange-200 transition hover:border-orange-300 hover:bg-orange-500/10"
               >
                 <PlusCircle size={16} />
                 Nouveau Spotlight
@@ -932,16 +972,16 @@ export default function SponsorDashboard() {
               <button
                 type="button"
                 onClick={() => setActiveView('spotlights')}
-                className="text-sm font-medium text-purple-300 transition hover:text-purple-200"
+                className="text-sm font-medium text-orange-300 transition hover:text-orange-200"
               >
-                Voir tout →
+                Voir tout â†’
               </button>
             </div>
           </div>
           <div className="mt-6 space-y-4">
             {recentSpotlights.length === 0 ? (
               <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 px-6 py-6 text-sm text-slate-300">
-                Aucune activation récente. Lance ton premier Spotlight pour apparaître ici.
+                Aucune activation rÃ©cente. Lance ton premier Spotlight pour apparaÃ®tre ici.
               </div>
             ) : (
               recentSpotlights.map((spotlight) => {
@@ -964,9 +1004,9 @@ export default function SponsorDashboard() {
                       <p className="text-sm text-slate-400">
                         {spotlight.start_date
                           ? new Date(spotlight.start_date).toLocaleDateString('fr-FR')
-                          : 'Début à définir'}
+                          : 'DÃ©but Ã  dÃ©finir'}
                         {spotlight.end_date
-                          ? ` → ${new Date(spotlight.end_date).toLocaleDateString('fr-FR')}`
+                          ? ` â†’ ${new Date(spotlight.end_date).toLocaleDateString('fr-FR')}`
                           : ''}
                       </p>
                     </div>
@@ -982,7 +1022,7 @@ export default function SponsorDashboard() {
                       <div className="text-left md:text-right">
                         <p className="text-xs uppercase tracking-widest text-slate-500">CTR 7j</p>
                         <p className="text-base font-semibold text-white">
-                          {ctr == null ? '—' : `${ctr.toFixed(1)} %`}
+                          {ctr == null ? 'â€”' : `${ctr.toFixed(1)} %`}
                         </p>
                       </div>
                     </div>
@@ -1014,9 +1054,9 @@ export default function SponsorDashboard() {
         >
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white">Analyses détaillées</h2>
+              <h2 className="text-xl font-semibold text-white">Analyses dÃ©taillÃ©es</h2>
               <p className="text-sm text-slate-400">
-                Explore la performance complète de ta boutique et de tes activations.
+                Explore la performance complÃ¨te de ta boutique et de tes activations.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1049,178 +1089,268 @@ export default function SponsorDashboard() {
     );
   };
 
-  const renderSpotlights = () => (
-    <div className="space-y-6">
-      {!permissions.canManageSpotlights ? (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 p-6 text-rose-200">
-          Ta marque n'a pas encore accès à la gestion des Spotlight. Contacte ton chargé de compte pour activer l'option.
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-2xl font-semibold text-white">Spotlight actifs</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCopySpotlights}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
-              >
-                <Copy size={16} /> Copier KPI
-              </button>
-              <button
-                type="button"
-                onClick={handleExportSpotlights}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
-              >
-                <Download size={16} /> Export CSV
-              </button>
-              <button
-                type="button"
-                onClick={openCreateSpotlightModal}
-                className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-100 hover:border-sky-400 hover:bg-sky-500/10"
-              >
-                <PlusCircle size={16} /> Nouveau Spotlight
-              </button>
-              <button
-                type="button"
-                onClick={refreshAll}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
-              >
-                <RefreshCw size={16} /> Rafraîchir
-              </button>
-            </div>
+  const renderSpotlights = () => {
+    const readLocal = () => {
+      try {
+        const raw = localStorage.getItem('activeAdCampaigns');
+        const arr = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(arr)) return [];
+        return arr.map((c: any, idx: number) => {
+          const est = c?.estimation ?? {};
+          const impressions = Math.max(0, Math.round(est.impressions ?? 0));
+          const clicks = Math.max(0, Math.round(est.clicks ?? 0));
+          const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+          const perf: any = {
+            totals: { impressions, clicks, ctr },
+            last7Days: { impressions: Math.round(impressions / 4), clicks: Math.round(clicks / 4) },
+            previous7Days: { impressions: Math.round(impressions / 5), clicks: Math.round(clicks / 5) },
+            daily: [],
+          };
+          return {
+            id: `local-${idx}`,
+            sponsor_id: profile?.id ?? 'local',
+            title: c?.draft?.creative?.headline ?? 'Campagne locale',
+            description: c?.draft?.creative?.message ?? '',
+            media_url: c?.draft?.creative?.mediaUrl ?? null,
+            call_to_action: c?.draft?.creative?.callToAction ?? null,
+            call_to_action_url: c?.draft?.creative?.landingUrl ?? null,
+            status: (c?.status ?? 'active') as SponsorSpotlight['status'],
+            start_date: c?.draft?.startDate ?? null,
+            end_date: c?.draft?.endDate ?? null,
+            performance: perf,
+            performanceInsights: { trend: { impressions: null, clicks: null, ctr: null }, sparkline: perf.daily },
+            created_at: c?.publishedAt ?? new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as unknown as SponsorSpotlight;
+        });
+      } catch {
+        return [];
+      }
+    };
+
+    const allSpots: SponsorSpotlight[] = [...readLocal(), ...spotlights];
+
+    const updateLocal = (id: string, updater: (item: any) => any) => {
+      try {
+        const raw = localStorage.getItem('activeAdCampaigns');
+        const arr = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(arr)) return;
+        const idx = parseInt(id.replace('local-', ''), 10);
+        if (!Number.isNaN(idx) && arr[idx] !== undefined) {
+          const next = updater(arr[idx]);
+          if (next === null) { arr.splice(idx, 1); } else { arr[idx] = next; }
+          localStorage.setItem('activeAdCampaigns', JSON.stringify(arr));
+          setLocalSpotlightsVersion((v) => v + 1);
+          try {
+            window.dispatchEvent(new Event('adCampaignsUpdated'));
+          } catch {}
+        }
+      } catch {}
+    };
+
+    return (
+      <div className="space-y-6">
+        {!permissions.canManageSpotlights ? (
+          <div className="rounded-2xl border border-orange-500/40 bg-orange-950/40 p-6 text-orange-100">
+            Ta marque n'a pas encore accès à la gestion des Spotlight. Contacte ton chargé de compte pour activer l'option.
           </div>
-          {spotlightFeedback && (
-            <p
-              className={`text-xs ${
-                spotlightFeedback.type === 'success'
-                  ? 'text-emerald-300'
-                  : spotlightFeedback.type === 'info'
-                    ? 'text-sky-300'
-                    : 'text-rose-300'
-              }`}
-            >
-              {spotlightFeedback.message}
-            </p>
-          )}
-          {copyFeedback && <p className="text-xs text-emerald-300">{copyFeedback}</p>}
-          <div className="grid gap-4">
-            {spotlights.length === 0 ? (
-              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-slate-300">
-                Aucun Spotlight pour le moment. Publie ton premier projet sponsorisé pour apparaître ici.
+        ) : (
+          <>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <h2 className="text-2xl font-semibold text-white">Spotlight actifs</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={handleCopySpotlights} className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white">
+                  <Copy size={16} /> Copier KPI
+                </button>
+                <button type="button" onClick={handleExportSpotlights} className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white">
+                  <Download size={16} /> Export CSV
+                </button>
+                <button type="button" onClick={openCreateSpotlightModal} className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 px-4 py-2 text-sm text-orange-100 hover:border-orange-400 hover:bg-orange-500/10">
+                  <PlusCircle size={16} /> Nouveau Spotlight
+                </button>
+                <button type="button" onClick={refreshAll} className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white">
+                  <RefreshCw size={16} /> Rafraîchir
+                </button>
               </div>
-            ) : (
-              spotlights.map((spotlight) => (
-                <div
-                  key={spotlight.id}
-                  className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 flex flex-col gap-5"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        {renderStatusBadge(spotlight.status)}
-                        {spotlight.start_date && (
-                          <span className="text-xs text-slate-400">
-                            {new Date(spotlight.start_date).toLocaleDateString('fr-FR')}
-                            {spotlight.end_date ? ` → ${new Date(spotlight.end_date).toLocaleDateString('fr-FR')}` : ''}
-                          </span>
+            </div>
+            {spotlightFeedback && (
+              <p className={`text-xs ${spotlightFeedback.type === 'success' ? 'text-orange-300' : spotlightFeedback.type === 'info' ? 'text-orange-300' : 'text-orange-300'}`}>
+                {spotlightFeedback.message}
+              </p>
+            )}
+            {copyFeedback && <p className="text-xs text-orange-300">{copyFeedback}</p>}
+            <div className="grid gap-4">
+              {allSpots.length === 0 ? (
+                <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-slate-300">Aucune activation pour le moment. Publie ton premier Spotlight pour apparaître ici.</div>
+              ) : (
+                allSpots.map((spotlight) => (
+                  <div key={spotlight.id} className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 flex flex-col gap-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          {renderStatusBadge(spotlight.status)}
+                          {spotlight.start_date && (
+                            <span className="text-xs text-slate-400">
+                              {new Date(spotlight.start_date as any).toLocaleDateString('fr-FR')}
+                              {spotlight.end_date ? ` – ${new Date(spotlight.end_date as any).toLocaleDateString('fr-FR')}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-xl font-semibold text-white">{spotlight.title}</h3>
+                        {spotlight.description && <p className="text-sm text-slate-300 max-w-3xl">{spotlight.description}</p>}
+                        {spotlight.call_to_action && (
+                          <p className="text-sm text-slate-400">CTA : <span className="text-slate-200">{spotlight.call_to_action}</span></p>
                         )}
                       </div>
-                      <h3 className="text-xl font-semibold text-white">{spotlight.title}</h3>
-                      {spotlight.description && (
-                        <p className="text-sm text-slate-300 max-w-3xl">{spotlight.description}</p>
-                      )}
-                      {spotlight.call_to_action && (
-                        <p className="text-sm text-slate-400">
-                          CTA : <span className="text-slate-200">{spotlight.call_to_action}</span>
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 self-start">
-                      <button
-                        type="button"
-                        onClick={() => openEditSpotlightModal(spotlight)}
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:border-slate-400 hover:text-white"
-                      >
-                        <Pencil size={16} /> Modifier
-                      </button>
-                      {spotlight.status !== 'active' && (
+                      <div className="flex items-center gap-3 self-start">
+                        <button type="button" onClick={() => openEditSpotlightModal(spotlight)} className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:border-slate-400 hover:text-white">
+                          <Pencil size={16} /> Modifier
+                        </button>
+                        {spotlight.status !== 'active' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (String(spotlight.id).startsWith('local-')) {
+                                updateLocal(String(spotlight.id), (it) => ({ ...it, status: 'active' }));
+                              } else {
+                                void updateSpotlightStatus(spotlight.id, 'active');
+                              }
+                            }}
+                            className="rounded-full border border-orange-500/60 px-4 py-2 text-sm text-orange-200 hover:bg-orange-500/10"
+                          >
+                            Démarrer
+                          </button>
+                        )}
+                        {spotlight.status === 'active' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (String(spotlight.id).startsWith('local-')) {
+                                updateLocal(String(spotlight.id), (it) => ({ ...it, status: 'scheduled' }));
+                              } else {
+                                void updateSpotlightStatus(spotlight.id, 'scheduled');
+                              }
+                            }}
+                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                          >
+                            Mettre en pause
+                          </button>
+                        )}
+                        {spotlight.status === 'active' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (String(spotlight.id).startsWith('local-')) {
+                                updateLocal(String(spotlight.id), (it) => ({ ...it, status: 'completed' }));
+                              } else {
+                                void updateSpotlightStatus(spotlight.id, 'completed');
+                              }
+                            }}
+                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                          >
+                            Terminer
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => updateSpotlightStatus(spotlight.id, 'active')}
-                          className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10"
+                          onClick={() => setSelectedSpotlightId((prev) => (prev === String(spotlight.id) ? null : String(spotlight.id)))}
+                          className={`rounded-full border px-4 py-2 text-sm ${selectedSpotlightId === String(spotlight.id) ? 'border-orange-500/60 text-orange-100 bg-orange-500/10' : 'border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white'}`}
                         >
-                          Activer
+                          {selectedSpotlightId === String(spotlight.id) ? 'Fermer' : 'Voir résultats'}
                         </button>
-                      )}
-                      {spotlight.status === 'active' && (
                         <button
                           type="button"
-                          onClick={() => updateSpotlightStatus(spotlight.id, 'completed')}
-                          className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                          onClick={() => {
+                            if (String(spotlight.id).startsWith('local-')) {
+                              updateLocal(String(spotlight.id), () => null);
+                            } else {
+                              void deleteSponsorSpotlight(spotlight.id).then(() => refreshSpotlights());
+                            }
+                          }}
+                          className="rounded-full border border-orange-500/60 px-4 py-2 text-sm text-orange-200 hover:bg-orange-500/10"
                         >
-                          Terminer
+                          Supprimer
                         </button>
-                      )}
-                    </div>
-                  </div>
-                  {spotlight.performance && (
-                    <div className="grid gap-4 md:grid-cols-5">
-                      <div className="md:col-span-3 grid gap-4 sm:grid-cols-3">
-                        <MetricCard
-                          label="Impressions (7j)"
-                          value={spotlight.performance.last7Days.impressions.toLocaleString('fr-FR')}
-                          trend={spotlight.performanceInsights?.trend.impressions ?? null}
-                          helper={`Total : ${spotlight.performance.totals.impressions.toLocaleString('fr-FR')}`}
-                        />
-                        <MetricCard
-                          label="Clics (7j)"
-                          value={spotlight.performance.last7Days.clicks.toLocaleString('fr-FR')}
-                          trend={spotlight.performanceInsights?.trend.clicks ?? null}
-                          helper={`Total : ${spotlight.performance.totals.clicks.toLocaleString('fr-FR')}`}
-                        />
-                        <MetricCard
-                          label="CTR (7j)"
-                          value={
-                            spotlight.performance.last7Days.impressions > 0
-                              ? `${(
-                                  (spotlight.performance.last7Days.clicks /
-                                    spotlight.performance.last7Days.impressions) *
-                                  100
-                                ).toFixed(2)} %`
-                              : '0.00 %'
-                          }
-                          trend={spotlight.performanceInsights?.trend.ctr ?? null}
-                          helper={`CTR global : ${spotlight.performance.totals.ctr.toFixed(2)} %`}
-                        />
                       </div>
-                      <div className="md:col-span-2 rounded-xl border border-slate-700/70 bg-slate-900/70 p-4">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs uppercase tracking-wider text-slate-500">Tendance 30 jours</p>
-                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500">
-                            <span className="inline-flex items-center gap-1 text-cyan-300">
-                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Impressions
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-orange-300">
-                              <span className="h-1.5 w-1.5 rounded-full bg-orange-300" /> Clics
-                            </span>
+                    </div>
+                    {String(spotlight.id).startsWith('local-') && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs text-slate-300">Début
+                          <input type="date" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-sm text-white" defaultValue={(spotlight.start_date as any) ?? ''} onChange={(e) => updateLocal(String(spotlight.id), (it) => ({ ...it, draft: { ...(it?.draft ?? {}), startDate: e.target.value }, start_date: e.target.value }))} />
+                        </label>
+                        <label className="text-xs text-slate-300">Fin
+                          <input type="date" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-sm text-white" defaultValue={(spotlight.end_date as any) ?? ''} onChange={(e) => updateLocal(String(spotlight.id), (it) => ({ ...it, draft: { ...(it?.draft ?? {}), endDate: e.target.value }, end_date: e.target.value }))} />
+                        </label>
+                      </div>
+                    )}
+                    {spotlight.performance && (
+                      <div className="grid gap-4 md:grid-cols-5">
+                        <div className="md:col-span-3 grid gap-4 sm:grid-cols-3">
+                          <MetricCard label="Impressions (7j)" value={spotlight.performance.last7Days.impressions.toLocaleString('fr-FR')} trend={spotlight.performanceInsights?.trend.impressions ?? null} helper={`Total : ${spotlight.performance.totals.impressions.toLocaleString('fr-FR')}`} />
+                          <MetricCard label="Clics (7j)" value={spotlight.performance.last7Days.clicks.toLocaleString('fr-FR')} trend={spotlight.performanceInsights?.trend.clicks ?? null} helper={`Total : ${spotlight.performance.totals.clicks.toLocaleString('fr-FR')}`} />
+                          <MetricCard label="CTR (7j)" value={spotlight.performance.last7Days.impressions > 0 ? `${((spotlight.performance.last7Days.clicks / spotlight.performance.last7Days.impressions) * 100).toFixed(2)} %` : '0.00 %'} trend={spotlight.performanceInsights?.trend.ctr ?? null} helper={`CTR global : ${spotlight.performance.totals.ctr.toFixed(2)} %`} />
+                        </div>
+                        <div className="md:col-span-2 rounded-xl border border-slate-700/70 bg-slate-900/70 p-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs uppercase tracking-wider text-slate-500">Tendance 30 jours</p>
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                              <span className="inline-flex items-center gap-1 text-cyan-300"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Impressions</span>
+                              <span className="inline-flex items-center gap-1 text-orange-300"><span className="h-1.5 w-1.5 rounded-full bg-orange-300" /> Clics</span>
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <SpotlightSparkline points={spotlight.performanceInsights?.sparkline ?? []} />
                           </div>
                         </div>
-                        <div className="mt-3">
-                          <SpotlightSparkline points={spotlight.performanceInsights?.sparkline ?? []} />
-                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-
+                    )}
+                    {selectedSpotlightId === String(spotlight.id) && (
+                      <div className="mt-4 grid gap-4 md:grid-cols-5">
+                        <div className="md:col-span-3 rounded-xl border border-slate-700/70 bg-slate-900/70 p-4">
+                          <p className="text-xs uppercase tracking-wider text-slate-500">Vues par région</p>
+                          {(analyticsBreakdowns?.regions?.length ?? 0) === 0 || (spotlight.performance?.totals.impressions ?? 0) <= 0 ? (
+                            <div className="text-sm text-slate-400">Aucune donnée régionale disponible.</div>
+                          ) : (
+                            <ul className="mt-2 space-y-1">
+                              {analyticsBreakdowns!.regions.slice(0, 5).map((r) => {
+                                const sumReach = analyticsBreakdowns!.regions.reduce((acc, it) => acc + (it.reach || 0), 0) || 1;
+                                const share = (r.reach || 0) / sumReach;
+                                const est = Math.round((spotlight.performance?.totals.impressions ?? 0) * share);
+                                return (
+                                  <li key={r.key} className="flex items-center justify-between text-sm">
+                                    <span className="text-slate-300">{r.label}</span>
+                                    <span className="text-slate-400">{est.toLocaleString('fr-FR')} vues · {(share * 100).toFixed(1)}%</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                        {spotlight.performance && (
+                          <div className="md:col-span-2 rounded-xl border border-slate-700/70 bg-slate-900/70 p-4">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs uppercase tracking-wider text-slate-500">Tendance 30 jours</p>
+                              <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                                <span className="inline-flex items-center gap-1 text-cyan-300"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Impressions</span>
+                                <span className="inline-flex items-center gap-1 text-orange-300"><span className="h-1.5 w-1.5 rounded-full bg-orange-300" /> Clics</span>
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <SpotlightSparkline points={spotlight.performanceInsights?.sparkline ?? []} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
   const shopTotals = useMemo(
     () =>
       shopAnalytics?.totals ?? {
@@ -1269,11 +1399,11 @@ export default function SponsorDashboard() {
 
   const formatDateTime = useCallback((value: string | null) => {
     if (!value) {
-      return '—';
+      return 'â€”';
     }
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
-      return '—';
+      return 'â€”';
     }
     return date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
   }, []);
@@ -1281,7 +1411,7 @@ export default function SponsorDashboard() {
   const renderShop = () => (
     <div className="space-y-6">
       {!permissions.canManageShop ? (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-6 text-amber-100">
+        <div className="rounded-2xl border border-orange-500/40 bg-orange-950/40 p-6 text-orange-100">
           La gestion de la boutique n'est pas incluse dans ton pack actuel.
         </div>
       ) : (
@@ -1290,7 +1420,7 @@ export default function SponsorDashboard() {
             <div>
               <h2 className="text-2xl font-semibold text-white">Inventaire boutique</h2>
               <p className="text-sm text-slate-400">
-                Gère les produits mis à disposition des riders et partenaires. Mets à jour le stock et l'état en un clic.
+                GÃ¨re les produits mis Ã  disposition des riders et partenaires. Mets Ã  jour le stock et l'Ã©tat en un clic.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
@@ -1299,12 +1429,12 @@ export default function SponsorDashboard() {
                 onClick={() => void refreshShopAnalytics()}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
               >
-                <RefreshCw size={16} /> Rafraîchir analytics
+                <RefreshCw size={16} /> RafraÃ®chir analytics
               </button>
               <button
                 type="button"
                 onClick={openCreateShopItemModal}
-                className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-100 hover:border-sky-400 hover:bg-sky-500/10"
+                className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 px-4 py-2 text-sm text-orange-100 hover:border-orange-400 hover:bg-orange-500/10"
               >
                 <PlusCircle size={18} /> Ajouter un produit
               </button>
@@ -1317,18 +1447,18 @@ export default function SponsorDashboard() {
                 <p className="text-xs uppercase tracking-wider text-slate-500">Stripe Connect</p>
                 <h3 className="text-lg font-semibold text-white">Statut des paiements</h3>
                 <p className="text-sm text-slate-400">
-                  Active le tunnel de paiement sécurisé Stripe pour encaisser les commandes et laisser SkateConnect appliquer
-                  sa commission ({defaultCommissionRate != null ? `${(defaultCommissionRate * 100).toFixed(1)} %` : '10 % par défaut'}).
+                  Active le tunnel de paiement sÃ©curisÃ© Stripe pour encaisser les commandes et laisser SkateConnect appliquer
+                  sa commission ({defaultCommissionRate != null ? `${(defaultCommissionRate * 100).toFixed(1)} %` : '10 % par dÃ©faut'}).
                 </p>
               </div>
               <span
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
                   stripeAccountReady
-                    ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
-                    : 'border-amber-500/60 bg-amber-500/10 text-amber-100'
+                    ? 'border-orange-500/60 bg-orange-500/10 text-orange-200'
+                    : 'border-orange-500/60 bg-orange-500/10 text-orange-100'
                 }`}
               >
-                {stripeAccountReady ? 'Connecté' : 'Connexion requise'}
+                {stripeAccountReady ? 'ConnectÃ©' : 'Connexion requise'}
               </span>
             </div>
             <div className="mt-3 space-y-3 text-sm text-slate-300">
@@ -1337,19 +1467,19 @@ export default function SponsorDashboard() {
                   <p>
                     Compte Stripe :{' '}
                     <code className="rounded bg-slate-800/80 px-2 py-1 text-xs text-slate-100">
-                      {stripeAccountId ?? 'non défini'}
+                      {stripeAccountId ?? 'non dÃ©fini'}
                     </code>
                   </p>
                   <p>
-                    Les paiements sont actifs et les commissions sont automatiquement déduites avant virement vers ton compte
+                    Les paiements sont actifs et les commissions sont automatiquement dÃ©duites avant virement vers ton compte
                     Stripe.
                   </p>
                 </>
               ) : (
                 <>
                   <p>
-                    Connecte-toi pour générer ton compte Express et compléter l'onboarding réglementaire. Tu pourras encaisser
-                    les commandes dès validation par Stripe.
+                    Connecte-toi pour gÃ©nÃ©rer ton compte Express et complÃ©ter l'onboarding rÃ©glementaire. Tu pourras encaisser
+                    les commandes dÃ¨s validation par Stripe.
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -1361,7 +1491,7 @@ export default function SponsorDashboard() {
                       {isRequestingStripeLink ? (
                         <>
                           <RefreshCw className="animate-spin" size={16} />
-                          Génération...
+                          GÃ©nÃ©ration...
                         </>
                       ) : (
                         <>
@@ -1370,7 +1500,7 @@ export default function SponsorDashboard() {
                         </>
                       )}
                     </button>
-                    {stripeSetupError && <p className="text-xs text-rose-300">{stripeSetupError}</p>}
+                    {stripeSetupError && <p className="text-xs text-orange-300">{stripeSetupError}</p>}
                   </div>
                 </>
               )}
@@ -1380,9 +1510,9 @@ export default function SponsorDashboard() {
           <div className="space-y-3">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">Ventes cumulées</p>
+                <p className="text-xs uppercase tracking-wider text-slate-500">Ventes cumulÃ©es</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{formatRevenue(shopTotals.revenueCents)}</p>
-                <p className="mt-1 text-xs text-slate-400">{shopTotals.orders} commandes confirmées</p>
+                <p className="mt-1 text-xs text-slate-400">{shopTotals.orders} commandes confirmÃ©es</p>
               </div>
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
                 <p className="text-xs uppercase tracking-wider text-slate-500">Taux de conversion</p>
@@ -1395,13 +1525,13 @@ export default function SponsorDashboard() {
                 <p className="mt-1 text-xs text-slate-400">Suivis des intentions d'achat</p>
               </div>
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">Unités vendues</p>
+                <p className="text-xs uppercase tracking-wider text-slate-500">UnitÃ©s vendues</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{shopTotals.units.toLocaleString('fr-FR')}</p>
-                <p className="mt-1 text-xs text-slate-400">Stock restant mis à jour en temps réel</p>
+                <p className="mt-1 text-xs text-slate-400">Stock restant mis Ã  jour en temps rÃ©el</p>
               </div>
             </div>
             {shopLastUpdatedLabel && (
-              <p className="text-xs text-slate-500">Dernière synchronisation : {shopLastUpdatedLabel}</p>
+              <p className="text-xs text-slate-500">DerniÃ¨re synchronisation : {shopLastUpdatedLabel}</p>
             )}
           </div>
 
@@ -1413,7 +1543,7 @@ export default function SponsorDashboard() {
               </div>
               <div className="mt-3 overflow-x-auto">
                 {recentShopHistory.length === 0 ? (
-                  <p className="text-sm text-slate-400">Pas encore de données enregistrées sur la boutique.</p>
+                  <p className="text-sm text-slate-400">Pas encore de donnÃ©es enregistrÃ©es sur la boutique.</p>
                 ) : (
                   <table className="min-w-full text-left text-xs text-slate-300">
                     <thead className="text-[11px] uppercase tracking-wider text-slate-500">
@@ -1422,7 +1552,7 @@ export default function SponsorDashboard() {
                         <th className="pb-2 pr-4">Vues</th>
                         <th className="pb-2 pr-4">Paniers</th>
                         <th className="pb-2 pr-4">Commandes</th>
-                        <th className="pb-2 pr-4">Unités</th>
+                        <th className="pb-2 pr-4">UnitÃ©s</th>
                         <th className="pb-2">CA</th>
                       </tr>
                     </thead>
@@ -1448,7 +1578,7 @@ export default function SponsorDashboard() {
               <div>
                 <h3 className="text-sm font-semibold text-white">Export & CRM</h3>
                 <p className="mt-2 text-sm text-slate-400">
-                  Utilise tes clés API existantes avec le scope <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs">shop:analytics</code>{' '}
+                  Utilise tes clÃ©s API existantes avec le scope <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs">shop:analytics</code>{' '}
                   pour synchroniser les KPI vers ton CRM ou outil BI.
                 </p>
               </div>
@@ -1479,7 +1609,7 @@ export default function SponsorDashboard() {
                             document.execCommand('copy');
                             document.body.removeChild(textarea);
                           }
-                          setShopCopyFeedback('Endpoint API copié.');
+                          setShopCopyFeedback('Endpoint API copiÃ©.');
                         } catch (err) {
                           console.error('Unable to copy shop analytics endpoint', err);
                           setShopCopyFeedback('Impossible de copier le lien.');
@@ -1490,25 +1620,25 @@ export default function SponsorDashboard() {
                       <Copy size={16} /> Copier le endpoint
                     </button>
                     <span className="text-xs text-slate-500">
-                      Inclure l'en-tête{' '}
-                      <code className="rounded bg-slate-800 px-1 py-0.5">apikey: &lt;clé&gt;</code>
+                      Inclure l'en-tÃªte{' '}
+                      <code className="rounded bg-slate-800 px-1 py-0.5">apikey: &lt;clÃ©&gt;</code>
                     </span>
                   </div>
-                  {shopCopyFeedback && <p className="text-xs text-emerald-300">{shopCopyFeedback}</p>}
+                  {shopCopyFeedback && <p className="text-xs text-orange-300">{shopCopyFeedback}</p>}
                 </div>
               ) : (
-                <p className="text-sm text-slate-400">Connecte-toi avec un compte sponsor pour générer l'endpoint d'export.</p>
+                <p className="text-sm text-slate-400">Connecte-toi avec un compte sponsor pour gÃ©nÃ©rer l'endpoint d'export.</p>
               )}
             </div>
           </div>
 
           {lowStockItems.length > 0 && (
-            <div className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-100">
+            <div className="rounded-2xl border border-orange-500/40 bg-orange-950/30 p-4 text-orange-100">
               <h3 className="text-sm font-semibold">Stock critique</h3>
               <ul className="mt-2 space-y-1 text-sm">
                 {lowStockItems.map((item) => (
                   <li key={item.id}>
-                    {item.name} — <span className="font-semibold">{item.stock}</span> unités restantes
+                    {item.name} â€” <span className="font-semibold">{item.stock}</span> unitÃ©s restantes
                   </li>
                 ))}
               </ul>
@@ -1518,7 +1648,7 @@ export default function SponsorDashboard() {
           <div className="grid gap-4 md:grid-cols-2">
             {shopItems.length === 0 ? (
               <div className="md:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-center text-slate-300">
-                Aucun produit listé pour l'instant. Lance ta première offre pour activer la boutique.
+                Aucun produit listÃ© pour l'instant. Lance ta premiÃ¨re offre pour activer la boutique.
               </div>
             ) : (
               shopItems.map((item) => {
@@ -1537,7 +1667,7 @@ export default function SponsorDashboard() {
                             {item.is_active ? 'Actif' : 'En pause'}
                           </p>
                           {item.stock <= 5 && (
-                            <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-400/60 px-2 py-0.5 text-[11px] text-amber-200">
+                            <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-orange-400/60 px-2 py-0.5 text-[11px] text-orange-200">
                               <Tag size={12} /> Stock bas
                             </span>
                           )}
@@ -1559,7 +1689,7 @@ export default function SponsorDashboard() {
                           rel="noreferrer"
                           className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 px-3 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
                         >
-                          Aperçu visuel
+                          AperÃ§u visuel
                         </a>
                       )}
                     </div>
@@ -1601,7 +1731,7 @@ export default function SponsorDashboard() {
                       <details className="rounded-xl border border-slate-800 bg-slate-950/40" open={variantsForItem.length > 0}>
                         <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-2 text-sm text-slate-200">
                           <span>Variantes ({variantsForItem.length})</span>
-                          <span className="text-xs text-slate-500">Stocks dédiés et tarifs différenciés</span>
+                          <span className="text-xs text-slate-500">Stocks dÃ©diÃ©s et tarifs diffÃ©renciÃ©s</span>
                         </summary>
                         <div className="overflow-x-auto px-4 py-3">
                           {variantsForItem.length === 0 ? (
@@ -1614,7 +1744,7 @@ export default function SponsorDashboard() {
                                   <th className="pb-2 pr-3">SKU</th>
                                   <th className="pb-2 pr-3">Stock</th>
                                   <th className="pb-2 pr-3">Prix</th>
-                                  <th className="pb-2 pr-3">Fenêtre</th>
+                                  <th className="pb-2 pr-3">FenÃªtre</th>
                                   <th className="pb-2">Statut</th>
                                 </tr>
                               </thead>
@@ -1625,21 +1755,21 @@ export default function SponsorDashboard() {
                                       <div className="flex flex-col">
                                         <span>{variant.name}</span>
                                         <span className="text-[10px] uppercase tracking-wider text-slate-500">
-                                          {[variant.size, variant.color].filter(Boolean).join(' · ') || '—'}
+                                          {[variant.size, variant.color].filter(Boolean).join(' Â· ') || 'â€”'}
                                         </span>
                                       </div>
                                     </td>
-                                    <td className="py-2 pr-3">{variant.sku ?? '—'}</td>
+                                    <td className="py-2 pr-3">{variant.sku ?? 'â€”'}</td>
                                     <td className="py-2 pr-3">{variant.stock}</td>
                                     <td className="py-2 pr-3">
                                       {variant.price_cents != null
                                         ? formatRevenue(variant.price_cents, item.currency)
-                                        : '—'}
+                                        : 'â€”'}
                                     </td>
                                     <td className="py-2 pr-3">
                                       {variant.availability_start || variant.availability_end
-                                        ? `${formatDateTime(variant.availability_start)} → ${formatDateTime(variant.availability_end)}`
-                                        : '—'}
+                                        ? `${formatDateTime(variant.availability_start)} â†’ ${formatDateTime(variant.availability_end)}`
+                                        : 'â€”'}
                                     </td>
                                     <td className="py-2 text-slate-200">
                                       {variant.is_active ? 'Active' : 'En pause'}
@@ -1659,7 +1789,7 @@ export default function SponsorDashboard() {
                         </summary>
                         <div className="overflow-x-auto px-4 py-3">
                           {couponsForItem.length === 0 ? (
-                            <p className="text-xs text-slate-500">Aucun code promotionnel configuré.</p>
+                            <p className="text-xs text-slate-500">Aucun code promotionnel configurÃ©.</p>
                           ) : (
                             <table className="min-w-full text-left text-xs text-slate-300">
                               <thead className="text-[11px] uppercase tracking-wider text-slate-500">
@@ -1670,7 +1800,7 @@ export default function SponsorDashboard() {
                                   <th className="pb-2 pr-3">Min.</th>
                                   <th className="pb-2 pr-3">Max</th>
                                   <th className="pb-2 pr-3">Utilisations</th>
-                                  <th className="pb-2 pr-3">Fenêtre</th>
+                                  <th className="pb-2 pr-3">FenÃªtre</th>
                                   <th className="pb-2">Statut</th>
                                 </tr>
                               </thead>
@@ -1685,14 +1815,14 @@ export default function SponsorDashboard() {
                                         : formatRevenue(coupon.discount_value, item.currency)}
                                     </td>
                                     <td className="py-2 pr-3">{coupon.minimum_quantity}</td>
-                                    <td className="py-2 pr-3">{coupon.max_uses ?? '∞'}</td>
+                                    <td className="py-2 pr-3">{coupon.max_uses ?? 'âˆž'}</td>
                                     <td className="py-2 pr-3">{coupon.usage_count}</td>
                                     <td className="py-2 pr-3">
                                       {coupon.starts_at || coupon.expires_at
-                                        ? `${formatDateTime(coupon.starts_at)} → ${formatDateTime(coupon.expires_at)}`
-                                        : '—'}
+                                        ? `${formatDateTime(coupon.starts_at)} â†’ ${formatDateTime(coupon.expires_at)}`
+                                        : 'â€”'}
                                     </td>
-                                    <td className="py-2 text-slate-200">{coupon.is_active ? 'Actif' : 'Archivé'}</td>
+                                    <td className="py-2 text-slate-200">{coupon.is_active ? 'Actif' : 'ArchivÃ©'}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -1716,7 +1846,7 @@ export default function SponsorDashboard() {
                                   <th className="pb-2 pr-3">Nom</th>
                                   <th className="pb-2 pr-3">Prix</th>
                                   <th className="pb-2 pr-3">Produits</th>
-                                  <th className="pb-2 pr-3">Fenêtre</th>
+                                  <th className="pb-2 pr-3">FenÃªtre</th>
                                   <th className="pb-2">Statut</th>
                                 </tr>
                               </thead>
@@ -1729,11 +1859,11 @@ export default function SponsorDashboard() {
                                     <tr key={bundle.id} className="border-t border-slate-800/60">
                                       <td className="py-2 pr-3 text-slate-200">{bundle.name}</td>
                                       <td className="py-2 pr-3">{formatRevenue(bundle.price_cents, bundle.currency)}</td>
-                                      <td className="py-2 pr-3 text-slate-200">{productsLabel || '—'}</td>
+                                      <td className="py-2 pr-3 text-slate-200">{productsLabel || 'â€”'}</td>
                                       <td className="py-2 pr-3">
                                         {bundle.available_from || bundle.available_until
-                                          ? `${formatDateTime(bundle.available_from)} → ${formatDateTime(bundle.available_until)}`
-                                          : '—'}
+                                          ? `${formatDateTime(bundle.available_from)} â†’ ${formatDateTime(bundle.available_until)}`
+                                          : 'â€”'}
                                       </td>
                                       <td className="py-2 text-slate-200">{bundle.is_active ? 'Actif' : 'En pause'}</td>
                                     </tr>
@@ -1760,11 +1890,11 @@ export default function SponsorDashboard() {
                       onClick={() => updateShopItemAvailability(item.id, !item.is_active)}
                       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${
                         item.is_active
-                          ? 'border-emerald-500/60 text-emerald-200 hover:bg-emerald-500/10'
+                          ? 'border-orange-500/60 text-orange-200 hover:bg-orange-500/10'
                           : 'border-slate-600 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
-                      {item.is_active ? 'Mettre en pause' : 'Réactiver'}
+                      {item.is_active ? 'Mettre en pause' : 'RÃ©activer'}
                     </button>
                   </div>
                   </div>
@@ -1781,12 +1911,12 @@ export default function SponsorDashboard() {
     <div className="space-y-8">
       {!permissions.canManageApiKeys ? (
         <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-slate-300">
-          Les clés API sont réservées aux partenaires Enterprise.
+          Les clÃ©s API sont rÃ©servÃ©es aux partenaires Enterprise.
         </div>
       ) : (
         <>
           <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-white">Générer une nouvelle clé</h3>
+            <h3 className="text-lg font-semibold text-white">GÃ©nÃ©rer une nouvelle clÃ©</h3>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="flex flex-col text-sm text-slate-300">
                 Nom interne
@@ -1798,7 +1928,7 @@ export default function SponsorDashboard() {
                 />
               </label>
               <fieldset className="flex flex-col gap-2 text-sm text-slate-300">
-                <legend className="font-medium text-slate-200">Scopes autorisés</legend>
+                <legend className="font-medium text-slate-200">Scopes autorisÃ©s</legend>
                 {availableScopes.map((scope) => {
                   const checked = apiKeyScopes.includes(scope.id);
                   return (
@@ -1811,7 +1941,7 @@ export default function SponsorDashboard() {
                             checked ? current.filter((value) => value !== scope.id) : [...current, scope.id],
                           );
                         }}
-                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-sky-400 focus:ring-sky-500"
+                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-orange-400 focus:ring-orange-500"
                       />
                       {scope.label}
                     </label>
@@ -1824,20 +1954,20 @@ export default function SponsorDashboard() {
                 type="button"
                 onClick={handleCreateApiKey}
                 disabled={isCreatingKey || apiKeyName.trim().length === 0 || apiKeyScopes.length === 0}
-                className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-200 hover:bg-sky-500/10 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 px-4 py-2 text-sm text-orange-200 hover:bg-orange-500/10 disabled:opacity-50"
               >
                 {isCreatingKey ? (
                   <>
                     <RefreshCw size={16} className="animate-spin" />
-                    Création...
+                    CrÃ©ation...
                   </>
                 ) : (
-                  'Créer une clé'
+                  'CrÃ©er une clÃ©'
                 )}
               </button>
               {createdKey && (
-                <span className="text-xs text-emerald-300">
-                  Copie la clé en lieu sûr : <code className="font-mono text-emerald-200">{createdKey}</code>
+                <span className="text-xs text-orange-300">
+                  Copie la clÃ© en lieu sÃ»r : <code className="font-mono text-orange-200">{createdKey}</code>
                 </span>
               )}
             </div>
@@ -1845,35 +1975,35 @@ export default function SponsorDashboard() {
 
           <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70">
             <div className="border-b border-slate-700/60 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">Clés existantes</h3>
-              <span className="text-xs uppercase tracking-widest text-slate-500">{apiKeys.length} clé(s)</span>
+              <h3 className="text-lg font-semibold text-white">ClÃ©s existantes</h3>
+              <span className="text-xs uppercase tracking-widest text-slate-500">{apiKeys.length} clÃ©(s)</span>
             </div>
             <ul className="divide-y divide-slate-800/80">
               {apiKeys.length === 0 ? (
-                <li className="px-6 py-6 text-sm text-slate-300">Aucune clé active.</li>
+                <li className="px-6 py-6 text-sm text-slate-300">Aucune clÃ© active.</li>
               ) : (
                 apiKeys.map((apiKey) => (
                   <li key={apiKey.id} className="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                       <p className="text-sm text-slate-200 font-medium">{apiKey.name}</p>
                       <p className="text-xs text-slate-500">
-                        Préfixe : {apiKey.key_prefix}•••• · Scopes : {apiKey.scopes.join(', ') || 'aucun'}
+                        PrÃ©fixe : {apiKey.key_prefix}â€¢â€¢â€¢â€¢ Â· Scopes : {apiKey.scopes.join(', ') || 'aucun'}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`text-xs uppercase tracking-widest ${
-                        apiKey.status === 'active' ? 'text-emerald-300' : 'text-slate-500'
+                        apiKey.status === 'active' ? 'text-orange-300' : 'text-slate-500'
                       }`}
                       >
-                        {apiKey.status === 'active' ? 'active' : 'révoquée'}
+                        {apiKey.status === 'active' ? 'active' : 'rÃ©voquÃ©e'}
                       </span>
                       {apiKey.status === 'active' && (
                         <button
                           type="button"
                           onClick={() => revokeApiKey(apiKey.id)}
-                          className="inline-flex items-center gap-1 rounded-full border border-rose-500/60 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10"
+                          className="inline-flex items-center gap-1 rounded-full border border-orange-500/60 px-3 py-1 text-xs text-orange-200 hover:bg-orange-500/10"
                         >
-                          <X size={14} /> Révoquer
+                          <X size={14} /> RÃ©voquer
                         </button>
                       )}
                     </div>
@@ -1890,9 +2020,9 @@ export default function SponsorDashboard() {
   if (!isSponsorAccount) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-16 text-center text-slate-200">
-        <h2 className="text-3xl font-semibold mb-4">Accès sponsor requis</h2>
+        <h2 className="text-3xl font-semibold mb-4">AccÃ¨s sponsor requis</h2>
         <p className="text-slate-400">
-          Connecte-toi avec un compte sponsor pour accéder au cockpit de pilotage des campagnes.
+          Connecte-toi avec un compte sponsor pour accÃ©der au cockpit de pilotage des campagnes.
         </p>
       </div>
     );
@@ -1918,7 +2048,7 @@ export default function SponsorDashboard() {
           </div>
 
         {error && (
-          <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 px-6 py-4 text-rose-200 text-sm">
+          <div className="rounded-2xl border border-orange-500/40 bg-orange-950/40 px-6 py-4 text-orange-100 text-sm">
             {error}
           </div>
         )}
@@ -1934,7 +2064,7 @@ export default function SponsorDashboard() {
                 onClick={() => setActiveView(view.id)}
                 className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition ${
                   isActive
-                    ? 'border-sky-500/80 bg-sky-500/10 text-sky-100 shadow-[0_0_20px_rgba(14,165,233,0.25)]'
+                    ? 'border-orange-500/80 bg-orange-500/10 text-orange-100 shadow-[0_0_20px_rgba(255,140,0,0.25)]'
                     : 'border-slate-700/60 text-slate-300 hover:border-slate-500 hover:text-white'
                 }`}
               >
@@ -1964,8 +2094,8 @@ export default function SponsorDashboard() {
               />
             )}
             {activeView === 'opportunities' && <SponsorOpportunitiesView />}
+
             {activeView === 'spotlights' && renderSpotlights()}
-            {activeView === 'shop' && renderShop()}
             {activeView === 'api-keys' && renderApiKeys()}
           </div>
         </div>
@@ -1989,3 +2119,6 @@ export default function SponsorDashboard() {
     </div>
   );
 }
+
+
+

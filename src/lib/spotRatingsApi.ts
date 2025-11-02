@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { upsertSpotRating } from './edgeSpotRatingFixed';
 import { isColumnMissingError } from './supabaseErrors.js';
 import type { SpotRating } from '../types/index.js';
 
@@ -39,6 +40,7 @@ const COLUMN_FALLBACKS: ColumnFallback[] = [
 ];
 
 let cachedCommentColumn: SpotRatingsColumn | null = null;
+const LOCAL_API = (import.meta as any)?.env?.VITE_LOCAL_BACKEND_URL as string | undefined;
 
 function getColumnCandidates(): ColumnFallback[] {
   if (!cachedCommentColumn) {
@@ -94,6 +96,25 @@ export async function fetchSpotRatingsPage(
   spotId: string,
   range: FetchSpotRatingsRange,
 ): Promise<FetchSpotRatingsResult> {
+  if (LOCAL_API && typeof LOCAL_API === 'string' && LOCAL_API.trim().length > 0) {
+    const base = LOCAL_API.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/spot_ratings?spot_id=${encodeURIComponent(spotId)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Local ratings fetch failed (${res.status})`);
+    const json = await res.json();
+    const items: any[] = Array.isArray(json?.items) ? json.items : [];
+    const total: number = Number(json?.stats?.count ?? items.length);
+    const sliced = items.slice(range.from, range.to + 1);
+    const ratings: SpotRating[] = sliced.map((r: any) => ({
+      id: `${r.spot_id}:${r.user_id}`,
+      spot_id: String(r.spot_id),
+      user_id: String(r.user_id),
+      rating: Number(r.rating) || 0,
+      comment: (r.comment ?? null) as string | null,
+      created_at: String(r.created_at ?? new Date().toISOString()),
+      updated_at: String(r.updated_at ?? new Date().toISOString()),
+    }));
+    return { ratings, total };
+  }
   return withCommentColumn(async (fallback) => {
     const { data, error, count } = await supabase
       .from('spot_ratings')
@@ -120,6 +141,24 @@ export async function fetchSpotRatingsPage(
 }
 
 export async function fetchUserSpotRating(spotId: string, userId: string): Promise<SpotRating | null> {
+  if (LOCAL_API && typeof LOCAL_API === 'string' && LOCAL_API.trim().length > 0) {
+    const base = LOCAL_API.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/spot_ratings?spot_id=${encodeURIComponent(spotId)}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const items: any[] = Array.isArray(json?.items) ? json.items : [];
+    const row = items.find((r) => String(r.user_id) === String(userId));
+    if (!row) return null;
+    return {
+      id: `${row.spot_id}:${row.user_id}`,
+      spot_id: String(row.spot_id),
+      user_id: String(row.user_id),
+      rating: Number(row.rating) || 0,
+      comment: (row.comment ?? null) as string | null,
+      created_at: String(row.created_at ?? new Date().toISOString()),
+      updated_at: String(row.updated_at ?? new Date().toISOString()),
+    } as SpotRating;
+  }
   return withCommentColumn(async (fallback) => {
     const { data, error } = await supabase
       .from('spot_ratings')
@@ -155,27 +194,8 @@ export async function saveSpotRating({
   comment,
   existingRatingId,
 }: SaveSpotRatingInput): Promise<void> {
-  await withCommentColumn(async (fallback) => {
-    const payload: Record<string, unknown> = {
-      spot_id: spotId,
-      user_id: userId,
-      rating,
-    };
-
-    payload[fallback.column] = comment;
-
-    if (existingRatingId) {
-      payload.id = existingRatingId;
-    }
-
-    const { error } = await supabase
-      .from('spot_ratings')
-      .upsert(payload, { onConflict: 'spot_id,user_id' });
-
-    if (error) {
-      throw error;
-    }
-  });
+  // Basculé vers Edge Function: relaie le JWT + RLS
+  await upsertSpotRating(spotId, rating, comment ?? undefined);
 }
 
 export async function deleteSpotRating(id: string): Promise<void> {

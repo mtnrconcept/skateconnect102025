@@ -199,17 +199,27 @@ export default function SpotDetailModal({ spot, onClose, onRequestRoute }: SpotD
 
   const loadSpotMedia = async () => {
     try {
-      const { data, error } = await supabase
-        .from('spot_media')
-        .select('*, user:profiles(*)')
-        .eq('spot_id', spot.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const cover = data?.find(m => m.is_cover_photo) || data?.[0] || null;
-      setCoverPhoto(cover);
-      setMedia(data || []);
+      const LOCAL_API = (import.meta as any)?.env?.VITE_LOCAL_BACKEND_URL as string | undefined;
+      if (LOCAL_API && typeof LOCAL_API === 'string' && LOCAL_API.trim().length > 0) {
+        const res = await fetch(`${LOCAL_API.replace(/\/$/, '')}/api/spot_media?spot_id=${encodeURIComponent(spot.id)}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Local media fetch failed (${res.status})`);
+        const json = await res.json();
+        const items = Array.isArray(json?.items) ? json.items : [];
+        const mapped = items.map((m: any) => ({ id: String(m.id), spot_id: String(m.spot_id), user_id: currentUser?.id ?? '', media_url: String(m.media_url), media_type: (m.media_type === 'video' ? 'video' : 'photo') as any, caption: '', is_cover_photo: !!m.is_cover_photo, likes_count: 0, views_count: 0, comments_count: 0, created_at: m.created_at ?? new Date().toISOString(), updated_at: m.created_at ?? new Date().toISOString(), user: undefined }));
+        const cover = mapped.find(m => m.is_cover_photo) || mapped[0] || null;
+        setCoverPhoto(cover);
+        setMedia(mapped);
+      } else {
+        const { data, error } = await supabase
+          .from('spot_media')
+          .select('*, user:profiles(*)')
+          .eq('spot_id', spot.id)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        const cover = data?.find(m => m.is_cover_photo) || data?.[0] || null;
+        setCoverPhoto(cover);
+        setMedia(data || []);
+      }
     } catch (error) {
       console.error('Error loading spot media:', error);
     } finally {
@@ -224,12 +234,21 @@ export default function SpotDetailModal({ spot, onClose, onRequestRoute }: SpotD
     }
 
     try {
-      const { error } = await supabase.rpc('set_spot_cover_photo', {
-        p_spot_id: spot.id,
-        p_media_id: mediaItem.id,
-      });
-
-      if (error) throw error;
+      const LOCAL_API = (import.meta as any)?.env?.VITE_LOCAL_BACKEND_URL as string | undefined;
+      if (LOCAL_API && typeof LOCAL_API === 'string' && LOCAL_API.trim().length > 0) {
+        const res = await fetch(`${LOCAL_API.replace(/\/$/, '')}/api/spots/${encodeURIComponent(spot.id)}/cover`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ media_id: mediaItem.id })
+        });
+        if (!res.ok) throw new Error(`Local cover set failed (${res.status})`);
+      } else {
+        const { error } = await supabase.rpc('set_spot_cover_photo', {
+          p_spot_id: spot.id,
+          p_media_id: mediaItem.id,
+        });
+        if (error) throw error;
+      }
 
       setCoverPhoto({ ...mediaItem, is_cover_photo: true });
       setMedia(prev =>
@@ -601,15 +620,30 @@ export default function SpotDetailModal({ spot, onClose, onRequestRoute }: SpotD
                       const file = files[i];
                       const result = await uploadFile('spots', file, `${spot.id}/${currentUser.id}`);
 
-                      const { error: insertError } = await supabase.from('spot_media').insert({
-                        spot_id: spot.id,
-                        user_id: currentUser.id,
-                        media_url: result.url,
-                        media_type: file.type.startsWith('video') ? 'video' : 'photo',
-                      });
-
-                      if (insertError) throw insertError;
-                    }
+                      const LOCAL_API = (import.meta as any)?.env?.VITE_LOCAL_BACKEND_URL as string | undefined;
+                      if (LOCAL_API && typeof LOCAL_API === 'string' && LOCAL_API.trim().length > 0) {
+                        const res = await fetch(`${LOCAL_API.replace(/\/$/, '')}/api/spot_media`, {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: JSON.stringify({
+                            spot_id: spot.id,
+                            media_url: result.url,
+                            media_type: file.type.startsWith('video') ? 'video' : 'photo',
+                            is_cover_photo: false,
+                          })
+                        });
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({}));
+                          throw new Error(err?.error || `Local media insert failed (${res.status})`);
+                        }
+                      } else {                        const { error: insertError } = await supabase.from('spot_media').insert({
+                          spot_id: spot.id,
+                          user_id: currentUser.id,
+                          media_url: result.url,
+                          media_type: file.type.startsWith('video') ? 'video' : 'photo',
+                        });
+                        if (insertError) throw insertError;
+                      }                    }
 
                     loadSpotMedia();
                     setShowGallery(true);
@@ -669,3 +703,7 @@ export default function SpotDetailModal({ spot, onClose, onRequestRoute }: SpotD
     </div>
   );
 }
+
+
+
+

@@ -39,6 +39,8 @@ export default function PostMediaViewer({
   const [currentPostIndex, setCurrentPostIndex] = useState(initialPostIndex);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(initialMediaIndex);
   const [showComments, setShowComments] = useState(true);
+  const [mediaError, setMediaError] = useState(false);
+  const [allowVideo, setAllowVideo] = useState(true);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -50,7 +52,11 @@ export default function PostMediaViewer({
   useEffect(() => {
     setCurrentPostIndex(initialPostIndex);
     setCurrentMediaIndex(initialMediaIndex);
+    setMediaError(false);
+    setAllowVideo(true);
   }, [initialPostIndex, initialMediaIndex]);
+
+  
 
   useEffect(() => {
     if (currentPostIndex >= posts.length) {
@@ -63,6 +69,34 @@ export default function PostMediaViewer({
   const currentMediaUrl = currentPost?.media_urls?.[currentMediaIndex] || '';
   const currentMediaIsVideo = currentMediaUrl ? isVideoUrl(currentMediaUrl) : currentPost?.post_type === 'video';
   const postAuthor = currentPost?.user || fallbackUser;
+
+
+  // Preflight check for video URLs to avoid 416 logs from media element
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentMediaUrl) return;
+    if (!currentMediaIsVideo) {
+      setAllowVideo(true);
+      return;
+    }
+    setAllowVideo(false);
+    setMediaError(false);
+    fetch(currentMediaUrl, { method: 'GET', headers: { Range: 'bytes=0-1' }, cache: 'no-store' })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok || res.status === 206) {
+          setAllowVideo(true);
+        } else {
+          setMediaError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMediaError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentMediaUrl, currentMediaIsVideo]);
   const authorId = postAuthor?.id || currentPost?.user_id;
   const isFakePost = Boolean((currentPost as Post & { isFake?: boolean })?.isFake);
 
@@ -123,25 +157,31 @@ export default function PostMediaViewer({
         </button>
 
         <div className="relative flex-1 bg-black flex items-center justify-center">
-          {currentMediaUrl ? (
+          {currentMediaUrl && !mediaError ? (
             currentMediaIsVideo ? (
-              <video
-                key={currentMediaUrl}
-                src={currentMediaUrl}
-                controls
-                autoPlay
-                playsInline
-                className="max-h-full max-w-full object-contain"
-              />
+              allowVideo ? (
+                <video
+                  key={currentMediaUrl}
+                  src={currentMediaUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  onError={() => setMediaError(true)}
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <div className="text-gray-400">MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dia indisponible</div>
+              )
             ) : (
               <img
                 src={currentMediaUrl}
                 alt={currentPost.content || 'Story media'}
+                onError={() => setMediaError(true)}
                 className="max-h-full max-w-full object-contain"
               />
             )
           ) : (
-            <div className="text-gray-400">Aucun média disponible</div>
+            <div className="text-gray-400">Aucun mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©dia disponible</div>
           )}
 
           {(posts.length > 1 || (currentPost.media_urls?.length || 0) > 1) && (
@@ -184,8 +224,7 @@ export default function PostMediaViewer({
                   type="button"
                   onClick={handleAuthorClick}
                   className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-                  aria-label={`Voir le profil de ${getUserDisplayName(postAuthor)}`}
-                >
+                  aria-label={`Voir le profil de ${getUserDisplayName(postAuthor)}`}>
                   {postAuthor?.avatar_url ? (
                     <img
                       src={postAuthor.avatar_url}
@@ -209,6 +248,7 @@ export default function PostMediaViewer({
                   {getUserInitial(postAuthor)}
                 </div>
               )}
+
               <div className="flex-1">
                 {onProfileClick && authorId ? (
                   <button
@@ -265,7 +305,7 @@ export default function PostMediaViewer({
             ) : (
               <div className="text-center text-gray-500 text-sm">
                 <MessageCircle className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                <p>Ouvrez les commentaires pour participer à la discussion</p>
+                <p>Ouvrez les commentaires pour participer ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â  la discussion</p>
               </div>
             )}
           </div>
@@ -274,3 +314,5 @@ export default function PostMediaViewer({
     </div>
   );
 }
+
+

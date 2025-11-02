@@ -338,7 +338,7 @@ export default function SponsorPlanner({
                           </label>
                           <select
                             id={`status-${item.id}`}
-                            className="rounded-md border border-slate-700/70 bg-slate-950/70 px-2 py-1 text-[11px] text-slate-200 focus:border-sky-500 focus:outline-none"
+                            className="rounded-md border border-slate-700/70 bg-slate-950/70 px-2 py-1 text-[11px] text-slate-200 focus:border-orange-500 focus:outline-none"
                             value={item.status}
                             disabled={statusPending}
                             onChange={(event) =>
@@ -354,7 +354,7 @@ export default function SponsorPlanner({
                           {canAssignSelf && (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-700/70 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200 hover:border-sky-500 hover:text-sky-200"
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-700/70 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200 hover:border-orange-500 hover:text-orange-200"
                               onClick={() => void handleAssign(item, currentUserId)}
                               disabled={ownerPending || item.owner_id === currentUserId}
                             >
@@ -365,7 +365,7 @@ export default function SponsorPlanner({
                           {onOwnerChange && item.owner_id && (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-rose-800/70 bg-rose-950/60 px-2 py-1 text-[11px] text-rose-200 hover:border-rose-600"
+                              className="inline-flex items-center gap-1 rounded-md border border-orange-800/70 bg-orange-950/60 px-2 py-1 text-[11px] text-orange-200 hover:border-orange-600"
                               onClick={() => void handleAssign(item, null)}
                               disabled={ownerPending}
                             >
@@ -403,7 +403,7 @@ export default function SponsorPlanner({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="rounded-lg border border-slate-700/60 bg-slate-900/70 p-2 text-slate-300 hover:border-sky-500 hover:text-sky-200"
+            className="rounded-lg border border-slate-700/60 bg-slate-900/70 p-2 text-slate-300 hover:border-orange-500 hover:text-orange-200"
             onClick={() =>
               setCurrentMonth((previous) =>
                 new Date(previous.getFullYear(), previous.getMonth() - 1, 1),
@@ -414,7 +414,7 @@ export default function SponsorPlanner({
           </button>
           <button
             type="button"
-            className="rounded-lg border border-slate-700/60 bg-slate-900/70 p-2 text-slate-300 hover:border-sky-500 hover:text-sky-200"
+            className="rounded-lg border border-slate-700/60 bg-slate-900/70 p-2 text-slate-300 hover:border-orange-500 hover:text-orange-200"
             onClick={() =>
               setCurrentMonth((previous) =>
                 new Date(previous.getFullYear(), previous.getMonth() + 1, 1),
@@ -441,10 +441,10 @@ export default function SponsorPlanner({
                 inMonth
                   ? 'border-slate-800/70 bg-slate-950/60'
                   : 'border-slate-900/40 bg-slate-950/40 text-slate-600'
-              } ${isToday ? 'border-sky-500/60' : ''}`}
+              } ${isToday ? 'border-orange-500/60' : ''}`}
             >
               <div className="flex items-center justify-between">
-                <span className={`text-sm font-semibold ${isToday ? 'text-sky-200' : 'text-slate-300'}`}>
+                <span className={`text-sm font-semibold ${isToday ? 'text-orange-200' : 'text-slate-300'}`}>
                   {dayFormatter.format(date)}
                 </span>
                 {itemsForDay.length > 0 && (
@@ -509,7 +509,7 @@ export default function SponsorPlanner({
           <button
             type="button"
             className={`flex items-center gap-2 rounded-md px-3 py-1 transition ${
-              viewMode === 'board' ? 'bg-slate-800/80 text-slate-100' : 'hover:text-sky-200'
+              viewMode === 'board' ? 'bg-slate-800/80 text-slate-100' : 'hover:text-orange-200'
             }`}
             onClick={() => setViewMode('board')}
           >
@@ -519,7 +519,7 @@ export default function SponsorPlanner({
           <button
             type="button"
             className={`flex items-center gap-2 rounded-md px-3 py-1 transition ${
-              viewMode === 'calendar' ? 'bg-slate-800/80 text-slate-100' : 'hover:text-sky-200'
+              viewMode === 'calendar' ? 'bg-slate-800/80 text-slate-100' : 'hover:text-orange-200'
             }`}
             onClick={() => setViewMode('calendar')}
           >

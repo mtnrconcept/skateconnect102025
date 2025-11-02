@@ -6,7 +6,7 @@ import {
 } from './supabase.js';
 import { isNative, capturePhoto, pickPhoto } from './capacitor';
 
-export type StorageBucket = 'avatars' | 'covers' | 'posts' | 'spots' | 'challenges' | 'messages' | 'sponsors';
+export type StorageBucket = 'avatars' | 'covers' | 'posts' | 'spots' | 'challenges' | 'messages' | 'sponsors' | 'marketplace';
 
 export interface UploadResult {
   url: string;
@@ -181,7 +181,8 @@ const storeFallbackFile = async (
   revokeFallbackUrl(existing);
 
   const now = new Date().toISOString();
-  const url = await createFallbackUrl(blob);
+  // Use a data URL for persistence across reloads (avoid ephemeral blob: URLs)
+  const url = await readBlobAsDataUrl(blob);
   const entry: FallbackStoredFile = {
     id: path,
     name,

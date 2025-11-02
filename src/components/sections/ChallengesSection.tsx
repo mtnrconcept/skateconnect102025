@@ -10,6 +10,10 @@ import { getFallbackChallenges } from '../../data/challengesCatalog';
 import ChallengeDetailModal from '../challenges/ChallengeDetailModal';
 import { fetchSubmissionHistory, fetchChallengeWinners } from '../../lib/challenges';
 import type { Challenge, ChallengeSubmission, ContentNavigationOptions, Profile } from '../../types';
+import Lobby from '../skate/Lobby';
+import MatchRoomLive from '../skate/MatchRoomLive';
+import MatchRoomRemote from '../skate/MatchRoomRemote';
+import { createMatch } from '../../lib/skate';
 
 interface ChallengesSectionProps {
   profile: Profile | null;
@@ -20,7 +24,7 @@ interface ChallengesSectionProps {
 export default function ChallengesSection({ profile, focusConfig, onFocusHandled }: ChallengesSectionProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [filter, setFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState<'daily' | 'community'>('daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'community' | 'skate'>('daily');
   const [loading, setLoading] = useState(true);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, { message: string; tone: 'success' | 'info' }>>({});
@@ -34,6 +38,8 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   const [completedError, setCompletedError] = useState<string | null>(null);
   const [winnersByChallenge, setWinnersByChallenge] = useState<Record<string, ChallengeSubmission[]>>({});
   const lastFocusedIdRef = useRef<string | null>(null);
+  const [skateMatchId, setSkateMatchId] = useState<string | null>(null);
+  const [skateMode, setSkateMode] = useState<'live' | 'remote' | null>(null);
 
   useEffect(() => {
     loadChallenges();
@@ -357,12 +363,26 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
             <Trophy size={20} />
             <span>Challenges Communautaires</span>
           </button>
+          <button
+            onClick={() => setActiveTab('skate')}
+            id="challenge-tab-skate"
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === 'skate'
+                ? 'bg-orange-500 text-white'
+                : 'bg-dark-700 text-gray-400 hover:bg-dark-600'
+            }`}
+          >
+            <Users size={20} />
+            <span>Game of S.K.A.T.E</span>
+          </button>
         </div>
       </div>
 
-      {activeTab === 'daily' ? (
+      {activeTab === 'daily' && (
         <DailyChallenges profile={profile} />
-      ) : (
+      )}
+
+      {activeTab === 'community' && (
         <div>
           <div className="mb-6 bg-dark-800 rounded-xl border border-dark-700 p-4">
             <div className="flex flex-wrap gap-2 overflow-x-auto pb-2">
@@ -607,6 +627,79 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
                 />
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'skate' && (
+        <div className="space-y-6" id="skate-mode-panel">
+          {!skateMatchId && (
+          <>
+          <div className="bg-dark-800 rounded-xl border border-dark-700 p-6">
+            <h3 className="text-2xl font-semibold text-white mb-2">Game of S.K.A.T.E</h3>
+            <p className="text-gray-300">Affronte un rider en live (synchrone) ou à distance (asynchrone 24h). Réussis les tricks proposés pour éviter les lettres. Le premier à former <span className="font-bold">S.K.A.T.E</span> perd.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-dark-800 rounded-xl border border-dark-700 p-6">
+              <h4 className="text-white font-semibold mb-2">Live (traditionnel)</h4>
+              <ul className="list-disc list-inside text-gray-300 space-y-1 mb-4">
+                <li>Lobby temps réel et room live.</li>
+                <li>Tour A: proposer un trick en direct.</li>
+                <li>Réponse B immédiate. Échec ⇒ lettre.</li>
+              </ul>
+              <button
+                className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 font-semibold"
+                onClick={() => {
+                  const el = document.getElementById('skate-lobby-anchor');
+                  el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              >
+                Entrer dans le lobby
+              </button>
+            </div>
+            <div className="bg-dark-800 rounded-xl border border-dark-700 p-6">
+              <h4 className="text-white font-semibold mb-2">Remote (asynchrone 24h)</h4>
+              <ul className="list-disc list-inside text-gray-300 space-y-1 mb-4">
+                <li>Poste ta vidéo; rival a 24h pour répondre.</li>
+                <li>Absence de réponse valide ⇒ lettre auto.</li>
+                <li>Vérifications d’intégrité et anti-triche de base.</li>
+              </ul>
+              <button
+                className="px-4 py-2 rounded-lg border border-dark-600 text-white hover:bg-dark-700 font-semibold"
+                onClick={() => alert('Création de match remote: à venir')}
+              >
+                Créer un match remote
+              </button>
+            </div>
+          </div>
+
+          <div id="skate-lobby-anchor" className="bg-dark-800 rounded-xl border border-dark-700 p-6">
+            <h4 className="text-white font-semibold mb-2">Lobby</h4>
+            <p className="text-gray-400 mb-4">Matchmaking automatique ou défi direct via profil.</p>
+            <Lobby
+              currentUserId={profile?.id}
+              onCreateMatch={async (opponentId, mode) => {
+                if (!profile?.id) return alert('Connecte-toi pour créer un match');
+                try {
+                  const created = await createMatch({ mode, opponent_id: opponentId }, profile.id);
+                  setSkateMatchId(created.id);
+                  setSkateMode(mode);
+                } catch (e) {
+                  console.error(e);
+                  alert('Impossible de créer le match');
+                }
+              }}
+            />
+          </div>
+          </>
+          )}
+
+          {skateMatchId && skateMode === 'live' && (
+            <MatchRoomLive matchId={skateMatchId} profile={profile} />
+          )}
+          {skateMatchId && skateMode === 'remote' && (
+            <MatchRoomRemote matchId={skateMatchId} />
           )}
         </div>
       )}

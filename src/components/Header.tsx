@@ -5,13 +5,13 @@ import {
   Bell,
   Mail,
   LogOut,
-  Settings,
   CalendarDays,
   Trophy,
   MapPin,
   User as UserIcon,
   Hash,
 } from 'lucide-react';
+import { Video } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { clearPersistedSession } from '../lib/authPersistence';
 import { getUnreadCount } from '../lib/notifications';
@@ -22,6 +22,7 @@ import { eventsCatalog } from '../data/eventsCatalog';
 import { createFallbackChallenges, createFallbackDailyChallenges } from '../data/challengesCatalog';
 import { settingsCategories, quickSettingsLinks } from '../data/settingsCatalog';
 import type { Profile, Section, ContentNavigationOptions } from '../types';
+import type { GlobalSearchResult } from '../types/search';
 import type { LucideIcon } from 'lucide-react';
 import {
   searchContent,
@@ -57,13 +58,13 @@ export default function Header({
   onSectionChange,
   onNavigateToContent,
   onSearchFocusChange,
-  onSearchSubmit,
+  onSearchSubmit: _onSearchSubmit,
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [dynamicResults, setDynamicResults] = useState<SearchResult[]>([]);
+  const [dynamicResults, setDynamicResults] = useState<HeaderSearchResult[]>([]);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const isSearchActive = isInputFocused || showSearchResults;
@@ -101,8 +102,8 @@ export default function Header({
     window.location.reload();
   };
 
-  const staticResults = useMemo<SearchResult[]>(() => {
-    const navigationResults: SearchResult[] = searchableNavigationItems.map((item) => ({
+  const staticResults = useMemo<HeaderSearchResult[]>(() => {
+    const navigationResults: HeaderSearchResult[] = searchableNavigationItems.map((item) => ({
       key: `nav-${item.id}`,
       label: item.label,
       category: item.category,
@@ -178,7 +179,7 @@ export default function Header({
     ]);
   }, []);
 
-  const mapSearchItemToResult = useCallback((item: SearchResultItem): SearchResult => {
+  const mapSearchItemToResult = useCallback((item: SearchResultItem): HeaderSearchResult => {
     const meta = dynamicCategoryMap[item.category];
     const descriptionParts: string[] = [];
     if (item.description) {
@@ -233,9 +234,9 @@ export default function Header({
 
   const combinedResults = useMemo(() => {
     const seen = new Set<string>();
-    const items: SearchResult[] = [];
+    const items: HeaderSearchResult[] = [];
 
-    const append = (source: SearchResult[]) => {
+    const append = (source: HeaderSearchResult[]) => {
       source.forEach((item) => {
         if (seen.has(item.key)) {
           return;
@@ -366,28 +367,170 @@ export default function Header({
 
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 border-b border-dark-700/80 bg-[#0e0e12]/95 backdrop-blur">
-      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-4 px-4 py-3 lg:gap-6 lg:px-8">
-        <div className="shrink-0">
-          <div className="flex items-center gap-3 rounded-2xl border border-dark-700/80 bg-[#121219]/90 px-4 py-2">
-            <img src="/logo2.png" className="neon-logo h-12 w-auto object-contain" />
-          </div>
+    <header className="fixed top-0 left-0 right-0 z-40 relative">
+      {/* Background image with progressive fade */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div
+          className="h-[220px] md:h-[280px] lg:h-[320px] w-full bg-cover bg-top"
+          style={{ backgroundImage: 'url("/head%202.jpg")' }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-[#0e0e12]/40 to-[#0e0e12]" />
+      </div>
+
+      {/* Header height container */}
+      <div className="relative h-[300px] md:h-[330px] lg:h-[350px]">
+        {/* Centered logo without frame */}
+        <div className="px-6 lg:px-8 pt-8 md:pt-8 h-full flex items-start justify-center relative z-20 pointer-events-none">
+          <img src="/logo2.png" alt="Shredloc" className="neon-logo h-24 md:h-56 lg:h-64 w-auto object-contain relative z-20 drop-shadow-[0_8px_24px_rgba(0,0,0,0.6)] pointer-events-auto" />
         </div>
 
+        {/* Bottom row: menu and utilities, anchored to bottom with slight transparency */}
+        <div className="absolute inset-x-0 bottom-0 px-0 pb-0">
+          <div className="relative z-30 w-full rounded-none border-t border-dark-700/60 bg-[#0e0e12]/70 backdrop-blur-sm">
+            {onSectionChange && (
+              <nav className="hidden md:flex items-center justify-between gap-4 px-4 lg:px-8 py-2">
+                <div className="flex-1 flex items-center justify-start">
+                  <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar xl:gap-3">
+                    {primaryNavigationItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = currentSection === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => navigateToSection(item.id)}
+                          className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all shadow-sm ${
+                            isActive
+                              ? 'border-orange-400 bg-orange-500 text-white shadow-orange-500/30'
+                              : 'border-dark-700/50 bg-[#181821]/80 text-gray-300 hover:border-orange-500/50 hover:bg-[#1f1f29]/80 hover:text-white'
+                          }`}
+                        >
+                          <Icon size={18} />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div ref={searchContainerRef} className="hidden lg:flex items-center min-w-[320px] max-w-[460px]">
+                  <form onSubmit={handleSearchSubmit} className="relative w-full">
+                    <Search className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${isSearchActive ? 'text-orange-400' : 'text-gray-500'}`} size={20} />
+                    <input
+                      type="search"
+                      value={searchTerm}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setSearchTerm(value);
+                        setShowSearchResults(value.trim().length > 0);
+                      }}
+                      onFocus={() => {
+                        setShowSearchResults(true);
+                        setIsInputFocused(true);
+                      }}
+                      onBlur={() => {
+                        window.setTimeout(() => {
+                          setIsInputFocused(false);
+                        }, 120);
+                      }}
+                      placeholder="Rechercher un rider, un dǸfi, un spot..."
+                      className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${
+                        isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
+                      }`}
+                    />
+                    {showSearchResults && filteredResults.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
+                        <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
+                          {filteredResults.length} rǸsultat{filteredResults.length > 1 ? 's' : ''}
+                        </div>
+                        {displayedResults.map((result) => {
+                          const IconResult = result.icon ?? Search;
+                          return (
+                            <button
+                              key={result.key}
+                              type="button"
+                              onClick={() => handleResultSelect(result)}
+                              className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-gray-200 transition-colors hover:bg-dark-700/80"
+                            >
+                              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1f1f29] text-orange-400">
+                                <IconResult size={18} />
+                              </span>
+                              <div className="flex flex-col">
+                                <span className="font-medium text-white">{renderHighlightedText(result.label)}</span>
+                                <span className="text-xs text-gray-500">{renderHighlightedText(result.description ? `${result.category} �?� ${result.description}` : result.category)}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                        {hasSearchTerm && (
+                          <div className="border-t border-dark-700/80 bg-[#101018] px-3 py-2">
+                            <button type="button" onClick={handleViewMore} className="w-full rounded-xl bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20">
+                              Voir plus de rǸsultats
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {showSearchResults && filteredResults.length === 0 && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
+                        Aucun rǸsultat pour �� {searchTerm} ��
+                      </div>
+                    )}
+                  </form>
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-dark-700 rounded-full transition-colors">
+                    <Bell size={20} className="text-gray-400" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-semibold px-1">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                    )}
+                  </button>
+                  <button onClick={() => navigateToSection('messages')} className={`relative p-2 rounded-full transition-colors ${currentSection === 'messages' ? 'bg-orange-500/20 text-orange-400' : 'hover:bg-dark-700'}`} title="Messagerie">
+                    <Mail size={20} className={currentSection === 'messages' ? 'text-orange-400' : 'text-gray-400'} />
+                    {currentSection !== 'messages' && <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>}
+                  </button>
+                  <div className="h-6 w-px bg-dark-700 mx-2"></div>
+                  <div className="flex items-center gap-2">
+                    {profile && (
+                      <div className="hidden sm:flex items-center gap-2">
+                        <button type="button" onClick={() => navigateToSection('profile')} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-full" title="Mon profil">
+                          {profile.avatar_url ? (
+                            <img src={profile.avatar_url} alt={getUserDisplayName(profile)} className="w-10 h-10 rounded-full object-cover border-2 border-transparent hover:border-orange-500 transition-colors" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold border-2 border-orange-500">{getUserInitial(profile)}</div>
+                          )}
+                        </button>
+                        <span className="font-medium text-white">{getUserDisplayName(profile)}</span>
+                      </div>
+                    )}
+                    <button onClick={handleLogout} className="p-2 hover:bg-dark-700 rounded-full transition-colors text-orange-500" title="DǸconnexion">
+                      <LogOut size={20} />
+                    </button>
+                  </div>
+                </div>
+              </nav>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Original search and right controls kept; they render inside nav above */}
+      <div className="hidden">{/* placeholder to keep TSX structure valid */}</div>
+      <div className="px-4 lg:px-8 pb-3 hidden">
         {onSectionChange && (
-          <nav className="hidden min-w-0 md:flex items-center">
-            <div className="flex w-full items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar xl:gap-3">
-              <div className="flex shrink-0 items-center gap-2 xl:gap-3">
+          <nav className="hidden md:flex items-center justify-between gap-4">
+            <div className="flex-1 flex items-center justify-center">
+              <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar xl:gap-3">
                 {primaryNavigationItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentSection === item.id;
-
                   return (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => navigateToSection(item.id)}
-                      className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all shadow-sm ${
+                      className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all shadow-sm ${
                         isActive
                           ? 'border-orange-400 bg-orange-500 text-white shadow-orange-500/30'
                           : 'border-dark-700/50 bg-[#181821] text-gray-300 hover:border-orange-500/50 hover:bg-[#1f1f29] hover:text-white'
@@ -399,163 +542,109 @@ export default function Header({
                   );
                 })}
               </div>
+            </div>
 
-              <div
-                ref={searchContainerRef}
-                className="hidden min-w-[260px] flex-1 items-center justify-end lg:flex"
-              >
-                <form
-                  onSubmit={handleSearchSubmit}
-                  className={`relative w-full transition-[max-width] duration-300 ease-out ${
-                    isSearchActive ? 'max-w-[420px]' : 'max-w-[360px]'
+            <div ref={searchContainerRef} className="hidden lg:flex items-center min-w-[320px] max-w-[460px]">
+              <form onSubmit={handleSearchSubmit} className="relative w-full">
+                <Search className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${isSearchActive ? 'text-orange-400' : 'text-gray-500'}`} size={20} />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSearchTerm(value);
+                    setShowSearchResults(value.trim().length > 0);
+                  }}
+                  onFocus={() => {
+                    setShowSearchResults(true);
+                    setIsInputFocused(true);
+                  }}
+                  onBlur={() => {
+                    window.setTimeout(() => {
+                      setIsInputFocused(false);
+                    }, 120);
+                  }}
+                  placeholder="Rechercher un rider, un défi, un spot..."
+                  className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${
+                    isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
                   }`}
-                >
-                  <Search
-                    className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
-                      isSearchActive ? 'text-orange-400' : 'text-gray-500'
-                    }`}
-                    size={20}
-                  />
-                  <input
-                    type="search"
-                    value={searchTerm}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setSearchTerm(value);
-                      setShowSearchResults(value.trim().length > 0);
-                    }}
-                    onFocus={() => {
-                      setShowSearchResults(true);
-                      setIsInputFocused(true);
-                    }}
-                    onBlur={() => {
-                      window.setTimeout(() => {
-                        setIsInputFocused(false);
-                      }, 120);
-                    }}
-                    placeholder="Rechercher un rider, un défi, un spot..."
-                    className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${
-                      isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
-                    }`}
-                  />
-                  {showSearchResults && filteredResults.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
-                      <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
-                        {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
+                />
+                {showSearchResults && filteredResults.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
+                    <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
+                      {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
+                    </div>
+                    {displayedResults.map((result) => {
+                      const IconResult = result.icon ?? Search;
+                      return (
+                        <button
+                          key={result.key}
+                          type="button"
+                          onClick={() => handleResultSelect(result)}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-gray-200 transition-colors hover:bg-dark-700/80"
+                        >
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1f1f29] text-orange-400">
+                            <IconResult size={18} />
+                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-white">{renderHighlightedText(result.label)}</span>
+                            <span className="text-xs text-gray-500">{renderHighlightedText(result.description ? `${result.category} • ${result.description}` : result.category)}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {hasSearchTerm && (
+                      <div className="border-t border-dark-700/80 bg-[#101018] px-3 py-2">
+                        <button type="button" onClick={handleViewMore} className="w-full rounded-xl bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20">
+                          Voir plus de résultats
+                        </button>
                       </div>
-                      {displayedResults.map((result) => {
-                        const IconResult = result.icon ?? Search;
-                        return (
-                          <button
-                            key={result.key}
-                            type="button"
-                            onClick={() => handleResultSelect(result)}
-                            className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-gray-200 transition-colors hover:bg-dark-700/80"
-                          >
-                            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1f1f29] text-orange-400">
-                              <IconResult size={18} />
-                            </span>
-                            <div className="flex flex-col">
-                              <span className="font-medium text-white">{renderHighlightedText(result.label)}</span>
-                              <span className="text-xs text-gray-500">
-                                {renderHighlightedText(result.description ? `${result.category} • ${result.description}` : result.category)}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                      {hasSearchTerm && (
-                        <div className="border-t border-dark-700/80 bg-[#101018] px-3 py-2">
-                          <button
-                            type="button"
-                            onClick={handleViewMore}
-                            className="w-full rounded-xl bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20"
-                          >
-                            Voir plus de résultats
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {showSearchResults && filteredResults.length === 0 && (
-                    <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
-                      Aucun résultat pour « {searchTerm} »
-                    </div>
-                  )}
-                </form>
-              </div>
+                    )}
+                  </div>
+                )}
+                {showSearchResults && filteredResults.length === 0 && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
+                    Aucun résultat pour « {searchTerm} »
+                  </div>
+                )}
+              </form>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => navigateToSection('settings')}
-                className="relative shrink-0 rounded-full p-2 transition-colors hover:bg-[#1f1f29]"
-                title="Paramètres"
-              >
-                <Settings size={20} className="text-gray-400" />
+            <div className="flex items-center gap-2 ml-auto">
+              <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-dark-700 rounded-full transition-colors">
+                <Bell size={20} className="text-gray-400" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-semibold px-1">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                )}
               </button>
+              <button onClick={() => navigateToSection('messages')} className={`relative p-2 rounded-full transition-colors ${currentSection === 'messages' ? 'bg-orange-500/20 text-orange-400' : 'hover:bg-dark-700'}`} title="Messagerie">
+                <Mail size={20} className={currentSection === 'messages' ? 'text-orange-400' : 'text-gray-400'} />
+                {currentSection !== 'messages' && <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>}
+              </button>
+              <button onClick={() => navigate('/skate/live')} className="p-2 hover:bg-dark-700 rounded-full transition-colors" title="SKATE Live">
+                <Video size={20} className="text-gray-400" />
+              </button>
+              <div className="h-6 w-px bg-dark-700 mx-2"></div>
+              <div className="flex items-center gap-2">
+                {profile && (
+                  <div className="hidden sm:flex items-center gap-2">
+                    <button type="button" onClick={() => navigateToSection('profile')} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-full" title="Mon profil">
+                      {profile.avatar_url ? (
+                        <img src={profile.avatar_url} alt={getUserDisplayName(profile)} className="w-10 h-10 rounded-full object-cover border-2 border-transparent hover:border-orange-500 transition-colors" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold border-2 border-orange-500">{getUserInitial(profile)}</div>
+                      )}
+                    </button>
+                    <span className="font-medium text-white">{getUserDisplayName(profile)}</span>
+                  </div>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-dark-700 rounded-full transition-colors text-orange-500" title="Déconnexion">
+                  <LogOut size={20} />
+                </button>
+              </div>
             </div>
           </nav>
         )}
-
-        {/* ACTIONS */}
-        <div className="flex items-center gap-2 ml-auto shrink-0">
-          <button
-            onClick={() => setShowNotifications(true)}
-            className="relative p-2 hover:bg-dark-700 rounded-full transition-colors"
-          >
-            <Bell size={20} className="text-gray-400" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-semibold px-1">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => navigateToSection('messages')}
-            className={`relative p-2 rounded-full transition-colors ${
-              currentSection === 'messages' ? 'bg-orange-500/20 text-orange-400' : 'hover:bg-dark-700'
-            }`}
-            title="Messagerie"
-          >
-            <Mail size={20} className={currentSection === 'messages' ? 'text-orange-400' : 'text-gray-400'} />
-            {currentSection !== 'messages' && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
-            )}
-          </button>
-          <div className="h-6 w-px bg-dark-700 mx-2"></div>
-          <div className="flex items-center gap-2">
-            {profile && (
-              <div className="hidden sm:flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => navigateToSection('profile')}
-                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-full"
-                  title="Mon profil"
-                >
-                  {profile.avatar_url ? (
-                    <img
-                      src={profile.avatar_url}
-                      alt={getUserDisplayName(profile)}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-transparent hover:border-orange-500 transition-colors"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-semibold border-2 border-orange-500">
-                      {getUserInitial(profile)}
-                    </div>
-                  )}
-                </button>
-                <span className="font-medium text-white">{getUserDisplayName(profile)}</span>
-              </div>
-            )}
-            <button
-              onClick={handleLogout}
-              className="p-2 hover:bg-dark-700 rounded-full transition-colors text-orange-500"
-              title="Déconnexion"
-            >
-              <LogOut size={20} />
-            </button>
-          </div>
-        </div>
       </div>
 
       {showNotifications &&
@@ -571,3 +660,4 @@ export default function Header({
     </header>
   );
 }
+

@@ -804,7 +804,7 @@ export default function SponsorPostForm({ sponsorId, mode, initial, onCancel, on
           </div>
         </div>
 
-        {templateError && <p className="text-xs text-red-400">{templateError}</p>}
+        {templateError && <p className="text-xs text-orange-300">{templateError}</p>}
 
         {selectedTemplate && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dark-700 bg-dark-800/60 p-3 text-xs text-gray-300">
@@ -1291,7 +1291,7 @@ export default function SponsorPostForm({ sponsorId, mode, initial, onCancel, on
       )}
 
       {error && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
+        <div className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm text-orange-200">{error}</div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1308,7 +1308,7 @@ export default function SponsorPostForm({ sponsorId, mode, initial, onCancel, on
               type="button"
               onClick={handleDelete}
               disabled={submitting}
-              className="rounded-full border border-rose-500/60 px-4 py-2 text-sm font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-orange-500/60 px-4 py-2 text-sm font-semibold text-orange-200 hover:bg-orange-500/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Supprimer
             </button>
@@ -1340,7 +1340,7 @@ export default function SponsorPostForm({ sponsorId, mode, initial, onCancel, on
             <p className="mt-1 text-xs text-gray-400">
               Sélectionne un visuel existant (logos, vidéos, couvertures) depuis le stockage Supabase.
             </p>
-            {libraryError && <p className="mt-4 text-sm text-red-400">{libraryError}</p>}
+            {libraryError && <p className="mt-4 text-sm text-orange-300">{libraryError}</p>}
             <div className="mt-4 max-h-[60vh] space-y-4 overflow-y-auto pr-1">
               {libraryLoading ? (
                 <div className="flex justify-center py-10">

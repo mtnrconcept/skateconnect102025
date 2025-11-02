@@ -69,6 +69,7 @@ const sectionRequirements: Record<Section, SubscriptionPlan> = {
   badges: 'shred-pass',
   sponsors: 'pro-loc',
   rewards: 'pro-loc',
+  marketplace: 'free-ride',
   messages: 'pro-loc',
   notifications: 'pro-loc',
 };

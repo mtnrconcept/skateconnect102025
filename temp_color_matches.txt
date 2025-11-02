@@ -1,0 +1,43 @@
+src/components/sponsors\spotlights\SponsorSpotlightModal.tsx:164:              required
+src/components/sponsors\SponsorDashboard.tsx:33:  SponsorEditableOpportunityType,
+src/components/sponsors\SponsorDashboard.tsx:311:      type: SponsorEditableOpportunityType,
+src/components/sponsors\SponsorDashboard.tsx:329:      type: SponsorEditableOpportunityType,
+src/components/sponsors\SponsorDashboard.tsx:368:      return history.reduce(
+src/components/sponsors\SponsorDashboard.tsx:1316:                                const sumReach = analyticsBreakdowns!.regions.reduce((acc, it) => acc + (it.reach || 0), 0) || 1;
+src/components/sponsors\SponsorShopItemFormModal.tsx:204:                required
+src/components/sponsors\SponsorShopItemFormModal.tsx:218:                required
+src/components/sponsors\SponsorShopItemFormModal.tsx:232:                required
+src/components/sponsors\shop\SponsorShopItemModal.tsx:510:                required
+src/components/sponsors\shop\SponsorShopItemModal.tsx:1014:                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+src/components/sponsors\shop\SponsorShopItemModal.tsx:1107:                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+src/components/sponsors\shop\SponsorShopItemModal.tsx:1118:                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+src/components/sponsors\shop\SponsorShopItemModal.tsx:1137:                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+src/components/sponsors\shop\SponsorShopItemModal.tsx:1145:                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+src/components/sponsors\shop\SponsorShopItemModal.tsx:1166:                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+src/components/sponsors\shop\SponsorShopItemModal.tsx:1239:                                  className="rounded-full border border-rose-500/40 px-2 py-0.5 text-xs text-rose-200 hover:border-rose-400 hover:text-rose-100"
+src/components/sponsors\SponsorPostForm.tsx:24:  SponsorEditableOpportunityType,
+src/components/sponsors\SponsorPostForm.tsx:127:    type: SponsorEditableOpportunityType,
+src/components/sponsors\SponsorPostForm.tsx:130:  onDeleted?: (type: SponsorEditableOpportunityType, id: string) => Promise<void> | void;
+src/components/sponsors\SponsorPostForm.tsx:135:  const [activeType, setActiveType] = useState<SponsorEditableOpportunityType>(initialType);
+src/components/sponsors\SponsorPostForm.tsx:313:      const filtered = current.filter((item) => item.id !== template.id);
+src/components/sponsors\SponsorPostForm.tsx:314:      const next = [template, ...filtered];
+src/components/sponsors\SponsorPostForm.tsx:747:          {(['challenge', 'event', 'call'] as SponsorEditableOpportunityType[]).map((type) => {
+src/components/sponsors\SponsorPostForm.tsx:1212:                placeholder="Plateforme Shredloc"
+src/components/sponsors\analytics\SponsorAnalyticsSection.tsx:31:  const filteredSeries = useMemo(() => {
+src/components/sponsors\analytics\SponsorAnalyticsSection.tsx:73:              series={filteredSeries}
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:20:  SponsorEditableOpportunityType,
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:185:  | { mode: 'create'; type: SponsorEditableOpportunityType }
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:228:  const filteredItems = useMemo(() => {
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:270:        items: filteredItems.filter((item) => item.status === status),
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:272:    [filteredItems],
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:287:  const totalOpportunities = filteredItems.length;
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:304:    type: SponsorEditableOpportunityType,
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:311:  const handleDeleted = async (type: SponsorEditableOpportunityType, id: string) => {
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:529:                              void handleDeleted(record.type as SponsorEditableOpportunityType, record.record.id);
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:596:              {filteredItems.length === 0 ? (
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:603:                filteredItems.map(({ record, status, date }) => {
+src/components/sponsors\opportunities\SponsorOpportunitiesView.tsx:648:                              void handleDeleted(record.type as SponsorEditableOpportunityType, record.record.id);
+src/components/sponsors\planner\SponsorPlanner.tsx:15:  SponsorEditableOpportunityType,
+src/components/sponsors\planner\SponsorPlanner.tsx:31:  type: SponsorEditableOpportunityType;
+src/components/sponsors\planner\SponsorPlanner.tsx:61:    type: SponsorEditableOpportunityType,
+src/components/sponsors\planner\SponsorPlanner.tsx:66:    type: SponsorEditableOpportunityType,

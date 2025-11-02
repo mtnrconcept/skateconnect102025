@@ -30,7 +30,7 @@ export default function AnalyticsFilters({
               key={period.id}
               className={`rounded-full border px-4 py-2 transition ${
                 isActive
-                  ? 'border-sky-400/60 bg-sky-500/10 text-sky-200 shadow-[0_0_15px_rgba(14,165,233,0.25)]'
+                  ? 'border-orange-400/60 bg-orange-500/10 text-orange-200 shadow-[0_0_15px_rgba(255,140,0,0.25)]'
                   : 'border-slate-700/70 bg-slate-900/70 text-slate-300 hover:border-slate-500 hover:text-white'
               }`}
               disabled={disabled}
@@ -51,7 +51,7 @@ export default function AnalyticsFilters({
             disabled={disabled}
             className={`px-3 py-1 text-[11px] font-medium transition ${
               segmentation === 'region'
-                ? 'rounded-full bg-sky-500/20 text-sky-100 shadow-[0_0_12px_rgba(14,165,233,0.35)]'
+                ? 'rounded-full bg-orange-500/20 text-orange-100 shadow-[0_0_12px_rgba(255,140,0,0.35)]'
                 : 'rounded-full hover:text-white'
             }`}
           >
@@ -63,7 +63,7 @@ export default function AnalyticsFilters({
             disabled={disabled}
             className={`px-3 py-1 text-[11px] font-medium transition ${
               segmentation === 'hashtag'
-                ? 'rounded-full bg-sky-500/20 text-sky-100 shadow-[0_0_12px_rgba(14,165,233,0.35)]'
+                ? 'rounded-full bg-orange-500/20 text-orange-100 shadow-[0_0_12px_rgba(255,140,0,0.35)]'
                 : 'rounded-full hover:text-white'
             }`}
           >

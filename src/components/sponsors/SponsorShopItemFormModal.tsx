@@ -187,7 +187,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
 
         <form onSubmit={handleSubmit} className="max-h-[calc(90vh-96px)] space-y-6 overflow-y-auto px-6 py-6">
           {formError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+            <div className="rounded-xl border border-orange-500/40 bg-orange-950/40 px-4 py-3 text-sm text-orange-100">
               {formError}
             </div>
           )}
@@ -199,7 +199,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 placeholder="Pack découverte Street"
                 required
               />
@@ -213,7 +213,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
                 step="0.01"
                 value={price}
                 onChange={(event) => setPrice(event.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 placeholder="49.90"
                 required
               />
@@ -227,7 +227,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
                 step="1"
                 value={stock}
                 onChange={(event) => setStock(event.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 placeholder="25"
                 required
               />
@@ -238,7 +238,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
               <select
                 value={isActive ? 'active' : 'inactive'}
                 onChange={(event) => setIsActive(event.target.value === 'active')}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               >
                 <option value="active">Actif · visible dans la boutique</option>
                 <option value="inactive">En pause</option>
@@ -252,7 +252,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               rows={4}
-              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               placeholder="Détaille le contenu du pack, l'expérience proposée..."
             />
           </label>
@@ -273,7 +273,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
             )}
 
             <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 px-4 py-2 text-sm text-sky-200 hover:bg-sky-500/10">
+              <label className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 px-4 py-2 text-sm text-orange-200 hover:bg-orange-500/10">
                 <UploadCloud size={16} />
                 <span>{uploading ? 'Téléversement...' : 'Importer un visuel'}</span>
                 <input
@@ -307,7 +307,7 @@ export default function SponsorShopItemFormModal({ mode, item, onClose }: Sponso
             <button
               type="submit"
               disabled={disableActions}
-              className="inline-flex items-center gap-2 rounded-full border border-sky-500/70 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-full border border-orange-500/70 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-100 transition hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? (
                 <>

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Trophy,
   ShoppingBag,
+  Store,
   TrendingUp,
   Handshake,
   Gift,
@@ -37,11 +38,11 @@ export const navigationGroups: NavigationGroup[] = [
       { id: 'map', label: 'Carte', icon: Map },
       { id: 'events', label: 'Événements', icon: CalendarDays },
       { id: 'challenges', label: 'Défis', icon: Trophy },
-      { id: 'shop', label: 'Boutique', icon: ShoppingBag },
+      { id: 'marketplace', label: 'Marketplace', icon: Store },
       { id: 'leaderboard', label: 'Classement', icon: TrendingUp },
       { id: 'sponsors', label: 'Sponsor', icon: Handshake },
       { id: 'pricing', label: 'Abonnements', icon: Coins },
-      { id: 'rewards', label: 'Store', icon: Gift },
+      
     ],
   },
   {
@@ -66,10 +67,15 @@ const primaryNavigationBase = navigationGroups[0]?.items ?? [];
 const badgesNavigationItem = navigationGroups
   .flatMap((group) => group.items)
   .find((item) => item.id === 'badges');
-
-export const primaryNavigationItems = badgesNavigationItem
-  ? [...primaryNavigationBase, badgesNavigationItem]
-  : primaryNavigationBase;
+const settingsNavigationItem = navigationGroups
+  .flatMap((group) => group.items)
+  .find((item) => item.id === 'settings');
+export const primaryNavigationItems = (() => {
+  const base = [...primaryNavigationBase];
+  if (badgesNavigationItem) base.push(badgesNavigationItem);
+  if (settingsNavigationItem) base.push(settingsNavigationItem);
+  return base;
+})();
 
 export const searchableNavigationItems = navigationGroups.flatMap((group) =>
   group.items.map((item) => ({

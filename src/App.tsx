@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase.js';
 import {
   clearPersistedSession,
@@ -15,16 +15,22 @@ import FeedSection from './components/sections/FeedSection';
 import EventsSection from './components/sections/EventsSection';
 import ChallengesSection from './components/sections/ChallengesSection';
 import ShopSection from './components/sections/ShopSection';
+import MarketplaceListingDetail from './components/sections/MarketplaceListingDetail';
+import MarketplaceAccountSection from './components/sections/MarketplaceAccountSection';
+import MarketplaceSection from './components/sections/MarketplaceSection';
+import MarketplaceLanding from './components/sections/MarketplaceLanding';
+import MarketplaceNewListingWizard from './components/sections/MarketplaceNewListingWizard';
 import ProfileSection from './components/sections/ProfileSection';
 import BadgesSection from './components/sections/BadgesSection';
 import RewardsSection from './components/sections/RewardsSection';
 import LeaderboardSection from './components/sections/LeaderboardSection';
 import PricingSection from './components/sections/PricingSection';
-import SearchResultsSection from './components/sections/SearchResultsSection';
 import SettingsSection from './components/sections/SettingsSection';
 import MessagesSection from './components/sections/MessagesSection';
 import PrivacyPolicySection from './components/sections/PrivacyPolicySection';
 import TermsSection from './components/sections/TermsSection';
+import LegalNoticeSection from './components/sections/LegalNoticeSection';
+import ReturnsSection from './components/sections/ReturnsSection';
 import SponsorsSection from './components/sections/SponsorsSection';
 import SponsorDashboard from './components/sponsors/SponsorDashboard';
 import AchievementNotification from './components/AchievementNotification';
@@ -43,7 +49,6 @@ import {
   type SubscriptionPlan,
 } from './lib/subscription';
 import type { Profile, Section, ContentNavigationOptions, ProfileExperienceMode } from './types';
-import type { GlobalSearchResult } from './types/search';
 import { buildSponsorExperienceProfile } from './data/sponsorExperience';
 import type { FakeDirectMessagePayload } from './types/messages';
 import {
@@ -54,6 +59,7 @@ import {
 import { useRouter } from './lib/router';
 import SearchPage from './components/search/SearchPage';
 import SponsorAdsManager from './pages/SponsorAdsManager';
+import LiveSkateRoom from './pages/LiveSkateRoom';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const isMapAvailable = typeof mapboxToken === 'string' && mapboxToken.trim().length > 0;
@@ -95,35 +101,40 @@ function App() {
     return DEFAULT_SUBSCRIPTION_PLAN;
   });
   const [restrictionNotice, setRestrictionNotice] = useState<RestrictionNotice | null>(null);
-  const [searchState, setSearchState] = useState<{ query: string; results: GlobalSearchResult[] }>(() => ({
-    query: '',
-    results: [],
-  }));
+  // search state is handled inside SearchPage
   const [showLoginIntro, setShowLoginIntro] = useState(false);
 
   const { location, navigate } = useRouter();
   const isSearchRoute = location.pathname === '/search';
   const isSponsorAdsRoute = location.pathname === '/sponsor/ads';
+  const isLiveSkateRoute = location.pathname === '/skate/live';
+  const isMarketplaceNewRoute = location.pathname === '/marketplace/new';
+  const isMarketplaceAccountRoute = location.pathname === '/marketplace/account';
+  const marketplaceDetailId = location.pathname.startsWith('/marketplace/listing/') ? location.pathname.replace('/marketplace/listing/','') : null;
+  const isMarketplaceBrowseRoute = location.pathname === '/marketplace/browse';
   const realtimeUserId = profile?.id ?? session?.user?.id ?? null;
 
   const sectionDisplayNames = useMemo<Record<Section, string>>(
     () => ({
       feed: "le fil d'actu",
       map: 'la carte',
-      events: 'les événements',
-      challenges: 'les défis sponsorisés',
+      events: 'les Ã©vÃ©nements',
+      challenges: 'les dÃ©fis sponsorisÃ©s',
       shop: 'la boutique partenaires',
-      search: 'les résultats de recherche',
-      sponsors: "l’espace sponsor",
+      search: 'les rÃ©sultats de recherche',
+      sponsors: "lâ€™espace sponsor",
       pricing: 'les abonnements',
-      profile: 'ton profil avancé',
-      messages: 'la messagerie avancée',
+      profile: 'ton profil avancÃ©',
+      messages: 'la messagerie avancÃ©e',
       badges: 'les badges actifs',
-      rewards: 'le store des récompenses',
+      rewards: 'le store des rÃ©compenses',
       leaderboard: 'le classement',
-      settings: 'les paramètres',
-      privacy: 'la politique de confidentialité',
-      terms: 'les conditions générales',
+      settings: 'les paramÃ¨tres',
+      privacy: 'la politique de confidentialitÃ©',
+      terms: 'les conditions gǸnǸrales',
+      returns: 'les retours',
+      legal: 'les mentions légales',
+      marketplace: 'le marketplace',
       notifications: 'les notifications',
     }),
     [],
@@ -190,7 +201,7 @@ function App() {
       if (storedSession) {
         const { error } = await supabase.auth.setSession(storedSession);
         if (error) {
-          console.error('Impossible de restaurer la session persistée :', error);
+          console.error('Impossible de restaurer la session persistÃ©e :', error);
           clearPersistedSession();
         } else if (!getRememberMePreference()) {
           clearPersistedSession();
@@ -423,7 +434,7 @@ function App() {
         const conversation = await getOrCreateConversation(supabase, profile.id, targetProfileId);
         handleNavigateToContent('messages', { conversationId: conversation.id });
       } catch (error) {
-        console.error("Erreur lors de l’ouverture de la conversation :", error);
+        console.error("Erreur lors de lâ€™ouverture de la conversation :", error);
       }
     },
     [handleNavigateToContent, profile?.id],
@@ -438,7 +449,7 @@ function App() {
       try {
         await markConversationMessagesAsRead(supabase, conversationId, profile.id);
       } catch (error) {
-        console.error('Erreur lors de la mise à jour du statut de lecture :', error);
+        console.error('Erreur lors de la mise Ã  jour du statut de lecture :', error);
       }
     },
     [profile?.id],
@@ -538,6 +549,19 @@ function App() {
   }, [pendingNavigation, currentSection, isMapAvailable]);
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      try {
+        const detail = (event as CustomEvent).detail as { section?: Section; options?: ContentNavigationOptions };
+        if (detail?.section) {
+          handleNavigateToContent(detail.section, detail.options);
+        }
+      } catch {}
+    };
+    window.addEventListener("shredloc:navigate", handler as EventListener);
+    return () => window.removeEventListener("shredloc:navigate", handler as EventListener);
+  }, [handleNavigateToContent]);
+
+  useEffect(() => {
     if (!isMapAvailable) {
       setMapFocusSpotId(null);
     }
@@ -565,7 +589,7 @@ function App() {
   }, [subscriptionPlan, currentSection]);
 
   const dimmedClass = isSearchActive
-    ? 'transition-all duration-300 ease-out opacity-40 pointer-events-none blur-[1px]'
+    ? 'transition-all duration-300 ease-out opacity-40 blur-[1px]'
     : 'transition-all duration-300 ease-out';
 
   const subscriptionContextValue = useMemo(
@@ -604,10 +628,7 @@ function App() {
             onSectionChange={handleNavigateToContent}
             onNavigateToContent={handleNavigateToContent}
             onSearchFocusChange={setIsSearchActive}
-            onSearchSubmit={(query, results) => {
-              setSearchState({ query, results });
-              handleNavigateToContent('search');
-            }}
+            onSearchSubmit={( _query, _results ) => { handleNavigateToContent('search'); }}
           />
           <div className={dimmedClass}>
             {!isSearchRoute && !isSponsorAdsRoute && (
@@ -615,11 +636,19 @@ function App() {
             )}
           </div>
 
-          <main className={`flex-1 pt-16 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
+          <main className={`page-fade-top flex-1 pt-6 md:pt-4 lg:pt-8 pb-20 md:pb-16 lg:pb-40 ${dimmedClass}`}>
             {isSearchRoute ? (
               <SearchPage onNavigateToContent={handleNavigateToContent} currentPlan={subscriptionPlan} />
             ) : isSponsorAdsRoute ? (
               <SponsorAdsManager profile={activeProfile} />
+            ) : isLiveSkateRoute ? (
+              <LiveSkateRoom />
+            ) : marketplaceDetailId ? (
+              <MarketplaceListingDetail id={marketplaceDetailId} profile={activeProfile} />
+            ) : isMarketplaceAccountRoute ? (
+              <MarketplaceAccountSection profile={activeProfile} />
+            ) : isMarketplaceNewRoute ? (
+              <MarketplaceNewListingWizard profile={activeProfile} />
             ) : (
               <>
                 {currentSection === 'map' && (
@@ -645,6 +674,13 @@ function App() {
                   />
                 )}
                 {currentSection === 'shop' && <ShopSection profile={activeProfile} />}
+                {currentSection === 'marketplace' && (
+                  isMarketplaceBrowseRoute ? (
+                    <MarketplaceSection profile={activeProfile} />
+                  ) : (
+                    <MarketplaceLanding onNavigateToContent={handleNavigateToContent} />
+                  )
+                )}
                 {currentSection === 'sponsors' &&
                   (activeProfile?.role === 'sponsor' ? (
                     <SponsorDashboard />
@@ -681,6 +717,8 @@ function App() {
                 )}
                 {currentSection === 'privacy' && <PrivacyPolicySection onNavigate={handleNavigateToContent} />}
                 {currentSection === 'terms' && <TermsSection onNavigate={handleNavigateToContent} />}
+                {currentSection === 'legal' && <LegalNoticeSection />}
+                {currentSection === 'returns' && <ReturnsSection />}
               </>
             )}
           </main>
@@ -715,3 +753,8 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
