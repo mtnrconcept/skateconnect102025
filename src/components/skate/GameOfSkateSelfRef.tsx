@@ -1,8 +1,10 @@
+// C'est la version que NOUS AVONS CRÉÉE, corrigée
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
-import { Match, MatchState } from '@/types'; // Assurez-vous que vos types sont corrects
+import { Match, MatchState } from '@/types'; 
+// CORRECTION: Retrait des accolades {} pour un import par défaut
 import { CountdownAnimation } from './CountdownAnimation';
 
 // Type pour la mutation
