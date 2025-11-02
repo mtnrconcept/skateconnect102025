@@ -1,52 +1,103 @@
-import React, { useState, useEffect, useRef } from 'react'; // Importation de useEffect et useRef
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { Match, MatchState } from '@/types'; // Assurez-vous que vos types sont corrects
 import { CountdownAnimation } from './CountdownAnimation';
-import { getMatchState } from '@/lib/skate'; // Supposant que cette fonction existe
 
-// Type pour la mutation, ajustez au besoin
+// Type pour la mutation
 type CreateTurnPayload = {
   match_id: string;
-  trick_id?: string; // L'ID du trick, si applicable
+  trick_id?: string;
   outcome: 'landed' | 'missed';
 };
 
 export const GameOfSkateSelfRef = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const queryClient = useQueryClient();
-  
-  const [match, setMatch] = useState<Match | null>(null); // Devrait être chargé via useQuery
-  const [matchState, setMatchState] = useState<MatchState | null>(null);
   const [isCountdown, setIsCountdown] = useState(false);
   const [isTurnActive, setIsTurnActive] = useState(false);
-  
-  // --- NOUVEAUX ÉTATS POUR LE CHRONOMÈTRE ---
   const [timeLeft, setTimeLeft] = useState(30);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  // ----------------------------------------
 
-  // Fetch match data
-  const { data: matchData, isLoading: isLoadingMatch } = useQuery({
-    queryKey: ['match', matchId],
+  // --- OBTENIR L'UTILISATEUR ACTUEL ---
+  const { data: sessionData } = useQuery({
+    queryKey: ['session'],
+    queryFn: async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      return data;
+    }
+  });
+  const userId = sessionData?.session?.user.id;
+
+  // --- REQUÊTE POUR LES INFOS DU MATCH (state) ---
+  // C'est cette requête qui sera rafraîchie en temps réel
+  const { data: matchState, isLoading: isLoadingMatchState } = useQuery({
+    queryKey: ['matchState', matchId],
     queryFn: async () => {
       if (!matchId) return null;
+      // Nous chargeons l'état du match, qui contient les lettres et le joueur actuel
       const { data, error } = await supabase
-        .from('gos_matches')
+        .from('gos_match_state')
         .select('*')
-        .eq('id', matchId)
+        .eq('match_id', matchId)
         .single();
-      if (error) throw error;
-      setMatch(data);
-      // Simuler l'état du match (vous devriez le charger)
-      // setMatchState(getMatchState(data)); 
-      return data;
+      if (error) throw new Error(error.message);
+      return data as MatchState;
     },
+    enabled: !!matchId, // Ne pas exécuter si matchId n'est pas défini
   });
 
+  // --- NOUVEAU: ABONNEMENT REALTIME ---
+  useEffect(() => {
+    if (!matchId) return;
+
+    // S'abonner aux changements sur la table gos_match_state
+    const channel = supabase
+      .channel(`realtime:match_state:${matchId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'gos_match_state',
+          filter: `match_id=eq.${matchId}`,
+        },
+        (payload) => {
+          console.log('Realtime update received!', payload);
+          
+          // Forcer react-query à recharger les données de l'état du match
+          // Cela mettra à jour l'interface pour *les deux* joueurs.
+          queryClient.invalidateQueries({ queryKey: ['matchState', matchId] });
+
+          // Réinitialiser l'interface locale (arrêter le timer, etc.)
+          setIsTurnActive(false);
+          setIsCountdown(false);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`Subscribed to match state ${matchId}`);
+        }
+        if (err) {
+          console.error('Realtime subscription error:', err);
+        }
+      });
+
+    // Nettoyage : se désabonner lors du démontage du composant
+    return () => {
+      console.log(`Unsubscribing from match state ${matchId}`);
+      supabase.removeChannel(channel);
+    };
+  }, [matchId, queryClient]);
+  // ------------------------------------
+
   // Mutation pour créer un tour
-  const { mutate: createTurn } = useMutation({
+  const { mutate: createTurn, isPending: isSubmittingTurn } = useMutation({
     mutationFn: async (payload: CreateTurnPayload) => {
       const { data, error } = await supabase.functions.invoke('skate-turns-create', {
         body: payload,
@@ -55,50 +106,33 @@ export const GameOfSkateSelfRef = () => {
       return data;
     },
     onSuccess: () => {
-      // Rafraîchir l'état du match après la soumission
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-      queryClient.invalidateQueries({ queryKey: ['matchState', matchId] });
+      // Invalider la requête n'est même plus nécessaire ici,
+      // car le backend va changer la BDD, ce qui va déclencher
+      // l'abonnement Realtime pour tout le monde (y compris nous).
+      // queryClient.invalidateQueries({ queryKey: ['matchState', matchId] });
     },
     onError: (error) => {
       console.error('Failed to create turn:', error);
-      // Réactiver les boutons si la soumission échoue ?
-      setIsTurnActive(true); 
+      // Réactiver les boutons si la soumission échoue
+      setIsTurnActive(true);
     }
   });
-
-  // --- NETTOYAGE DU CHRONOMÈTRE ---
-  useEffect(() => {
-    // Nettoyer le timer lors du démontage du composant
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
-  // --------------------------------
-
-  const handleStartTurn = () => {
-    // Logique pour vérifier si c'est bien le tour du joueur
-    setIsCountdown(true);
-  };
 
   const onCountdownComplete = () => {
     setIsCountdown(false);
     setIsTurnActive(true);
-    setTimeLeft(30); // Réinitialiser le chronomètre
+    setTimeLeft(30);
 
-    // Effacer l'ancien timer s'il existe
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
 
-    // --- DÉMARRER LE NOUVEAU CHRONOMÈTRE ---
     timerRef.current = setInterval(() => {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerRef.current!);
           // Le temps est écoulé ! Compte comme un échec.
-          handleTrickOutcome('missed'); 
+          handleTrickOutcome('missed');
           return 0;
         }
         return prevTime - 1;
@@ -107,48 +141,50 @@ export const GameOfSkateSelfRef = () => {
   };
 
   const handleTrickOutcome = (outcome: 'landed' | 'missed') => {
-    // --- PROTÉGER CONTRE LES CLICS MULTIPLES ---
-    if (!isTurnActive) return; 
+    if (!isTurnActive || isSubmittingTurn) return; // Protection clics multiples
     
     setIsTurnActive(false); // Désactiver le tour
-    
-    // --- ARRÊTER LE CHRONOMÈTRE ---
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
     
-    console.log(`Outcome reported: ${outcome}`);
-    
-    // Envoyer le résultat au backend
     if (matchId) {
       createTurn({
         match_id: matchId,
-        // trick_id: "current_trick_id", // Vous devez gérer la sélection du trick
         outcome: outcome,
       });
     }
   };
 
-  if (isLoadingMatch) {
-    return <div>Loading match...</div>;
+  if (isLoadingMatchState) {
+    return <div>Chargement du match...</div>;
   }
 
-  // TODO: Afficher l'état du match (lettres S.K.A.T.E., qui est le setter, etc.)
-  // const { player1Letters, player2Letters, currentSetter } = matchState || {};
+  if (!matchState) {
+    return <div>Erreur: Match non trouvé.</div>;
+  }
+
+  // Déterminer si c'est mon tour
+  const isMyTurn = matchState.current_player_id === userId;
+  const matchEnded = matchState.status === 'completed';
 
   return (
     <div className="p-4 text-center">
       <h1 className="text-2xl font-bold mb-4">Game of S.K.A.T.E.</h1>
       
-      {/* Affichage des scores (lettres) */}
-      <div className="flex justify-around mb-4">
+      {/* --- AFFICHAGE DES LETTRES (mis à jour en temps réel) --- */}
+      <div className="flex justify-around mb-4 text-2xl">
         <div>
-          <span className="font-bold">Player 1: </span>
-          {/* {player1Letters.join('')} */}
+          <span className="font-bold">Joueur 1: </span>
+          <span className="font-bold text-red-500 tracking-widest">
+            {matchState.player_1_letters}
+          </span>
         </div>
         <div>
-          <span className="font-bold">Player 2: </span>
-          {/* {player2Letters.join('')} */}
+          <span className="font-bold">Joueur 2: </span>
+          <span className="font-bold text-red-500 tracking-widest">
+            {matchState.player_2_letters}
+          </span>
         </div>
       </div>
 
@@ -156,22 +192,20 @@ export const GameOfSkateSelfRef = () => {
 
       {isTurnActive && (
         <div className="mt-4">
-          {/* --- AFFICHAGE DU CHRONOMÈTRE --- */}
           <div className="text-5xl font-bold text-white mb-6">
             {timeLeft}s
           </div>
-          
-          <p className="text-lg mb-4">C'est votre tour !</p>
+          <p className="text-lg mb-4">À vous !</p>
           <button 
             onClick={() => handleTrickOutcome('landed')}
-            disabled={!isTurnActive}
+            disabled={!isTurnActive || isSubmittingTurn}
             className="btn btn-success btn-lg mr-4"
           >
             Trick Landed
           </button>
           <button 
             onClick={() => handleTrickOutcome('missed')}
-            disabled={!isTurnActive}
+            disabled={!isTurnActive || isSubmittingTurn}
             className="btn btn-error btn-lg"
           >
             Trick Raté
@@ -179,18 +213,33 @@ export const GameOfSkateSelfRef = () => {
         </div>
       )}
 
-      {/* Bouton pour démarrer le tour (à n'afficher que si c'est le tour du joueur) */}
-      {!isCountdown && !isTurnActive && (
-        <button 
-          onClick={handleStartTurn}
-          className="btn btn-primary btn-lg mt-4"
-          // disabled={!isMyTurn} // Ajouter la logique pour vérifier si c'est mon tour
-        >
-          Démarrer mon tour
-        </button>
+      {/* --- GESTION DE L'ÉTAT DU JEU --- */}
+      {!matchEnded && !isCountdown && !isTurnActive && (
+        <div className="mt-8">
+          {isMyTurn ? (
+            <button 
+              onClick={() => setIsCountdown(true)} // Démarrer le compte à rebours
+              className="btn btn-primary btn-lg"
+            >
+              Démarrer mon tour
+            </button>
+          ) : (
+            <p className="text-lg text-gray-400">
+              En attente du tour de l'adversaire...
+            </p>
+          )}
+        </div>
       )}
 
-      {/* ... Reste de l'interface (chat, infos, etc.) ... */}
+      {matchEnded && (
+        <div className="mt-8">
+          <h2 className="text-3xl font-bold text-green-500">Partie terminée !</h2>
+          <p className="text-xl">
+            {/* Vous devrez déterminer le gagnant en fonction des lettres */}
+            Le gagnant est {matchState.winner_id === userId ? 'vous' : 'l\'adversaire'} !
+          </p>
+        </div>
+      )}
     </div>
   );
 };
