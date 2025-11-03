@@ -5,7 +5,7 @@ import { requestNotificationPermissions, addPushNotificationListeners } from './
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'like' | 'comment' | 'follow' | 'mention' | 'message' | 'spot_comment' | 'challenge_vote';
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'message' | 'spot_comment' | 'challenge_vote' | 'gos_invite';
   title: string;
   body: string;
   data: Record<string, any>;
@@ -142,6 +142,8 @@ export const subscribeToNotifications = (
   let channel: RealtimeChannel | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let isActive = true;
+  let failureCount = 0;
+  const MAX_FAILURES = 5;
 
   const retryDelay = options.retryDelayMs ?? DEFAULT_RETRY_DELAY;
 
@@ -154,6 +156,15 @@ export const subscribeToNotifications = (
 
   const scheduleRetry = () => {
     if (!isActive) {
+      return;
+    }
+
+    if (failureCount >= MAX_FAILURES) {
+      if (failureCount === MAX_FAILURES) {
+        console.warn('Notifications realtime disabled after repeated failures.');
+      }
+      failureCount += 1;
+      clearChannel();
       return;
     }
 
@@ -199,12 +210,18 @@ export const subscribeToNotifications = (
           }
 
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.warn('Notifications channel disconnected, attempting to reconnect...', status);
+            failureCount += 1;
+            if (failureCount <= MAX_FAILURES) {
+              console.warn('Notifications channel disconnected, attempting to reconnect...', status);
+            }
             scheduleRetry();
+          } else if (status === 'SUBSCRIBED') {
+            failureCount = 0;
           }
         });
     } catch (error) {
       console.error('Failed to subscribe to notifications:', error);
+      failureCount += 1;
       scheduleRetry();
     }
   };

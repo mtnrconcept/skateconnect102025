@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase.js';
+import type { Session } from '@supabase/supabase-js';
+import { supabase as supabaseClient } from '@/lib/supabaseClient';
 import {
   clearPersistedSession,
   getRememberMePreference,
@@ -60,13 +62,38 @@ import { useRouter } from './lib/router';
 import SearchPage from './components/search/SearchPage';
 import SponsorAdsManager from './pages/SponsorAdsManager';
 import LiveSkateRoom from './pages/LiveSkateRoom';
+import GameInviteManager from './components/skate/GameInviteManager';
 
 const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const isMapAvailable = typeof mapboxToken === 'string' && mapboxToken.trim().length > 0;
 const PROFILE_MODE_STORAGE_KEY = 'shredloc:profile-mode';
 
+async function syncSupabaseClients(session: Session | null) {
+  try {
+    if (!session) {
+      await supabaseClient.auth.signOut();
+      return;
+    }
+
+    if (!session.access_token || !session.refresh_token) {
+      await supabaseClient.auth.signOut();
+      return;
+    }
+
+    const { error } = await supabaseClient.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.warn('[auth] Failed to sync Supabase clients', error);
+  }
+}
+
 function App() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileMode, setProfileMode] = useState<ProfileExperienceMode>(() => {
     if (typeof window === 'undefined') {
@@ -217,6 +244,7 @@ function App() {
       }
 
       setSession(session);
+      await syncSupabaseClients(session);
       if (session?.user) {
         loadProfile(session.user.id);
       } else {
@@ -228,8 +256,9 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
+      await syncSupabaseClients(session);
       if (session?.user) {
         loadProfile(session.user.id);
         if (getRememberMePreference()) {
@@ -351,8 +380,9 @@ function App() {
   const handleAuthSuccess = () => {
     setShowLoginIntro(true);
     setCurrentSection('feed');
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
+      await syncSupabaseClients(session);
       if (session?.user) {
         loadProfile(session.user.id);
         if (getRememberMePreference()) {
@@ -438,6 +468,19 @@ function App() {
       }
     },
     [handleNavigateToContent, profile?.id],
+  );
+
+  const handleOpenLiveMatch = useCallback(
+    (matchId: string) => {
+      const options: ContentNavigationOptions = {
+        challengeTab: 'skate',
+        skateMode: 'live',
+        skateMatchId: matchId,
+      };
+      setChallengeFocus(options);
+      handleNavigateToContent('challenges', options);
+    },
+    [handleNavigateToContent],
   );
 
   const handleConversationViewed = useCallback(
@@ -621,15 +664,17 @@ function App() {
     content = (
       <SponsorProvider profile={activeProfile}>
         <RealtimeProvider userId={realtimeUserId}>
+          <GameInviteManager currentUserId={activeProfile?.id} onOpenMatch={handleOpenLiveMatch} />
           <div className="min-h-screen bg-dark-900 flex flex-col">
             <Header
               profile={activeProfile}
               currentSection={currentSection}
-            onSectionChange={handleNavigateToContent}
-            onNavigateToContent={handleNavigateToContent}
-            onSearchFocusChange={setIsSearchActive}
-            onSearchSubmit={( _query, _results ) => { handleNavigateToContent('search'); }}
-          />
+              onSectionChange={handleNavigateToContent}
+              onNavigateToContent={handleNavigateToContent}
+              onSearchFocusChange={setIsSearchActive}
+              onSearchSubmit={( _query, _results ) => { handleNavigateToContent('search'); }}
+              onOpenLiveMatch={handleOpenLiveMatch}
+            />
           <div className={dimmedClass}>
             {!isSearchRoute && !isSponsorAdsRoute && (
               <MobileNavigation currentSection={currentSection} onNavigate={handleNavigateToContent} />

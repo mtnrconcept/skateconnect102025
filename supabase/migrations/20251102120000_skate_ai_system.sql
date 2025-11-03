@@ -224,3 +224,9 @@ add column if not exists ai_analysis_session_id uuid references public.skate_ai_
 
 create index if not exists skate_turns_ai_session_idx on public.skate_turns (ai_analysis_session_id);
 
+
+
+
+
+
+

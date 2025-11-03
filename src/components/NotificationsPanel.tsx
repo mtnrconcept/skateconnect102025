@@ -13,9 +13,10 @@ import { useRealtime } from '../contexts/RealtimeContext';
 
 interface NotificationsPanelProps {
   onClose: () => void;
+  onOpenMatch?: (matchId: string) => void;
 }
 
-export default function NotificationsPanel({ onClose }: NotificationsPanelProps) {
+export default function NotificationsPanel({ onClose, onOpenMatch }: NotificationsPanelProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -96,6 +97,32 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
     return date.toLocaleDateString();
   };
 
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.read) {
+      try {
+        await handleMarkAsRead(notification.id);
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+
+    if (notification.type === 'gos_invite') {
+      const matchId =
+        typeof notification.data?.match_id === 'string'
+          ? notification.data.match_id
+          : typeof notification.data?.match_id === 'number'
+            ? String(notification.data.match_id)
+            : typeof notification.data?.matchId === 'string'
+              ? notification.data.matchId
+              : null;
+
+      if (matchId) {
+        onOpenMatch?.(matchId);
+        onClose();
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto no-scrollbar">
       <div className="bg-white text-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl">
@@ -152,7 +179,7 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
                   className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                     !notification.read ? 'bg-blue-50' : ''
                   }`}
-                  onClick={() => !notification.read && handleMarkAsRead(notification.id)}
+                  onClick={() => void handleNotificationClick(notification)}
                 >
                   <div className="flex gap-4">
                     <div

@@ -171,3 +171,9 @@ Pour améliorer les modèles:
 3. Réentraîner avec `training/train_tcn.py`
 4. Tester et déployer le nouveau ONNX
 
+
+
+
+
+
+

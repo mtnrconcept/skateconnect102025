@@ -71,3 +71,9 @@ After training, convert MoveNet to ONNX:
 3. Fine-tune models on collected data
 4. Deploy ONNX models to `public/models/` for web inference
 
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Search,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { supabase as supabaseClient } from '@/lib/supabaseClient';
 import { clearPersistedSession } from '../lib/authPersistence';
 import { getUnreadCount } from '../lib/notifications';
 import { getUserInitial, getUserDisplayName } from '../lib/userUtils';
@@ -41,6 +42,7 @@ interface HeaderProps {
   onNavigateToContent?: (section: Section, options?: ContentNavigationOptions) => boolean | void;
   onSearchFocusChange?: (isActive: boolean) => void;
   onSearchSubmit?: (query: string, results: GlobalSearchResult[]) => void;
+  onOpenLiveMatch?: (matchId: string) => void;
 }
 
 type HeaderSearchResult = GlobalSearchResult & { onSelect?: () => void };
@@ -48,7 +50,7 @@ type HeaderSearchResult = GlobalSearchResult & { onSelect?: () => void };
 const dynamicCategoryMap: Record<SearchContentType, { label: string; icon: LucideIcon }> = {
   riders: { label: 'Riders', icon: UserIcon },
   spots: { label: 'Spots', icon: MapPin },
-  challenges: { label: 'Défis', icon: Trophy },
+  challenges: { label: 'DÃ©fis', icon: Trophy },
   hashtags: { label: 'Hashtags', icon: Hash },
 };
 
@@ -59,6 +61,7 @@ export default function Header({
   onNavigateToContent,
   onSearchFocusChange,
   onSearchSubmit: _onSearchSubmit,
+  onOpenLiveMatch,
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -97,7 +100,14 @@ export default function Header({
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    const { error: publicError } = await supabase.auth.signOut();
+    if (publicError) {
+      console.error('Unable to sign out public Supabase client:', publicError);
+    }
+    const { error: clientError } = await supabaseClient.auth.signOut();
+    if (clientError) {
+      console.error('Unable to sign out session Supabase client:', clientError);
+    }
     clearPersistedSession();
     window.location.reload();
   };
@@ -107,7 +117,7 @@ export default function Header({
       key: `nav-${item.id}`,
       label: item.label,
       category: item.category,
-      description: `Aller à ${item.label}`,
+      description: `Aller Ã  ${item.label}`,
       section: item.id,
       icon: item.icon,
     }));
@@ -115,7 +125,7 @@ export default function Header({
     const eventResults: HeaderSearchResult[] = eventsCatalog.map((event) => ({
       key: `event-${event.id}`,
       label: event.title,
-      category: 'Événements',
+      category: 'Ã‰vÃ©nements',
       description: event.location,
       section: 'events',
       icon: CalendarDays,
@@ -125,7 +135,7 @@ export default function Header({
     const fallbackChallengeResults: HeaderSearchResult[] = createFallbackChallenges().map((challenge) => ({
       key: `fallback-challenge-${challenge.id}`,
       label: challenge.title,
-      category: 'Défis',
+      category: 'DÃ©fis',
       description: challenge.description,
       section: 'challenges',
       icon: Trophy,
@@ -138,7 +148,7 @@ export default function Header({
     const fallbackDailyResults: HeaderSearchResult[] = createFallbackDailyChallenges().map((challenge) => ({
       key: `fallback-daily-${challenge.id}`,
       label: challenge.title,
-      category: 'Défis quotidiens',
+      category: 'DÃ©fis quotidiens',
       description: challenge.description,
       section: 'challenges',
       icon: Trophy,
@@ -152,7 +162,7 @@ export default function Header({
       category.items.map((item) => ({
         key: `setting-${item.id}`,
         label: item.title,
-        category: `Paramètres · ${category.title}`,
+        category: `ParamÃ¨tres Â· ${category.title}`,
         description: item.description,
         section: 'settings',
         icon: item.icon as LucideIcon,
@@ -195,8 +205,8 @@ export default function Header({
     return {
       key: `dynamic-${item.category}-${item.id}`,
       label: item.title,
-      category: meta?.label ?? 'Résultats',
-      description: descriptionParts.join(' • ') || undefined,
+      category: meta?.label ?? 'RÃ©sultats',
+      description: descriptionParts.join(' â€¢ ') || undefined,
       section: item.section,
       icon: meta?.icon,
       options: item.options,
@@ -433,7 +443,7 @@ export default function Header({
                           setIsInputFocused(false);
                         }, 120);
                       }}
-                      placeholder="Rechercher un rider, un dǸfi, un spot..."
+                      placeholder="Rechercher un rider, un dÇ¸fi, un spot..."
                       className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${
                         isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
                       }`}
@@ -441,7 +451,7 @@ export default function Header({
                     {showSearchResults && filteredResults.length > 0 && (
                       <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
                         <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
-                          {filteredResults.length} rǸsultat{filteredResults.length > 1 ? 's' : ''}
+                          {filteredResults.length} rÇ¸sultat{filteredResults.length > 1 ? 's' : ''}
                         </div>
                         {displayedResults.map((result) => {
                           const IconResult = result.icon ?? Search;
@@ -457,7 +467,7 @@ export default function Header({
                               </span>
                               <div className="flex flex-col">
                                 <span className="font-medium text-white">{renderHighlightedText(result.label)}</span>
-                                <span className="text-xs text-gray-500">{renderHighlightedText(result.description ? `${result.category} �?� ${result.description}` : result.category)}</span>
+                                <span className="text-xs text-gray-500">{renderHighlightedText(result.description ? `${result.category} ï¿½?ï¿½ ${result.description}` : result.category)}</span>
                               </div>
                             </button>
                           );
@@ -465,7 +475,7 @@ export default function Header({
                         {hasSearchTerm && (
                           <div className="border-t border-dark-700/80 bg-[#101018] px-3 py-2">
                             <button type="button" onClick={handleViewMore} className="w-full rounded-xl bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20">
-                              Voir plus de rǸsultats
+                              Voir plus de rÇ¸sultats
                             </button>
                           </div>
                         )}
@@ -473,7 +483,7 @@ export default function Header({
                     )}
                     {showSearchResults && filteredResults.length === 0 && (
                       <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
-                        Aucun rǸsultat pour �� {searchTerm} ��
+                        Aucun rÇ¸sultat pour ï¿½ï¿½ {searchTerm} ï¿½ï¿½
                       </div>
                     )}
                   </form>
@@ -504,7 +514,7 @@ export default function Header({
                         <span className="font-medium text-white">{getUserDisplayName(profile)}</span>
                       </div>
                     )}
-                    <button onClick={handleLogout} className="p-2 hover:bg-dark-700 rounded-full transition-colors text-orange-500" title="DǸconnexion">
+                    <button onClick={handleLogout} className="p-2 hover:bg-dark-700 rounded-full transition-colors text-orange-500" title="DÇ¸connexion">
                       <LogOut size={20} />
                     </button>
                   </div>
@@ -564,7 +574,7 @@ export default function Header({
                       setIsInputFocused(false);
                     }, 120);
                   }}
-                  placeholder="Rechercher un rider, un défi, un spot..."
+                  placeholder="Rechercher un rider, un dÃ©fi, un spot..."
                   className={`w-full rounded-full border border-dark-600 bg-[#1f1f29]/95 pr-4 text-sm text-white placeholder-gray-500 transition-all duration-300 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${
                     isSearchActive ? 'pl-14 py-3 shadow-lg shadow-orange-500/15' : 'pl-12 py-2.5'
                   }`}
@@ -572,7 +582,7 @@ export default function Header({
                 {showSearchResults && filteredResults.length > 0 && (
                   <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-dark-700/80 bg-[#121219]/95 shadow-xl">
                     <div className="px-3 py-2 text-xs uppercase tracking-wide text-gray-500">
-                      {filteredResults.length} résultat{filteredResults.length > 1 ? 's' : ''}
+                      {filteredResults.length} rÃ©sultat{filteredResults.length > 1 ? 's' : ''}
                     </div>
                     {displayedResults.map((result) => {
                       const IconResult = result.icon ?? Search;
@@ -588,7 +598,7 @@ export default function Header({
                           </span>
                           <div className="flex flex-col">
                             <span className="font-medium text-white">{renderHighlightedText(result.label)}</span>
-                            <span className="text-xs text-gray-500">{renderHighlightedText(result.description ? `${result.category} • ${result.description}` : result.category)}</span>
+                            <span className="text-xs text-gray-500">{renderHighlightedText(result.description ? `${result.category} â€¢ ${result.description}` : result.category)}</span>
                           </div>
                         </button>
                       );
@@ -596,7 +606,7 @@ export default function Header({
                     {hasSearchTerm && (
                       <div className="border-t border-dark-700/80 bg-[#101018] px-3 py-2">
                         <button type="button" onClick={handleViewMore} className="w-full rounded-xl bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20">
-                          Voir plus de résultats
+                          Voir plus de rÃ©sultats
                         </button>
                       </div>
                     )}
@@ -604,7 +614,7 @@ export default function Header({
                 )}
                 {showSearchResults && filteredResults.length === 0 && (
                   <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-2xl border border-dark-700/80 bg-[#121219]/95 p-4 text-sm text-gray-400 shadow-xl">
-                    Aucun résultat pour « {searchTerm} »
+                    Aucun rÃ©sultat pour Â« {searchTerm} Â»
                   </div>
                 )}
               </form>
@@ -638,7 +648,7 @@ export default function Header({
                     <span className="font-medium text-white">{getUserDisplayName(profile)}</span>
                   </div>
                 )}
-                <button onClick={handleLogout} className="p-2 hover:bg-dark-700 rounded-full transition-colors text-orange-500" title="Déconnexion">
+                <button onClick={handleLogout} className="p-2 hover:bg-dark-700 rounded-full transition-colors text-orange-500" title="DÃ©connexion">
                   <LogOut size={20} />
                 </button>
               </div>
@@ -654,10 +664,12 @@ export default function Header({
               setShowNotifications(false);
               loadUnreadCount();
             }}
+            onOpenMatch={onOpenLiveMatch}
           />,
           document.body,
         )}
     </header>
   );
 }
+
 

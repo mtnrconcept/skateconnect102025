@@ -99,3 +99,9 @@ export default function PoseOverlay({ keypoints, boardVector, show }: PoseOverla
   );
 }
 
+
+
+
+
+
+

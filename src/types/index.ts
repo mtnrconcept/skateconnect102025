@@ -335,7 +335,7 @@ export interface Notification {
   id: string;
   user_id: string;
   sender_id: string | null;
-  type: 'like' | 'comment' | 'follow' | 'mention' | 'challenge' | 'message';
+    type: 'like' | 'comment' | 'follow' | 'mention' | 'challenge' | 'message' | 'gos_invite';
   content: string;
   related_id: string | null;
   is_read: boolean;
@@ -406,7 +406,9 @@ export interface SpotComment {
 
 export interface ContentNavigationOptions {
   scrollToId?: string;
-  challengeTab?: 'community' | 'daily';
+  challengeTab?: 'community' | 'daily' | 'skate';
+  skateMode?: 'live' | 'remote';
+  skateMatchId?: string;
   spotId?: string;
   conversationId?: string;
 }
@@ -810,4 +812,59 @@ export interface RiderRewardRow {
   delta: number;
   reason: string | null;
   created_at: string;
+}
+// ---- Types pour Game of S.K.A.T.E. (Self-Ref) ----
+
+export type Side = "A" | "B";
+export type Phase =
+  | "set_idle"
+  | "set_attempting"
+  | "copy_idle"
+  | "copy_attempting"
+  | "confirm"
+  | "dispute";
+
+export type PhasePayload = {
+  trick?: string | null;
+  round?: number | null;
+  imposerResult?: "landed" | "missed" | null;
+  responderDeclaration?: "landed" | "missed" | null;
+  lastTryActiveFor?: Side | null;
+  disputeVotes?: Record<Side, "validate" | "refuse" | null>;
+  contestingSide?: Side | null;
+};
+
+// C'est le type 'Match' que l'autre composant utilise
+export interface Match {
+  id: string;
+  rider_a: string;
+  rider_b: string;
+  turn: Side;
+  letters_a: number;
+  letters_b: number;
+  status: "active" | "ended";
+  winner: Side | null;
+  created_at: string;
+  round_number: number;
+  phase: Phase;
+  phase_payload: PhasePayload | null;
+  current_trick: string | null;
+  timer_expires_at: string | null;
+  timer_for: Side | null;
+  last_try_a_used: boolean;
+  last_try_b_used: boolean;
+  contest_a_count: number;
+  contest_b_count: number;
+}
+
+// C'est le type 'MatchState' que notre composant utilise
+export interface MatchState {
+  match_id: string;
+  status: 'pending' | 'active' | 'completed' | 'canceled';
+  current_player_id: string;
+  current_setter_id: string;
+  winner_id: string | null;
+  player_1_letters: string;
+  player_2_letters: string;
+  // Ajoutez d'autres champs de gos_match_state si nécessaire
 }

@@ -1,4 +1,5 @@
-import { supabase } from './supabase.js';
+import { supabase as supabasePublic } from './supabase.js';
+import { supabase as supabaseSession } from './supabaseClient';
 import { withTableFallback } from './postgrest';
 import type {
   MatchMode,
@@ -11,6 +12,8 @@ import type {
 function nowIso() { return new Date().toISOString(); }
 
 // Fallback in-memory mocks (for dev without schema)
+const supabase = supabasePublic;
+
 const mock: { matches: SkateMatchRow[]; turns: SkateTurnRow[] } = {
   matches: [],
   turns: [],
@@ -121,32 +124,62 @@ export function isFinished(letters: string): boolean {
   return (letters || '').toUpperCase() === 'SKATE';
 }
 
-// Create GOS match (self-referee system)
-export async function createGOSMatch(riderA: string, riderB: string): Promise<{ id: string }> {
-  const { data, error } = await supabase
-    .from('gos_match')
-    .insert({
-      rider_a: riderA,
-      rider_b: riderB,
-      turn: 'A',
-      letters_a: 0,
-      letters_b: 0,
-      status: 'active',
-    })
-    .select('id')
-    .single();
-
-  if (error) throw error;
-  if (!data) throw new Error('Failed to create GOS match');
-
-  // Post initial system message
-  await supabase.from('gos_chat_message').insert({
-    match_id: data.id,
-    sender: null,
-    kind: 'system',
-    text: 'Match démarré. Rider A commence.',
+async function invokeGOS<T>(payload: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabaseSession.functions.invoke('gos-match', {
+    body: payload,
   });
-
-  return { id: data.id };
+  if (error) throw error;
+  return data as T;
 }
 
+// Create GOS match (self-referee system)
+export async function createGOSMatch(
+  _riderA: string,
+  riderB: string,
+  options?: { inviterName?: string }
+): Promise<{ id: string }> {
+  const result = await invokeGOS<{ match: { id: string } }>({
+    action: 'create',
+    opponent_id: riderB,
+    inviter_name: options?.inviterName ?? null,
+  });
+  return { id: result.match.id };
+}
+
+export async function acceptGOSMatch(matchId: string, _riderId?: string): Promise<void> {
+  await invokeGOS<{ match: unknown }>({ action: 'accept', match_id: matchId });
+}
+
+export async function declineGOSMatch(matchId: string, _riderId?: string): Promise<void> {
+  await invokeGOS<{ match: unknown }>({ action: 'decline', match_id: matchId });
+}
+
+export async function gosFailSet(matchId: string): Promise<any> {
+  const result = await invokeGOS<{ match: any }>({ action: 'set_fail', match_id: matchId });
+  return result.match;
+}
+
+export async function gosAddLetter(matchId: string, side: 'A' | 'B', lettersSet: string): Promise<any> {
+  const result = await invokeGOS<{ match: any }>({
+    action: 'add_letter',
+    match_id: matchId,
+    side,
+    letters_set: lettersSet,
+  });
+  return result.match;
+}
+
+export async function gosPostChat(
+  matchId: string,
+  kind: 'text' | 'system' | 'event',
+  text: string | null,
+  payload?: unknown
+): Promise<void> {
+  await invokeGOS<{ message: any }>({
+    action: 'chat',
+    match_id: matchId,
+    kind,
+    text,
+    payload: payload ?? null,
+  });
+}
