@@ -75,6 +75,7 @@ Deno.serve(async (req) => {
     switch (action) {
       case "create": {
         const opponentId = body?.opponent_id as string | undefined;
+        const skateMatchId = body?.skate_match_id as string | undefined;
         if (!opponentId) return json(400, { error: "opponent_id required" });
         if (opponentId === user.id) return json(400, { error: "Impossible de t'auto-défier" });
 
@@ -85,12 +86,26 @@ Deno.serve(async (req) => {
           letters_a: 0,
           letters_b: 0,
           status: "pending",
+          skate_match_id: skateMatchId ?? null,
         };
 
         const { data, error } = await service.from("gos_match").insert(insert).select("*").single();
         if (error || !data) return json(400, { error: error?.message ?? "insert failed" });
 
         const inviterName = (body?.inviter_name as string | undefined) ?? null;
+
+        if (data?.id) {
+          await service
+            .from("gos_chat_message")
+            .insert({
+              match_id: data.id,
+              sender: null,
+              kind: "system",
+              text: "Invitation envoyée. Rider A attend la réponse.",
+            })
+            .catch(() => {});
+        }
+
         await service
           .from("notifications")
           .insert({
@@ -121,9 +136,15 @@ Deno.serve(async (req) => {
         if (match.rider_b !== user.id) return json(403, { error: "Tu n'es pas l'invité de ce match" });
         if (match.status !== "pending") return json(409, { error: "Ce match a déjà été traité" });
 
+        const countdownStartAt = new Date(Date.now() + 10_000).toISOString();
+
         const { data, error } = await service
           .from("gos_match")
-          .update({ status: "active", accepted_at: new Date().toISOString() })
+          .update({
+            status: "active",
+            accepted_at: new Date().toISOString(),
+            countdown_started_at: countdownStartAt,
+          })
           .eq("id", matchId)
           .select("*")
           .single();

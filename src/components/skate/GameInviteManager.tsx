@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Swords, XCircle, Loader2 } from "lucide-react";
+import { useRouter } from "@/lib/router";
 import { supabase } from "@/lib/supabaseClient";
 import { acceptGOSMatch, declineGOSMatch } from "@/lib/skate";
 
 interface GameInvite {
-  matchId: string;
+  matchId: string;               // id du gos_match
   riderA: string;
   riderB: string;
   inviterName?: string;
@@ -12,20 +13,22 @@ interface GameInvite {
 
 interface GameInviteManagerProps {
   currentUserId?: string | null;
-  onOpenMatch: (matchId: string) => void;
 }
 
-export default function GameInviteManager({ currentUserId, onOpenMatch }: GameInviteManagerProps) {
+const SELFREF_PATH = "/skate/selfref";
+const SELFREF_PARAM = "gosId";
+
+export default function GameInviteManager({ currentUserId }: GameInviteManagerProps) {
   const [queue, setQueue] = useState<GameInvite[]>([]);
   const [processing, setProcessing] = useState(false);
   const nameCache = useRef(new Map<string, string>());
+  const { navigate } = useRouter();
   const activeInvite = queue[0];
+  const navigatingRef = useRef(false);
 
   const resolveInviterName = useCallback(async (userId: string): Promise<string> => {
     if (!userId) return "Un rider";
-    if (nameCache.current.has(userId)) {
-      return nameCache.current.get(userId)!;
-    }
+    if (nameCache.current.has(userId)) return nameCache.current.get(userId)!;
 
     const { data, error } = await supabase
       .from("profiles")
@@ -33,9 +36,7 @@ export default function GameInviteManager({ currentUserId, onOpenMatch }: GameIn
       .eq("id", userId)
       .maybeSingle();
 
-    if (error) {
-      console.warn("[gos] Impossible de charger le profil de l'invitant", error);
-    }
+    if (error) console.warn("[gos] profil invitant non résolu:", error);
 
     const name = data?.display_name || data?.username || "Un rider";
     nameCache.current.set(userId, name);
@@ -45,19 +46,17 @@ export default function GameInviteManager({ currentUserId, onOpenMatch }: GameIn
   const upsertInvite = useCallback((invite: GameInvite) => {
     setQueue((prev) => {
       const existing = prev.find((i) => i.matchId === invite.matchId);
-      if (existing) {
-        return prev.map((i) => (i.matchId === invite.matchId ? { ...existing, ...invite } : i));
-      }
+      if (existing) return prev.map((i) => (i.matchId === invite.matchId ? { ...existing, ...invite } : i));
       return [...prev, invite];
     });
   }, []);
 
   const removeInvite = useCallback((matchId: string) => {
-    setQueue((prev) => prev.filter((invite) => invite.matchId !== matchId));
+    setQueue((prev) => prev.filter((i) => i.matchId !== matchId));
   }, []);
 
   const queueFromRow = useCallback(
-    async (row: { id: string; rider_a: string; rider_b: string }) => {
+    async (row: { id: string; rider_a: string; rider_b: string; status?: string }) => {
       const inviterName = await resolveInviterName(row.rider_a);
       upsertInvite({
         matchId: row.id,
@@ -69,64 +68,45 @@ export default function GameInviteManager({ currentUserId, onOpenMatch }: GameIn
     [resolveInviterName, upsertInvite]
   );
 
+  // Récupère les invites pending pour B + écoute INSERT/UPDATE
   useEffect(() => {
     if (!currentUserId) return;
-
     let cancelled = false;
 
-    const loadExisting = async () => {
+    (async () => {
       const { data, error } = await supabase
         .from("gos_match")
         .select("id, rider_a, rider_b, status")
         .eq("rider_b", currentUserId)
         .eq("status", "pending");
-
       if (error) {
-        console.error("Impossible de charger les invitations GOS:", error);
-        return;
+        console.error("[gos] load pending:", error);
+      } else {
+        for (const row of data ?? []) {
+          if (cancelled) break;
+          await queueFromRow(row);
+        }
       }
-
-      for (const row of data ?? []) {
-        if (cancelled) break;
-        await queueFromRow(row);
-      }
-    };
-
-    void loadExisting();
+    })();
 
     const channel = supabase
       .channel(`gos-invite-${currentUserId}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "gos_match",
-          filter: `rider_b=eq.${currentUserId}`,
-        },
+        { event: "INSERT", schema: "public", table: "gos_match", filter: `rider_b=eq.${currentUserId}` },
         (payload) => {
           const row = payload.new as { id: string; rider_a: string; rider_b: string; status?: string };
-          if (row?.status === "pending" && !cancelled) {
-            void queueFromRow(row);
-          }
+          if (!cancelled && row?.status === "pending") void queueFromRow(row);
         }
       )
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "gos_match",
-          filter: `rider_b=eq.${currentUserId}`,
-        },
+        { event: "UPDATE", schema: "public", table: "gos_match", filter: `rider_b=eq.${currentUserId}` },
         (payload) => {
-          const row = payload.new as { id: string; rider_a: string; rider_b: string; status?: string };
+          const row = payload.new as { id: string; status?: string };
           if (!row?.id) return;
-          if (row.status === "pending" && !cancelled) {
-            void queueFromRow(row);
-          } else {
-            removeInvite(row.id);
-          }
+          // si passe out of pending, on retire la modale
+          if (row.status !== "pending") removeInvite(row.id);
         }
       )
       .subscribe();
@@ -137,6 +117,32 @@ export default function GameInviteManager({ currentUserId, onOpenMatch }: GameIn
     };
   }, [currentUserId, queueFromRow, removeInvite]);
 
+  const hardNavigateSelfRef = useCallback((gosId: string) => {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+
+    const rel = `${SELFREF_PATH}?${SELFREF_PARAM}=${encodeURIComponent(gosId)}`;
+    try { navigate(rel); } catch {}
+
+    setTimeout(() => {
+      const ok =
+        typeof window !== "undefined" &&
+        window.location.pathname === SELFREF_PATH &&
+        window.location.search.includes(`${SELFREF_PARAM}=${gosId}`);
+      if (!ok) {
+        const abs = new URL(window.location.href);
+        abs.pathname = SELFREF_PATH;
+        abs.search = `?${SELFREF_PARAM}=${encodeURIComponent(gosId)}`;
+        try {
+          window.location.replace(abs.toString());
+        } catch {
+          window.location.href = abs.toString();
+        }
+      }
+      setTimeout(() => (navigatingRef.current = false), 300);
+    }, 80);
+  }, [navigate]);
+
   const handleAction = useCallback(
     async (action: "accept" | "decline") => {
       const invite = activeInvite;
@@ -145,30 +151,26 @@ export default function GameInviteManager({ currentUserId, onOpenMatch }: GameIn
       setProcessing(true);
       try {
         if (action === "accept") {
-          await acceptGOSMatch(invite.matchId, currentUserId);
-          removeInvite(invite.matchId);
-          onOpenMatch(invite.matchId);
+          // Edge Function vérifie que rider_b = auth.uid()
+          await acceptGOSMatch(invite.matchId);
+          // redirection immédiate vers la salle SelfRef (gosId dans l’URL)
+          hardNavigateSelfRef(invite.matchId);
         } else {
-          await declineGOSMatch(invite.matchId, currentUserId);
-          removeInvite(invite.matchId);
+          await declineGOSMatch(invite.matchId);
         }
+        removeInvite(invite.matchId);
       } catch (error) {
-        console.error("Erreur lors du traitement de l'invitation GOS:", error);
+        console.error("[gos] Accept/Decline error:", error);
       } finally {
         setProcessing(false);
       }
     },
-    [activeInvite, currentUserId, onOpenMatch, removeInvite]
+    [activeInvite, currentUserId, removeInvite, hardNavigateSelfRef]
   );
 
-  const inviterName = useMemo(() => {
-    if (!activeInvite) return null;
-    return activeInvite.inviterName || "Un rider";
-  }, [activeInvite]);
+  const inviterName = useMemo(() => activeInvite?.inviterName ?? "Un rider", [activeInvite]);
 
-  if (!activeInvite || !currentUserId) {
-    return null;
-  }
+  if (!activeInvite || !currentUserId) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">

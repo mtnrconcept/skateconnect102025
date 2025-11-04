@@ -2,15 +2,30 @@ import { useState, useEffect } from 'react';
 
 interface CountdownAnimationProps {
   onComplete: () => void;
+  startSeconds?: number;
 }
 
-export default function CountdownAnimation({ onComplete }: CountdownAnimationProps) {
-  const [count, setCount] = useState(10);
-  const [isVisible, setIsVisible] = useState(true);
+export default function CountdownAnimation({ onComplete, startSeconds = 10 }: CountdownAnimationProps) {
+  const normalizedStart = Math.max(0, Math.ceil(startSeconds));
+  const [total, setTotal] = useState(Math.max(1, normalizedStart || 10));
+  const [count, setCount] = useState(normalizedStart);
+  const [isVisible, setIsVisible] = useState(normalizedStart > 0);
 
   useEffect(() => {
+    const freshStart = Math.max(0, Math.ceil(startSeconds ?? 10));
+    setTotal(Math.max(1, freshStart || 10));
+    setCount(freshStart);
+    setIsVisible(freshStart > 0);
+
+    if (freshStart <= 0) {
+      onComplete();
+    }
+  }, [startSeconds, onComplete]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
     if (count <= 0) {
-      // Animation de sortie
       const timer = setTimeout(() => {
         setIsVisible(false);
         onComplete();
@@ -23,7 +38,7 @@ export default function CountdownAnimation({ onComplete }: CountdownAnimationPro
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [count, onComplete]);
+  }, [count, isVisible, onComplete]);
 
   if (!isVisible) return null;
 
@@ -31,11 +46,11 @@ export default function CountdownAnimation({ onComplete }: CountdownAnimationPro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div
         className={`transition-all duration-300 ${
-          count <= 3
-            ? 'scale-150 animate-pulse'
-            : count <= 7
-              ? 'scale-125'
-              : 'scale-100'
+          count <= Math.max(1, Math.ceil(total * 0.3))
+            ? "scale-150 animate-pulse"
+            : count <= Math.max(2, Math.ceil(total * 0.7))
+              ? "scale-125"
+              : "scale-100"
         }`}
       >
         <div className="relative">
@@ -60,7 +75,7 @@ export default function CountdownAnimation({ onComplete }: CountdownAnimationPro
               fill="none"
               stroke="rgba(249, 115, 22, 0.4)"
               strokeWidth="3"
-              strokeDasharray={`${(count / 10) * 534} 534`}
+              strokeDasharray={`${Math.max(0, Math.min(1, count / total)) * 534} 534`}
               strokeLinecap="round"
               transform="rotate(-90 100 100)"
               className="transition-all duration-1000 ease-linear"
@@ -71,23 +86,23 @@ export default function CountdownAnimation({ onComplete }: CountdownAnimationPro
           <div className="absolute inset-0 flex items-center justify-center">
             <div
               className={`text-8xl md:text-9xl font-bold transition-all duration-500 ${
-                count <= 3
-                  ? 'text-red-500 animate-bounce'
-                  : count <= 7
-                    ? 'text-orange-400'
-                    : 'text-orange-500'
+                count <= Math.max(1, Math.ceil(total * 0.3))
+                  ? "text-red-500 animate-bounce"
+                  : count <= Math.max(2, Math.ceil(total * 0.7))
+                    ? "text-orange-400"
+                    : "text-orange-500"
               }`}
               style={{
-                textShadow: '0 0 30px rgba(249, 115, 22, 0.8), 0 0 60px rgba(249, 115, 22, 0.6)',
+                textShadow: "0 0 30px rgba(249, 115, 22, 0.8), 0 0 60px rgba(249, 115, 22, 0.6)",
               }}
             >
-              {count > 0 ? count : 'GO!'}
+              {count > 0 ? count : "GO!"}
             </div>
           </div>
         </div>
 
         {/* Effet de particules pour les dernières secondes */}
-        {count <= 3 && count > 0 && (
+        {count <= Math.max(1, Math.ceil(total * 0.3)) && count > 0 && (
           <div className="absolute inset-0 pointer-events-none">
             {Array.from({ length: 20 }).map((_, i) => (
               <div
@@ -107,6 +122,7 @@ export default function CountdownAnimation({ onComplete }: CountdownAnimationPro
     </div>
   );
 }
+
 
 
 

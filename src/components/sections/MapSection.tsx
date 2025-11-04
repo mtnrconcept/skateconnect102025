@@ -622,7 +622,6 @@ export default function MapSection({
       map.current = null;
     };
   }, [clearRoute, isMapAvailable]);
-
   useEffect(() => {
     if (!isMapAvailable) return;
     if (!map.current || !isDesktop) return;
@@ -1776,4 +1775,3 @@ export default function MapSection({
     </div>
   );
 }
-

@@ -214,7 +214,6 @@ export default function GameOfSkateAI({
             validationScore: validationResult.confidence ?? 0       // score de confiance
           }
         });
-        
 
 
         // Update session

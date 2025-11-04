@@ -49,3 +49,8 @@ export async function applySupabaseAccessToken(token: string | null) {
 }
 
 export const isSupabaseConfigured = () => hasSupabaseConfig;
+// src/lib/supabase.ts
+// Re-export du même singleton pour éviter tout deuxième client dans le même context.
+// src/lib/supabase.ts
+// Point d’entrée unique : évite la création de multiples clients GoTrue
+

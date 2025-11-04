@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+﻿﻿import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { MapPin, Filter, Plus, Navigation, AlertTriangle, Star, Route, X, Clock } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -25,7 +25,7 @@ const routeModeProfiles: Record<RouteMode, string> = {
 const routeModeLabels: Record<RouteMode, string> = {
   driving: 'Voiture',
   transit: 'Transports en commun',
-  walking: 'Ã€ pied',
+  walking: 'À pied',
 };
 
 const routeModeOptions: Array<{ id: RouteMode; label: string }> = [
@@ -135,7 +135,7 @@ export default function MapSection({
 
   const formatDistance = useCallback((meters: number) => {
     if (!Number.isFinite(meters) || meters <= 0) {
-      return 'â€”';
+      return '—';
     }
 
     if (meters >= 1000) {
@@ -147,7 +147,7 @@ export default function MapSection({
 
   const formatDuration = useCallback((seconds: number) => {
     if (!Number.isFinite(seconds) || seconds <= 0) {
-      return 'â€”';
+      return '—';
     }
 
     const minutes = Math.round(seconds / 60);
@@ -212,11 +212,11 @@ export default function MapSection({
   );
 
   const surfaceLabels: Record<string, string> = {
-    concrete: 'BÃ©ton',
+    concrete: 'Béton',
     wood: 'Bois',
     marble: 'Marbre',
     granite: 'Granite',
-    metal: 'MÃ©tal',
+    metal: 'Métal',
     asphalt: 'Asphalte',
   };
 
@@ -242,9 +242,9 @@ export default function MapSection({
     helper?: string;
   }[] = [
     { id: 'all', label: 'Tous niveaux' },
-    { id: 'beginner', label: 'DÃ©butant', helper: 'Niveaux 1 Ã  2' },
-    { id: 'intermediate', label: 'IntermÃ©diaire', helper: 'Niveau 3' },
-    { id: 'advanced', label: 'AvancÃ©', helper: 'Niveaux 4 Ã  5' },
+    { id: 'beginner', label: 'Débutant', helper: 'Niveaux 1 à 2' },
+    { id: 'intermediate', label: 'Intermédiaire', helper: 'Niveau 3' },
+    { id: 'advanced', label: 'Avancé', helper: 'Niveaux 4 à 5' },
   ];
 
   const difficultyRanges = useMemo(
@@ -258,9 +258,9 @@ export default function MapSection({
 
   const ratingFilterOptions: { id: 'all' | 1 | 2 | 3 | 4 | 5; label: string }[] = [
     { id: 'all', label: 'Toutes notes' },
-    { id: 4, label: '4 Ã©toiles et +' },
-    { id: 3, label: '3 Ã©toiles et +' },
-    { id: 2, label: '2 Ã©toiles et +' },
+    { id: 4, label: '4 étoiles et +' },
+    { id: 3, label: '3 étoiles et +' },
+    { id: 2, label: '2 étoiles et +' },
   ];
 
   const activeFiltersCount =
@@ -710,7 +710,7 @@ export default function MapSection({
 
       const coverPhotoUrl = spotCoverPhotos[spot.id] || (spot as any).cover_image_url || '';
       const stars = Array.from({ length: 5 }, (_, i) =>
-        i < spot.difficulty ? 'â˜…' : 'â˜†'
+        i < spot.difficulty ? '★' : '☆'
       ).join('');
 
       const createPopupWithSmartAnchor = () => {
@@ -869,7 +869,7 @@ export default function MapSection({
               <div class="spot-hover-rating">
                 <span class="spot-hover-stars">${stars}</span>
               </div>
-              <p class="spot-hover-address">${spot.address || 'Adresse non spÃ©cifiÃ©e'}</p>
+              <p class="spot-hover-address">${spot.address || 'Adresse non spécifiée'}</p>
             </div>
           </div>
         `);
@@ -1002,7 +1002,7 @@ export default function MapSection({
       } else {
         userLocationMarkerRef.current = new mapboxgl.Marker({ color: '#3b82f6' })
           .setLngLat(coords)
-          .setPopup(new mapboxgl.Popup().setHTML('<p class="text-sm font-medium">Vous Ãªtes ici</p>'))
+          .setPopup(new mapboxgl.Popup().setHTML('<p class="text-sm font-medium">Vous êtes ici</p>'))
           .addTo(mapInstance);
       }
     },
@@ -1020,7 +1020,7 @@ export default function MapSection({
     }
 
     if (!('geolocation' in navigator)) {
-      throw new Error('La gÃ©olocalisation n\'est pas supportÃ©e par votre navigateur.');
+      throw new Error('La géolocalisation n\'est pas supportée par votre navigateur.');
     }
 
     return await new Promise<[number, number]>((resolve, reject) => {
@@ -1078,7 +1078,7 @@ export default function MapSection({
       }
 
       if (typeof spot.longitude !== 'number' || typeof spot.latitude !== 'number') {
-        alert('Ce spot ne dispose pas de coordonnÃ©es valides.');
+        alert('Ce spot ne dispose pas de coordonnées valides.');
         return;
       }
 
@@ -1106,7 +1106,7 @@ export default function MapSection({
         const response = await fetch(directionsUrl.toString());
 
         if (!response.ok) {
-          throw new Error(`Ã‰chec de la rÃ©cupÃ©ration de l'itinÃ©raire (${response.status})`);
+          throw new Error(`Échec de la récupération de l'itinéraire (${response.status})`);
         }
 
         const data: MapboxRouteResponse = await response.json();
@@ -1115,7 +1115,7 @@ export default function MapSection({
         const routeGeometry = firstRoute?.geometry;
 
         if (!routeGeometry || !Array.isArray(routeGeometry.coordinates) || routeGeometry.coordinates.length === 0) {
-          throw new Error('Aucun itinÃ©raire disponible');
+          throw new Error('Aucun itinéraire disponible');
         }
 
         const routeFeatureCollection: FeatureCollection<LineString> = {
@@ -1186,7 +1186,7 @@ export default function MapSection({
       } catch (error) {
         console.error('Error fetching route:', error);
         clearRoute();
-        alert('Impossible de calculer l\'itinÃ©raire jusqu\'Ã  ce spot.');
+        alert('Impossible de calculer l\'itinéraire jusqu\'à ce spot.');
       } finally {
         setIsRouteLoading(false);
       }
@@ -1269,7 +1269,7 @@ export default function MapSection({
               </span>
             </div>
             <p className="mt-2 max-w-xl text-sm text-gray-400">
-              DÃ©couvre les parks, bowls, DIY et transitions autour de toi. La carte reste visible pendant que tu explores les spots dÃ©taillÃ©s.
+              Découvre les parks, bowls, DIY et transitions autour de toi. La carte reste visible pendant que tu explores les spots détaillés.
             </p>
           </div>
           <div className="flex w-full flex-col gap-3 lg:w-[26rem]">
@@ -1306,7 +1306,7 @@ export default function MapSection({
                   aria-label="Filtres des spots"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">Filtres avancÃ©s</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">Filtres avancés</p>
                     {activeFiltersCount > 0 && (
                       <span className="text-xs text-gray-400">
                         {activeFiltersCount} filtre{activeFiltersCount > 1 ? 's' : ''} actif{activeFiltersCount > 1 ? 's' : ''}
@@ -1373,7 +1373,7 @@ export default function MapSection({
                   </div>
 
                   <div className="mt-4">
-                    <p className="text-sm font-semibold text-white">DifficultÃ©</p>
+                    <p className="text-sm font-semibold text-white">Difficulté</p>
                     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {difficultyOptions.map((option) => {
                         const isActive = difficultyFilter === option.id;
@@ -1425,7 +1425,7 @@ export default function MapSection({
                                   />
                                 ))}
                                 <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-300">
-                                  {`${threshold}â˜… et +`}
+                                  {`${threshold}★ et +`}
                                 </span>
                               </span>
                             ) : (
@@ -1448,7 +1448,7 @@ export default function MapSection({
                       className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400 hover:text-orange-200"
                       type="button"
                     >
-                      RÃ©initialiser
+                      Réinitialiser
                     </button>
                     <button
                       onClick={() => setShowFilterPanel(false)}
@@ -1498,7 +1498,7 @@ export default function MapSection({
                     <div className="relative h-40 w-40 overflow-hidden rounded-3xl border border-orange-500/30 shadow-[0_0_50px_rgba(255,149,60,0.35)]">
                       <video
                         className="h-full w-full object-cover"
-                        src="/CrÃ©ation_d_animation_de_chargement_skate_urbain.mp4"
+                        src="/Création_d_animation_de_chargement_skate_urbain.mp4"
                         autoPlay
                         loop
                         muted
@@ -1550,10 +1550,10 @@ export default function MapSection({
                           ? 'border-orange-500/60 bg-orange-500/20 text-orange-100'
                           : 'border-dark-700 bg-dark-900/80'
                       } ${isRouteLoading ? 'cursor-wait opacity-80' : ''}`}
-                      title="Afficher l'itinÃ©raire vers ce spot"
+                      title="Afficher l'itinéraire vers ce spot"
                     >
                       <Route size={18} className="text-orange-400" />
-                      <span>{isRouteLoading ? 'Calcul...' : 'ItinÃ©raire'}</span>
+                      <span>{isRouteLoading ? 'Calcul...' : 'Itinéraire'}</span>
                     </button>
                   )}
                 </div>
@@ -1562,7 +1562,7 @@ export default function MapSection({
                   <div className="absolute right-4 top-4 z-30 hidden w-[min(22rem,calc(100%-2rem))] rounded-2xl border border-dark-700 bg-dark-900/85 p-4 text-gray-200 shadow-2xl shadow-black/40 backdrop-blur lg:block">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">ItinÃ©raire</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">Itinéraire</p>
                         <h3 className="mt-1 text-lg font-semibold text-white leading-tight">{routeDetails.spotName}</h3>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                           <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1 text-orange-200">
@@ -1582,7 +1582,7 @@ export default function MapSection({
                         type="button"
                         onClick={clearRoute}
                         className="rounded-full p-1 text-gray-400 transition-colors hover:bg-dark-800/70 hover:text-white"
-                        title="Fermer l'itinÃ©raire"
+                        title="Fermer l'itinéraire"
                       >
                         <X size={16} />
                       </button>
@@ -1603,7 +1603,7 @@ export default function MapSection({
                                   <p className="font-medium leading-snug text-white">{step.instruction}</p>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                                     <span>{formatDistance(step.distance)}</span>
-                                    <span>â€¢</span>
+                                    <span>•</span>
                                     <span>{formatDuration(step.duration)}</span>
                                   </div>
                                 </div>
@@ -1613,7 +1613,7 @@ export default function MapSection({
                         </ol>
                       ) : (
                         <p className="text-sm text-gray-400">
-                          ItinÃ©raire dÃ©taillÃ© indisponible pour ce trajet.
+                          Itinéraire détaillé indisponible pour ce trajet.
                         </p>
                       )}
                     </div>
@@ -1652,7 +1652,7 @@ export default function MapSection({
             <div className="mt-4 rounded-2xl border border-dark-700 bg-dark-900/85 p-4 text-gray-200 shadow-2xl shadow-black/40 backdrop-blur lg:hidden">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">ItinÃ©raire</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-orange-400/80">Itinéraire</p>
                   <h3 className="mt-1 text-lg font-semibold leading-tight text-white">{routeDetails.spotName}</h3>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                     <span className="inline-flex items-center gap-1 rounded-full bg-dark-800/70 px-2.5 py-1 text-orange-200">
@@ -1672,7 +1672,7 @@ export default function MapSection({
                   type="button"
                   onClick={clearRoute}
                   className="rounded-full p-1 text-gray-400 transition-colors hover:bg-dark-800/70 hover:text-white"
-                  title="Fermer l'itinÃ©raire"
+                  title="Fermer l'itinéraire"
                 >
                   <X size={16} />
                 </button>
@@ -1693,7 +1693,7 @@ export default function MapSection({
                             <p className="font-medium leading-snug text-white">{step.instruction}</p>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                               <span>{formatDistance(step.distance)}</span>
-                              <span>â€¢</span>
+                              <span>•</span>
                               <span>{formatDuration(step.duration)}</span>
                             </div>
                           </div>
@@ -1703,7 +1703,7 @@ export default function MapSection({
                   </ol>
                 ) : (
                   <p className="text-sm text-gray-400">
-                    ItinÃ©raire dÃ©taillÃ© indisponible pour ce trajet.
+                    Itinéraire détaillé indisponible pour ce trajet.
                   </p>
                 )}
               </div>
@@ -1726,13 +1726,13 @@ export default function MapSection({
                   <MapPin size={48} className="opacity-40" />
                   <p>
                     {searchTerm.trim().length > 0
-                      ? `Aucun spot ne correspond Ã  Â« ${searchTerm} Â»`
-                      : 'Aucun spot trouvÃ©'}
+                      ? `Aucun spot ne correspond à « ${searchTerm} »`
+                      : 'Aucun spot trouvé'}
                   </p>
                   <p className="text-sm text-gray-500">
                     {searchTerm.trim().length > 0
-                      ? 'Essaie un autre nom, une ville ou rÃ©initialise ta recherche pour voir plus de rÃ©sultats.'
-                      : 'Ajoute le premier spot dans cette catÃ©gorie.'}
+                      ? 'Essaie un autre nom, une ville ou réinitialise ta recherche pour voir plus de résultats.'
+                      : 'Ajoute le premier spot dans cette catégorie.'}
                   </p>
                 </div>
               ) : mapVisibleSpots.length === 0 ? (
@@ -1740,7 +1740,7 @@ export default function MapSection({
                   <MapPin size={48} className="opacity-40" />
                   <p>Aucun spot visible dans cette zone.</p>
                   <p className="text-sm text-gray-500">
-                    DÃ©zoome ou dÃ©place la carte pour dÃ©couvrir davantage de spots.
+                    Dézoome ou déplace la carte pour découvrir davantage de spots.
                   </p>
                 </div>
               ) : (
@@ -1776,4 +1776,3 @@ export default function MapSection({
     </div>
   );
 }
-
