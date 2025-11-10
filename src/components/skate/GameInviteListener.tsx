@@ -12,6 +12,25 @@ type IncomingInvite = {
   ts: number;
 };
 
+const LIVE_ROOM_PATH = "/skate/live";
+const LIVE_ROOM_PARAM = "room";
+
+const buildLiveRoomTarget = (matchId: string) =>
+  `${LIVE_ROOM_PATH}?${LIVE_ROOM_PARAM}=${encodeURIComponent(matchId)}`;
+
+const resolveRoomTarget = (roomUrl: string | null | undefined, fallbackMatchId: string) => {
+  if (roomUrl) {
+    try {
+      const base = typeof window !== "undefined" ? window.location.origin : "https://localhost";
+      const url = new URL(roomUrl, base);
+      return `${url.pathname}${url.search}`;
+    } catch {
+      // ignore and fallback
+    }
+  }
+  return buildLiveRoomTarget(fallbackMatchId);
+};
+
 interface GameInviteListenerProps {
   /** id utilisateur connecté (profiles.id / auth.user.id) */
   userId: string | null | undefined;
@@ -76,10 +95,11 @@ export default function GameInviteListener({ userId }: GameInviteListenerProps) 
         .eq("id", inv.gosMatchId);
 
       // Redirection vers la salle (utilise le lien fourni)
-      navigate(new URL(inv.roomUrl).pathname + new URL(inv.roomUrl).search);
+      const target = resolveRoomTarget(inv.roomUrl, inv.gosMatchId || inv.skateMatchId);
+      navigate(target);
     } catch {
       // En cas d’échec, tente quand même la navigation
-      navigate(`/live?match=${inv.skateMatchId}`);
+      navigate(buildLiveRoomTarget(inv.gosMatchId || inv.skateMatchId));
     } finally {
       setInvites((prev) => prev.filter((i) => i.id !== inv.id));
     }

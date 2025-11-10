@@ -8,11 +8,13 @@ import type {
   SkateMatchRow,
   SkateTurnRow,
 } from '../types';
+type TurnIndexRow = Pick<SkateTurnRow, 'turn_index'>;
 
 /* ============================================================================
  * Env & utils
  * ========================================================================== */
 const nowIso = () => new Date().toISOString();
+
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -74,7 +76,21 @@ export async function createTurn(params: {
   difficulty?: number;
   mode: MatchMode;
 }): Promise<SkateTurnRow> {
-  const idx = mock.turns.filter((t) => t.match_id === params.match_id).length;
+  const lastTurns = await withTableFallback<TurnIndexRow[]>(
+    supabase
+      .from('skate_turns')
+      .select('turn_index')
+      .eq('match_id', params.match_id)
+      .order('turn_index', { ascending: false })
+      .limit(1),
+    () => {
+      const sorted = mock.turns
+        .filter((t) => t.match_id === params.match_id)
+        .sort((a, b) => b.turn_index - a.turn_index);
+      return sorted.length ? [{ turn_index: sorted[0].turn_index }] : [];
+    }
+  );
+  const idx = (lastTurns?.[0]?.turn_index ?? -1) + 1;
   const row: SkateTurnRow = {
     id: (crypto as any).randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     match_id: params.match_id,

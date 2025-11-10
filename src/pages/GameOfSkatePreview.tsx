@@ -1,5 +1,6 @@
-import GameOfSkateLiveMock from "@/components/skate/GameOfSkateLiveMock";
+import LiveSkateRoom from "./LiveSkateRoom";
 
 export default function GameOfSkatePreview() {
-  return <GameOfSkateLiveMock />;
+  return <LiveSkateRoom />;
 }
+

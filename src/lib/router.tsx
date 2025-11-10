@@ -1,5 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+type NavigateEventDetail = {
+  to: string;
+  options?: { replace?: boolean };
+};
+
+declare global {
+  interface WindowEventMap {
+    'router:navigate': CustomEvent<NavigateEventDetail>;
+  }
+}
+
 export interface AppLocation {
   pathname: string;
   search: string;
@@ -54,6 +65,14 @@ export function RouterProvider({ children }: RouterProviderProps) {
 
   const navigate = useCallback((to: string, options?: { replace?: boolean }) => {
     if (typeof window === 'undefined') {
+      return;
+    }
+
+    const event = new CustomEvent<NavigateEventDetail>('router:navigate', {
+      detail: { to, options },
+      cancelable: true,
+    });
+    if (!window.dispatchEvent(event)) {
       return;
     }
 

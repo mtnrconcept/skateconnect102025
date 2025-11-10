@@ -1,4 +1,4 @@
-Ôªøimport { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   CheckCircle2,
@@ -32,7 +32,7 @@ type Match = {
   winner: Side | null;
   created_at: string;
   accepted_at?: string | null;
-  // Champs optionnels ‚Äî non s√©lectionn√©s c√¥t√© SQL pour √©viter les 42703
+  // Champs optionnels ó non sÈlectionnÈs cÙtÈ SQL pour Èviter les 42703
   starts_at?: string | null;
   countdown_s?: number | null;
 };
@@ -201,7 +201,7 @@ export default function GameOfSkateSelfRef({
   const [trickName, setTrickName] = useState("Kickflip");
   const [remainingClock, setRemainingClock] = useState("30:00.0");
 
-  // Compte √† rebours synchronis√© (optionnel)
+  // Compte ‡ rebours synchronisÈ (optionnel)
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(10);
   const [countdownKey, setCountdownKey] = useState(0);
@@ -368,11 +368,11 @@ export default function GameOfSkateSelfRef({
       p_payload: payload ?? null,
     });
 
-    // La logique de fallback est supprim√©e. Si l'appel RPC √©choue,
-    // nous affichons l'erreur pour faciliter le d√©bogage.
+    // La logique de fallback est supprimÈe. Si l'appel RPC Èchoue,
+    // nous affichons l'erreur pour faciliter le dÈbogage.
     if (tryRpc.error) {
       console.error("[gos] chat rpc error", tryRpc.error);
-      // Optionnel: afficher une notification √† l'utilisateur
+      // Optionnel: afficher une notification ‡ l'utilisateur
     }
   };
 
@@ -398,7 +398,7 @@ export default function GameOfSkateSelfRef({
 
   const onSetSucceeded = async () => {
     if (!match || !isActiveMatch || isEnded || !myTurn) return;
-    await rpcPost("event", `${iAm} valide son set. L‚Äôadversaire doit copier.`, {
+    await rpcPost("event", `${iAm} valide son set. Líadversaire doit copier.`, {
       actor: iAm,
       type: "set_ok",
     });
@@ -409,16 +409,16 @@ export default function GameOfSkateSelfRef({
     const loser: Side = match.turn === "A" ? "B" : "A";
     const result = await addLetter(loser);
 
-    await rpcPost("event", `Rider ${loser} √©choue la copie ‚Üí +1 lettre`, {
+    await rpcPost("event", `Rider ${loser} Èchoue la copie ? +1 lettre`, {
       loser,
       type: "copy_fail",
     });
 
     if (result?.ended) {
       const winner = loser === "A" ? "B" : "A";
-      await rpcPost("system", `Partie termin√©e. Vainqueur : Rider ${winner}`, { winner });
+      await rpcPost("system", `Partie terminÈe. Vainqueur : Rider ${winner}`, { winner });
     } else {
-      await rpcPost("system", `Tour conserv√© par Rider ${match.turn}.`, {
+      await rpcPost("system", `Tour conservÈ par Rider ${match.turn}.`, {
         turn: match.turn,
       });
     }
@@ -442,23 +442,23 @@ export default function GameOfSkateSelfRef({
       if (up.error) console.warn("[gos] switch_turn fallback error", up.error);
     }
 
-    await rpcPost("event", `${iAm} rate son set ‚Üí main √† ${iAm === "A" ? "B" : "A"}`, {
+    await rpcPost("event", `${iAm} rate son set ? main ‡ ${iAm === "A" ? "B" : "A"}`, {
       actor: iAm,
       type: "set_fail",
     });
   };
 
   /* =========================================================
-   *  Rendu MOBILE ‚Äî EXACT comme le mock / aucun scroll
+   *  Rendu MOBILE ó EXACT comme le mock / aucun scroll
    * ========================================================= */
   const MobileUI = () => {
-    // lettre active ¬´ H ¬ª visuellement
+    // lettre active ´ H ª visuellement
     const activeLetterIndex = 1;
 
     return (
       <div className="md:hidden text-zinc-200 bg-black h-[100dvh] w-full overflow-hidden">
         <div className="mx-auto h-full max-w-[520px] px-4">
-        {/* Grid en 5 rang√©es pour figer la hauteur, coll√© au header (h-16) */}
+        {/* Grid en 5 rangÈes pour figer la hauteur, collÈ au header (h-16) */}
         <div className="grid h-full grid-rows-[64px,1fr,76px,136px,64px] pt-16 gap-0">
             {/* Pastilles SHRED */}
             <div className="flex items-center justify-center gap-4">
@@ -480,17 +480,17 @@ export default function GameOfSkateSelfRef({
               ))}
             </div>
 
-            {/* Vid√©o (remplacer par ton player) */}
+            {/* VidÈo (remplacer par ton player) */}
             <div className="relative rounded-2xl border border-zinc-700 bg-zinc-950 overflow-hidden">
               <div className="absolute inset-0">
                 {/* Place ton flux ici si besoin */}
                 <div className="w-full h-full bg-black grid place-items-center">
                   <span className="text-zinc-500 text-sm opacity-60">
-                    Flux vid√©o / √©cran du rider
+                    Flux vidÈo / Ècran du rider
                   </span>
                 </div>
               </div>
-              {/* padding bas pour laisser la place aux boutons dans le cadre comme sur l‚Äôimage */}
+              {/* padding bas pour laisser la place aux boutons dans le cadre comme sur líimage */}
               <div className="pointer-events-none h-full w-full opacity-0">.</div>
             </div>
 
@@ -502,7 +502,7 @@ export default function GameOfSkateSelfRef({
                 className="flex-1 h-12 rounded-xl font-semibold inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-lg shadow-emerald-800/30 disabled:opacity-50"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                {/* libell√© sans accent comme le mock */}
+                {/* libellÈ sans accent comme le mock */}
                 Trick reussi
               </button>
               <button
@@ -511,15 +511,15 @@ export default function GameOfSkateSelfRef({
                 className="flex-1 h-12 rounded-xl font-semibold inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white shadow-lg shadow-rose-900/40 disabled:opacity-50"
               >
                 <XCircle className="w-5 h-5" />
-                Trick loup√©
+                Trick loupÈ
               </button>
             </div>
 
-            {/* Carte ‚ÄúTrick √† faire‚Äù */}
+            {/* Carte ìTrick ‡ faireî */}
             <div className="rounded-2xl p-4 bg-zinc-900/70 border border-zinc-700/60 backdrop-blur shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)]">
               <div className="flex items-center justify-between">
                 <h2 className="font-extrabold text-xl text-amber-400 tracking-wide">
-                  Trick √† faire
+                  Trick ‡ faire
                 </h2>
                 <Sparkles className="w-5 h-5 text-zinc-400" />
               </div>
@@ -528,7 +528,7 @@ export default function GameOfSkateSelfRef({
                 <button
                   type="button"
                   className="shrink-0 w-12 h-12 rounded-xl border border-zinc-700/70 bg-zinc-900/80 grid place-items-center"
-                  aria-label="Retour vid√©o"
+                  aria-label="Retour vidÈo"
                 >
                   <Play className="w-6 h-6 text-zinc-200" />
                 </button>
@@ -552,10 +552,10 @@ export default function GameOfSkateSelfRef({
                 </button>
               </div>
 
-              <p className="mt-2 text-xs text-zinc-500">retour vid√©o</p>
+              <p className="mt-2 text-xs text-zinc-500">retour vidÈo</p>
             </div>
 
-            {/* Barre d‚Äôic√¥nes basse (fixe) */}
+            {/* Barre díicÙnes basse (fixe) */}
             <div className="border-t border-zinc-800/80 bg-zinc-900/80 backdrop-blur">
               <div className="mx-auto h-16 max-w-[520px] px-6">
                 <ul className="h-full grid grid-cols-4 items-center text-zinc-300">
@@ -575,7 +575,7 @@ export default function GameOfSkateSelfRef({
                     </button>
                   </li>
                   <li className="grid place-items-center">
-                    <button className="flex flex-col items-center gap-1 text-xs" aria-label="Plein √©cran">
+                    <button className="flex flex-col items-center gap-1 text-xs" aria-label="Plein Ècran">
                       <ArrowUpRightSquare className="w-6 h-6" />
                     </button>
                   </li>
@@ -592,7 +592,7 @@ export default function GameOfSkateSelfRef({
   const offlineBadge = !rtOnline ? (
     <span className="ml-2 inline-flex items-center gap-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">
       <WifiOff className="h-3 w-3" />
-      Realtime d√©connect√©
+      Realtime dÈconnectÈ
     </span>
   ) : null;
 
@@ -601,8 +601,8 @@ export default function GameOfSkateSelfRef({
     centralCardContent = (
       <div className="flex flex-col items-center gap-4 text-center text-white/70">
         <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Arbitre du jeu</div>
-        <div className="text-lg font-semibold text-white">En attente de l‚Äôadversaire</div>
-        <p className="text-xs text-white/50">Ton adversaire doit accepter le d√©fi pour d√©marrer la partie.</p>
+        <div className="text-lg font-semibold text-white">En attente de líadversaire</div>
+        <p className="text-xs text-white/50">Ton adversaire doit accepter le dÈfi pour dÈmarrer la partie.</p>
         <div className="mt-2 h-2 w-48 overflow-hidden rounded-full bg-white/10">
           <div className="h-full w-full animate-pulse bg-gradient-to-r from-[#FF6A00]/20 via-[#FF6A00] to-[#FF6A00]/20" />
         </div>
@@ -611,14 +611,14 @@ export default function GameOfSkateSelfRef({
   } else if (isCancelled) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-3 text-center text-white/70">
-        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match annul√©</div>
-        <p className="text-xs text-white/50">L‚Äôadversaire a d√©clin√© l‚Äôinvitation. Retourne au lobby pour relancer un d√©fi.</p>
+        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match annulÈ</div>
+        <p className="text-xs text-white/50">Líadversaire a dÈclinÈ líinvitation. Retourne au lobby pour relancer un dÈfi.</p>
       </div>
     );
   } else if (isEnded) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-4 text-center text-white/80">
-        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match termin√©</div>
+        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match terminÈ</div>
         <div className="flex items-center gap-2 text-amber-300">
           <Crown className="h-5 w-5" />
           Vainqueur : Rider {match?.winner ?? "?"}
@@ -644,7 +644,7 @@ export default function GameOfSkateSelfRef({
             className="inline-flex items-center gap-2 rounded-lg bg-[#1E8030] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-[#1E8030]/40 transition disabled:opacity-50"
           >
             <CheckCircle2 className="h-4 w-4" />
-            Trick accept√©
+            Trick acceptÈ
           </button>
           <button
             onClick={myTurn ? onSetFailed : onCopyFailed}
@@ -652,14 +652,14 @@ export default function GameOfSkateSelfRef({
             className="inline-flex items-center gap-2 rounded-lg bg-[#D32F2F] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-[#D32F2F]/40 transition hover:bg-[#e53e3e] disabled:opacity-50"
           >
             <XCircle className="h-4 w-4" />
-            Trick refus√©
+            Trick refusÈ
           </button>
         </div>
         <p className="mt-4 text-xs text-white/55">
           {myTurn
-            ? "√Ä toi de lancer un trick."
+            ? "¿ toi de lancer un trick."
             : copyTurn
-            ? "R√©plique le trick impos√©."
+            ? "RÈplique le trick imposÈ."
             : "En attente du tour suivant."}
         </p>
       </div>
@@ -672,7 +672,7 @@ export default function GameOfSkateSelfRef({
   if (!match) {
     return (
       <div className="grid place-items-center rounded-2xl border border-white/10 bg-[#121214] p-10 text-white/60">
-        Chargement du match‚Ä¶
+        Chargement du matchÖ
       </div>
     );
   }
@@ -690,7 +690,7 @@ export default function GameOfSkateSelfRef({
       {/* MOBILE (mock exact, aucun scroll) */}
       <MobileUI />
 
-      {/* DESKTOP (ancienne UI conserv√©e) */}
+      {/* DESKTOP (ancienne UI conservÈe) */}
       <div className="hidden md:block">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 text-white">
           <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,0.8fr)_1fr]">
@@ -715,11 +715,11 @@ export default function GameOfSkateSelfRef({
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-4">
-              <VideoPane label="Flux vid√©o rider A" className="h-[440px]" />
+              <VideoPane label="Flux vidÈo rider A" className="h-[440px]" />
               <LatencyBar label="Latences A" />
             </div>
             <div className="flex flex-col gap-4">
-              <VideoPane label="Flux vid√©o rider B" className="h-[440px]" />
+              <VideoPane label="Flux vidÈo rider B" className="h-[440px]" />
               <LatencyBar label="Latences B" />
             </div>
           </div>
@@ -770,7 +770,7 @@ export default function GameOfSkateSelfRef({
                       setInput("");
                       await rpcPost("text", trimmed);
                     })()}
-                    placeholder="√âcris un message‚Ä¶"
+                    placeholder="…cris un messageÖ"
                     className="h-10 flex-1 rounded-lg border border-white/10 bg-black/60 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#FF6A00]"
                   />
                   <button
@@ -791,13 +791,13 @@ export default function GameOfSkateSelfRef({
 
             <div className="flex flex-col gap-6">
               <SectionCard
-                title="Choix de la r√®gle"
+                title="Choix de la rËgle"
                 icon={<Settings className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
                 <div className="text-sm text-white/60">
                   <label className="block text-xs uppercase tracking-[0.3em] text-white/40">
-                    R√®gle active
+                    RËgle active
                   </label>
                   <select
                     value={ruleChoice}
@@ -812,7 +812,7 @@ export default function GameOfSkateSelfRef({
               </SectionCard>
 
               <SectionCard
-                title="Trick √† faire"
+                title="Trick ‡ faire"
                 icon={<Wand2 className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
@@ -838,13 +838,13 @@ export default function GameOfSkateSelfRef({
               </SectionCard>
 
               <SectionCard
-                title="R√®gles du jeu"
+                title="RËgles du jeu"
                 icon={<BookOpen className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
                 <p className="text-sm leading-relaxed text-white/70">
-                  Deux riders s‚Äôaffrontent : le premier impose une figure, l‚Äôautre doit la reproduire. Chaque √©chec donne une lettre du mot{" "}
-                  <span className="font-semibold text-white">S.K.A.T.E.</span>. √Ä cinq lettres, la partie est perdue. Le dernier rider sans faute gagne ‚Äî style, propret√© et fair-play obligatoires.
+                  Deux riders síaffrontent : le premier impose une figure, líautre doit la reproduire. Chaque Èchec donne une lettre du mot{" "}
+                  <span className="font-semibold text-white">S.K.A.T.E.</span>. ¿ cinq lettres, la partie est perdue. Le dernier rider sans faute gagne ó style, propretÈ et fair-play obligatoires.
                 </p>
               </SectionCard>
             </div>
@@ -854,3 +854,4 @@ export default function GameOfSkateSelfRef({
     </>
   );
 }
+

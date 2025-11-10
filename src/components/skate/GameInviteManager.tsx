@@ -15,8 +15,11 @@ interface GameInviteManagerProps {
   currentUserId?: string | null;
 }
 
-const SELFREF_PATH = "/skate/selfref";
-const SELFREF_PARAM = "gosId";
+const LIVE_SKATE_PATH = "/skate/live";
+const LIVE_SKATE_PARAM = "room";
+
+const buildLiveSkateUrl = (gosId: string) =>
+  `${LIVE_SKATE_PATH}?${LIVE_SKATE_PARAM}=${encodeURIComponent(gosId)}`;
 
 export default function GameInviteManager({ currentUserId }: GameInviteManagerProps) {
   const [queue, setQueue] = useState<GameInvite[]>([]);
@@ -117,26 +120,30 @@ export default function GameInviteManager({ currentUserId }: GameInviteManagerPr
     };
   }, [currentUserId, queueFromRow, removeInvite]);
 
-  const hardNavigateSelfRef = useCallback((gosId: string) => {
+  const hardNavigateToLiveRoom = useCallback((gosId: string) => {
     if (navigatingRef.current) return;
     navigatingRef.current = true;
 
-    const rel = `${SELFREF_PATH}?${SELFREF_PARAM}=${encodeURIComponent(gosId)}`;
-    try { navigate(rel); } catch {}
+    const rel = buildLiveSkateUrl(gosId);
+    try {
+      navigate(rel);
+    } catch {}
 
     setTimeout(() => {
       const ok =
         typeof window !== "undefined" &&
-        window.location.pathname === SELFREF_PATH &&
-        window.location.search.includes(`${SELFREF_PARAM}=${gosId}`);
+        window.location.pathname === LIVE_SKATE_PATH &&
+        window.location.search.includes(`${LIVE_SKATE_PARAM}=${encodeURIComponent(gosId)}`);
       if (!ok) {
-        const abs = new URL(window.location.href);
-        abs.pathname = SELFREF_PATH;
-        abs.search = `?${SELFREF_PARAM}=${encodeURIComponent(gosId)}`;
-        try {
-          window.location.replace(abs.toString());
-        } catch {
-          window.location.href = abs.toString();
+        if (typeof window !== "undefined") {
+          const abs = new URL(window.location.href);
+          abs.pathname = LIVE_SKATE_PATH;
+          abs.search = `?${LIVE_SKATE_PARAM}=${encodeURIComponent(gosId)}`;
+          try {
+            window.location.replace(abs.toString());
+          } catch {
+            window.location.href = abs.toString();
+          }
         }
       }
       setTimeout(() => (navigatingRef.current = false), 300);
@@ -153,19 +160,20 @@ export default function GameInviteManager({ currentUserId }: GameInviteManagerPr
         if (action === "accept") {
           // Edge Function vérifie que rider_b = auth.uid()
           await acceptGOSMatch(invite.matchId);
-          // redirection immédiate vers la salle SelfRef (gosId dans l’URL)
-          hardNavigateSelfRef(invite.matchId);
         } else {
           await declineGOSMatch(invite.matchId);
         }
-        removeInvite(invite.matchId);
       } catch (error) {
         console.error("[gos] Accept/Decline error:", error);
       } finally {
+        if (action === "accept") {
+          hardNavigateToLiveRoom(invite.matchId);
+        }
+        removeInvite(invite.matchId);
         setProcessing(false);
       }
     },
-    [activeInvite, currentUserId, removeInvite, hardNavigateSelfRef]
+    [activeInvite, currentUserId, removeInvite, hardNavigateToLiveRoom]
   );
 
   const inviterName = useMemo(() => activeInvite?.inviterName ?? "Un rider", [activeInvite]);

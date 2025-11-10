@@ -11,7 +11,7 @@ import ChallengeDetailModal from '../challenges/ChallengeDetailModal';
 import { fetchSubmissionHistory, fetchChallengeWinners } from '../../lib/challenges';
 import type { Challenge, ChallengeSubmission, ContentNavigationOptions, Profile } from '../../types';
 import Lobby from '../skate/Lobby';
-import MatchRoomLive from '../skate/MatchRoomLive';
+import GameOfSkateSelfRef from '../skate/GameOfSkateSelfRef';
 import MatchRoomRemote from '../skate/MatchRoomRemote';
 import { createMatch } from '../../lib/skate';
 
@@ -695,8 +695,8 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
           </>
           )}
 
-          {skateMatchId && skateMode === 'live' && (
-            <MatchRoomLive matchId={skateMatchId} profile={profile} />
+          {skateMatchId && skateMode === 'live' && profile?.id && (
+            <GameOfSkateSelfRef matchId={skateMatchId} me={profile.id} />
           )}
           {skateMatchId && skateMode === 'remote' && (
             <MatchRoomRemote matchId={skateMatchId} />
