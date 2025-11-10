@@ -13,12 +13,15 @@ import {
   ChevronDown,
   Sparkles,
   ArrowLeft,
+  Trash2,
 } from 'lucide-react';
 import type { Profile } from '../../types';
 import { useConversations } from '../../hooks/useConversations';
 import { useMessages, type MessageWithSender } from '../../hooks/useMessages';
 import { getUserDisplayName } from '../../lib/userUtils';
 import { fakeMessagesByProfileId, fakeProfilesById } from '../../data/fakeFeed';
+import { deleteConversation } from '../../lib/messages';
+import { supabase } from '../../lib/supabase';
 
 interface Participant {
   id: string;
@@ -175,6 +178,7 @@ export default function MessagesSection({
     error: conversationsError,
     hasMore: conversationsHasMore,
     loadMore: loadMoreConversations,
+    refresh: refreshConversations,
     markConversationReadLocally,
     ensureConversation,
   } = useConversations(viewerId);
@@ -191,6 +195,9 @@ export default function MessagesSection({
   const [pendingOptions, setPendingOptions] = useState({ isMuted: false, isPinned: false });
   const [isSparkComposerOpen, setSparkComposerOpen] = useState(false);
   const [sparkNotes, setSparkNotes] = useState('');
+  const [conversationPendingDelete, setConversationPendingDelete] = useState<ConversationPreview | null>(null);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const [deleteConversationError, setDeleteConversationError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [preferences, setPreferences] = useState<Record<string, { isMuted: boolean; isPinned: boolean }>>({});
   const [systemMessages, setSystemMessages] = useState<Record<string, ConversationMessage[]>>({});
@@ -882,6 +889,86 @@ export default function MessagesSection({
         break;
     }
   };
+
+  const requestDeleteConversation = useCallback(() => {
+    if (!selectedConversation || selectedConversation.type !== 'real') {
+      showToast('Cette conversation ne peut pas être supprimée.');
+      return;
+    }
+    setDeleteConversationError(null);
+    setConversationPendingDelete(selectedConversation);
+    setMoreOptionsOpen(false);
+  }, [selectedConversation, showToast]);
+
+  const closeDeleteConversationDialog = useCallback(() => {
+    if (isDeletingConversation) {
+      return;
+    }
+    setConversationPendingDelete(null);
+    setDeleteConversationError(null);
+  }, [isDeletingConversation]);
+
+  const confirmDeleteConversation = useCallback(async () => {
+    if (!conversationPendingDelete) {
+      return;
+    }
+    const targetId = conversationPendingDelete.id;
+    setIsDeletingConversation(true);
+    setDeleteConversationError(null);
+    try {
+      await deleteConversation(supabase, targetId);
+      showToast('Conversation supprimée.');
+      setConversationPendingDelete(null);
+      setPreferences((previous) => {
+        if (!previous[targetId]) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[targetId];
+        return next;
+      });
+      setSystemMessages((previous) => {
+        if (!previous[targetId]) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[targetId];
+        return next;
+      });
+      setEphemeralMessages((previous) => {
+        if (!previous[targetId]) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[targetId];
+        return next;
+      });
+      if (selectedId === targetId) {
+        setSelectedId('');
+        setMobileConversationOpen(false);
+      }
+      await refreshConversations();
+    } catch (error) {
+      console.error('Erreur lors de la suppression de la conversation :', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Impossible de supprimer la conversation pour le moment.";
+      setDeleteConversationError(message);
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  }, [
+    conversationPendingDelete,
+    refreshConversations,
+    selectedId,
+    showToast,
+    setEphemeralMessages,
+    setPreferences,
+    setSystemMessages,
+    setSelectedId,
+    setMobileConversationOpen,
+  ]);
 
   const handleComposerAction = (action: ComposerAction) => {
     setActiveComposerAction((current) => (current === action ? null : action));
@@ -2104,6 +2191,25 @@ export default function MessagesSection({
                 </span>
               </button>
             </div>
+            {selectedConversation?.type === 'real' && (
+              <div className="space-y-2 text-sm">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Historique</p>
+                <button
+                  type="button"
+                  onClick={requestDeleteConversation}
+                  className="flex w-full items-center justify-between rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-left font-semibold text-red-200 hover:bg-red-500/20"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Trash2 size={16} />
+                    Supprimer la conversation
+                  </span>
+                  <span className="text-[11px] uppercase tracking-wide">Définitif</span>
+                </button>
+                <p className="text-xs text-gray-500">
+                  L’historique partagé sera supprimé pour ce compte.
+                </p>
+              </div>
+            )}
             <div className="flex justify-end gap-3 text-sm">
               <button
                 type="button"
@@ -2118,6 +2224,47 @@ export default function MessagesSection({
                 className="px-4 py-2 rounded-full bg-orange-500 text-white font-semibold shadow-lg shadow-orange-500/30 hover:bg-orange-400"
               >
                 Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {conversationPendingDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="conversation-delete-title"
+        >
+          <div className="w-full max-w-md rounded-3xl border border-dark-700 bg-dark-900/95 p-6 space-y-5">
+            <div className="space-y-1">
+              <h2 id="conversation-delete-title" className="text-lg font-semibold text-white">
+                Supprimer la conversation ?
+              </h2>
+              <p className="text-sm text-gray-400">
+                L’historique avec {conversationPendingDelete.participant.name} sera effacé pour votre compte.
+              </p>
+            </div>
+            {deleteConversationError && (
+              <p className="text-sm text-red-400">{deleteConversationError}</p>
+            )}
+            <div className="flex justify-end gap-3 text-sm">
+              <button
+                type="button"
+                onClick={closeDeleteConversationDialog}
+                disabled={isDeletingConversation}
+                className="px-4 py-2 rounded-full border border-dark-700 text-gray-300 hover:border-orange-400/60 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteConversation}
+                disabled={isDeletingConversation}
+                className="px-4 py-2 rounded-full bg-red-500 text-white font-semibold shadow-lg shadow-red-500/30 hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isDeletingConversation ? 'Suppression…' : 'Supprimer'}
               </button>
             </div>
           </div>

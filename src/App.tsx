@@ -734,7 +734,12 @@ function App() {
                   ))}
                 {currentSection === 'pricing' && <PricingSection />}
                 {currentSection === 'profile' && (
-                  <ProfileSection profile={activeProfile} onProfileUpdate={handleProfileUpdated} />
+                  <ProfileSection
+                    profile={activeProfile}
+                    currentUserId={activeProfile?.id ?? null}
+                    onOpenConversation={handleOpenConversation}
+                    onProfileUpdate={handleProfileUpdated}
+                  />
                 )}
                 {currentSection === 'badges' && <BadgesSection profile={activeProfile} />}
                 {currentSection === 'rewards' && <RewardsSection profile={activeProfile} />}

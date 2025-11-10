@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MapPin, Award } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 import { getUserInitial, getUserDisplayName } from '../../lib/userUtils';
@@ -15,10 +15,17 @@ import type { Profile, Post, UserXP, UserBadge } from '../../types';
 
 interface ProfileSectionProps {
   profile: Profile | null;
+  currentUserId?: string | null;
+  onOpenConversation?: (profileId: string) => Promise<void> | void;
   onProfileUpdate?: (profile: Profile) => void;
 }
 
-export default function ProfileSection({ profile, onProfileUpdate }: ProfileSectionProps) {
+export default function ProfileSection({
+  profile,
+  currentUserId,
+  onOpenConversation,
+  onProfileUpdate,
+}: ProfileSectionProps) {
   const [profileData, setProfileData] = useState<Profile | null>(profile);
   const [activeTab, setActiveTab] = useState('posts');
   const [userPosts, setUserPosts] = useState<Post[]>([]);
@@ -35,6 +42,8 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
   const [showGalleryViewer, setShowGalleryViewer] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   const [profileSnapshot, setProfileSnapshot] = useState<Profile | null>(null);
+  const [isOpeningConversation, setIsOpeningConversation] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
 
   const handleAvatarPreview = useCallback((url: string | null) => {
     setProfileData((prev) => (prev ? { ...prev, avatar_url: url } : prev));
@@ -64,6 +73,45 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
   useEffect(() => {
     setProfileData(profile);
   }, [profile]);
+
+  const viewerId = currentUserId ?? null;
+  const viewedProfileId = profileData?.id ?? null;
+  const isOwnProfile = Boolean(viewerId && viewedProfileId && viewerId === viewedProfileId);
+
+  const isCertifiedProfile = useMemo(() => {
+    if (!userBadges.length) {
+      return false;
+    }
+    return userBadges.some((userBadge) => {
+      const name = userBadge.badge?.name?.toLowerCase() ?? '';
+      const category = userBadge.badge?.category?.toLowerCase() ?? '';
+      return (
+        name.includes('certif') ||
+        category.includes('certif') ||
+        name.includes('pro rider')
+      );
+    });
+  }, [userBadges]);
+
+  const canMessageCertifiedProfile = Boolean(
+    onOpenConversation && viewedProfileId && !isOwnProfile && isCertifiedProfile,
+  );
+
+  const handleMessageClick = useCallback(async () => {
+    if (!canMessageCertifiedProfile || !profileData?.id || !onOpenConversation) {
+      return;
+    }
+    setMessageError(null);
+    setIsOpeningConversation(true);
+    try {
+      await onOpenConversation(profileData.id);
+    } catch (error) {
+      console.error("Erreur lors de l'ouverture de la messagerie :", error);
+      setMessageError("Impossible d'ouvrir la messagerie pour le moment.");
+    } finally {
+      setIsOpeningConversation(false);
+    }
+  }, [canMessageCertifiedProfile, onOpenConversation, profileData?.id]);
 
   const loadProfileData = useCallback(
     async (profileId: string) => {
@@ -315,13 +363,20 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
                 </div>
               )}
 
-              <div className="flex gap-3 mb-4">
+              <div className="flex gap-3 mb-4 flex-wrap">
                 <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
                   Follow
                 </button>
-                <button className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold">
-                  Message
-                </button>
+                {canMessageCertifiedProfile && (
+                  <button
+                    type="button"
+                    onClick={handleMessageClick}
+                    disabled={isOpeningConversation}
+                    className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isOpeningConversation ? 'Ouverture…' : 'Écrire un message'}
+                  </button>
+                )}
                 <button
                   onClick={openEditModal}
                   className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold"
@@ -329,6 +384,9 @@ export default function ProfileSection({ profile, onProfileUpdate }: ProfileSect
                   Edit Profile
                 </button>
               </div>
+              {messageError && (
+                <p className="text-sm text-red-400 -mt-2 mb-4">{messageError}</p>
+              )}
 
               <div className="flex justify-around border-t border-dark-700 pt-4">
                 <div className="text-center">

@@ -91,8 +91,11 @@ async function buildConversationItems(
 
   const participantIds = new Set<string>();
   for (const conversation of conversations) {
-    participantIds.add(conversation.participant_1_id);
-    participantIds.add(conversation.participant_2_id);
+    for (const participantId of conversation.participant_ids ?? []) {
+      if (participantId) {
+        participantIds.add(participantId);
+      }
+    }
   }
 
   const profileMap = await fetchProfileMap(Array.from(participantIds));
@@ -104,14 +107,14 @@ async function buildConversationItems(
 
   return conversations.map((conversation) => {
     const otherParticipantId =
-      conversation.participant_1_id === viewerId
-        ? conversation.participant_2_id
-        : conversation.participant_1_id;
+      conversation.participant_ids?.find((participantId) => participantId !== viewerId) ??
+      conversation.participant_ids?.[0] ??
+      null;
     const meta = metaMap.get(conversation.id);
 
     return {
       conversation,
-      otherParticipant: profileMap.get(otherParticipantId) ?? null,
+      otherParticipant: otherParticipantId ? profileMap.get(otherParticipantId) ?? null : null,
       lastMessage: meta?.lastMessage ?? null,
       unreadCount: meta?.unreadCount ?? 0,
     };
@@ -129,7 +132,7 @@ async function fetchConversationPage(
   const { data, error } = await supabase
     .from('conversations')
     .select('*')
-    .or(`participant_1_id.eq.${viewerId},participant_2_id.eq.${viewerId}`)
+    .contains('participant_ids', [viewerId])
     .order('last_message_at', { ascending: false, nullsLast: false })
     .range(from, to);
 
@@ -175,15 +178,16 @@ async function fetchConversationSummary(
 
   const conversation = data as Conversation;
   const otherParticipantId =
-    conversation.participant_1_id === viewerId
-      ? conversation.participant_2_id
-      : conversation.participant_1_id;
+    conversation.participant_ids?.find((participantId) => participantId !== viewerId) ??
+    conversation.participant_ids?.[0] ??
+    null;
 
-  const profileMap = await fetchProfileMap([otherParticipantId]);
+  const profileIds = otherParticipantId ? [otherParticipantId] : [];
+  const profileMap = profileIds.length ? await fetchProfileMap(profileIds) : new Map();
 
   return {
     conversation,
-    otherParticipant: profileMap.get(otherParticipantId) ?? null,
+    otherParticipant: otherParticipantId ? profileMap.get(otherParticipantId) ?? null : null,
     lastMessage: meta?.lastMessage ?? null,
     unreadCount: meta?.unreadCount ?? 0,
   };
@@ -358,7 +362,7 @@ export function useConversations(viewerId: string | null, pageSize = DEFAULT_PAG
         return;
       }
       const conversation = payload.new as Conversation;
-      if (conversation.participant_1_id !== viewerId && conversation.participant_2_id !== viewerId) {
+      if (!conversation.participant_ids?.includes(viewerId)) {
         return;
       }
       void upsertConversation(conversation.id);

@@ -8,14 +8,13 @@ La messagerie en temps réel repose sur deux tables principales, créées dans l
 | Colonne              | Type    | Détails |
 |----------------------|---------|---------|
 | `id`                 | `uuid`  | Identifiant unique, généré automatiquement. |
-| `participant_1_id`   | `uuid`  | Référence vers `profiles.id` (participant A). |
-| `participant_2_id`   | `uuid`  | Référence vers `profiles.id` (participant B). |
+| `participant_ids`    | `uuid[]`| Identifiants triés des participants (2 entrées pour un DM). |
 | `last_message_at`    | `timestamptz` | Date du dernier message (mise à jour par trigger). |
 | `created_at`         | `timestamptz` | Date de création de la conversation. |
 
 Contraintes et politiques :
-- Unicité du couple (`participant_1_id`, `participant_2_id`).
-- Vérification `participant_1_id != participant_2_id`.
+- Unicité du couple définie par le tableau trié `participant_ids` (DM uniquement).
+- Vérification de la taille du tableau (`array_length(participant_ids, 1) = 2`).
 - RLS : seuls les participants peuvent sélectionner/insérer leurs conversations.
 
 ## `messages`

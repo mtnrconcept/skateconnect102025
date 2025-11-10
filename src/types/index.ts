@@ -345,12 +345,9 @@ export interface Notification {
 
 export interface Conversation {
   id: string;
-  participant_1_id: string;
-  participant_2_id: string;
-  last_message_at: string;
+  participant_ids: string[];
+  last_message_at: string | null;
   created_at: string;
-  participant_1?: Profile;
-  participant_2?: Profile;
   last_message?: Message;
 }
 

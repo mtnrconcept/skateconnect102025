@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Paperclip, Smile, ThumbsUp, Star, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
+import { getOrCreateConversation } from '../../lib/messages.js';
 import type { Profile } from '../../types';
 
 interface MatchChatProps {
@@ -30,30 +31,13 @@ export default function MatchChat({ matchId, currentUserId, opponentProfile }: M
     (async () => {
       if (!opponentProfile) return;
 
-      // Find existing conversation between players
-      const { data: existingConv } = await supabase
-        .from('conversations')
-        .select('id')
-        .or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${opponentProfile.id}),and(participant_1_id.eq.${opponentProfile.id},participant_2_id.eq.${currentUserId})`)
-        .limit(1)
-        .single();
-
-      let conversationId = existingConv?.id;
-
-      if (!conversationId) {
-        // Create new conversation
-        const { data: newConv } = await supabase
-          .from('conversations')
-          .insert({
-            participant_1_id: currentUserId,
-            participant_2_id: opponentProfile.id,
-          })
-          .select('id')
-          .single();
-
-        if (newConv) {
-          conversationId = newConv.id;
-        }
+      let conversationId: string | null = null;
+      try {
+        const conversation = await getOrCreateConversation(supabase, currentUserId, opponentProfile.id);
+        conversationId = conversation.id;
+      } catch (error) {
+        console.error('MatchChat: unable to load conversation', error);
+        conversationId = null;
       }
 
       if (!conversationId) return;
@@ -125,35 +109,17 @@ export default function MatchChat({ matchId, currentUserId, opponentProfile }: M
   const sendMessage = async (content: string) => {
     if (!content.trim() || !opponentProfile) return;
 
-    // Find or create conversation
-    const { data: existingConv } = await supabase
-      .from('conversations')
-      .select('id')
-      .or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${opponentProfile.id}),and(participant_1_id.eq.${opponentProfile.id},participant_2_id.eq.${currentUserId})`)
-      .limit(1)
-      .single();
-
-    let conversationId = existingConv?.id;
-
-    if (!conversationId) {
-      const { data: newConv } = await supabase
-        .from('conversations')
-        .insert({
-          participant_1_id: currentUserId,
-          participant_2_id: opponentProfile.id,
-        })
-        .select('id')
-        .single();
-      conversationId = newConv?.id;
-    }
-
-    if (conversationId) {
+    try {
+      const conversation = await getOrCreateConversation(supabase, currentUserId, opponentProfile.id);
+      const conversationId = conversation.id;
       await supabase.from('messages').insert({
         conversation_id: conversationId,
         sender_id: currentUserId,
         content: content.trim(),
       });
       setInputValue('');
+    } catch (error) {
+      console.error('MatchChat: unable to send message', error);
     }
   };
 
@@ -231,4 +197,3 @@ export default function MatchChat({ matchId, currentUserId, opponentProfile }: M
     </div>
   );
 }
-

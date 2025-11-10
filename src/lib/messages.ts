@@ -3,17 +3,29 @@ import type { Conversation, Message } from '../types/index.js';
 import type { FakeDirectMessagePayload } from '../types/messages.js';
 import { isTableMissingError } from './supabaseErrors.js';
 
+function normalizeParticipants(participantA: string, participantB: string): string[] {
+  return [participantA, participantB].sort((left, right) => left.localeCompare(right));
+}
+
+function participantsMatch(candidate: Conversation | null, expected: string[]): boolean {
+  if (!candidate?.participant_ids || candidate.participant_ids.length !== expected.length) {
+    return false;
+  }
+  const normalized = [...candidate.participant_ids].sort((left, right) => left.localeCompare(right));
+  return normalized.every((value, index) => value === expected[index]);
+}
+
 async function findConversation(
   supabase: SupabaseClient,
   participantA: string,
   participantB: string,
 ): Promise<Conversation | null> {
+  const normalizedPair = normalizeParticipants(participantA, participantB);
+
   const { data, error } = await supabase
     .from('conversations')
     .select('*')
-    .eq('participant_1_id', participantA)
-    .eq('participant_2_id', participantB)
-    .maybeSingle();
+    .contains('participant_ids', normalizedPair);
 
   if (error) {
     if (isTableMissingError(error)) {
@@ -22,7 +34,9 @@ async function findConversation(
     throw error;
   }
 
-  return (data as Conversation | null) ?? null;
+  const rows = (data ?? []) as Conversation[];
+  const match = rows.find((row) => participantsMatch(row, normalizedPair)) ?? null;
+  return match;
 }
 
 export async function getOrCreateConversation(
@@ -39,18 +53,12 @@ export async function getOrCreateConversation(
     return existingDirect;
   }
 
-  const existingReverse = await findConversation(supabase, otherUserId, currentUserId);
-  if (existingReverse) {
-    return existingReverse;
-  }
-
-  const [firstParticipant, secondParticipant] = [currentUserId, otherUserId].sort();
+  const normalizedParticipants = normalizeParticipants(currentUserId, otherUserId);
 
   const { data, error } = await supabase
     .from('conversations')
     .insert({
-      participant_1_id: firstParticipant,
-      participant_2_id: secondParticipant,
+      participant_ids: normalizedParticipants,
     })
     .select('*')
     .single();
@@ -123,6 +131,38 @@ export async function markConversationMessagesAsRead(
   }
 
   return { updated: (data?.length ?? 0) as number };
+}
+
+export async function deleteConversation(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<void> {
+  if (!conversationId) {
+    throw new Error('Identifiant de conversation manquant');
+  }
+
+  const { error: messagesError } = await supabase
+    .from('messages')
+    .delete()
+    .eq('conversation_id', conversationId)
+    .select('id');
+
+  if (messagesError && !isTableMissingError(messagesError)) {
+    throw messagesError;
+  }
+
+  const { error } = await supabase
+    .from('conversations')
+    .delete()
+    .eq('id', conversationId)
+    .select('id');
+
+  if (error) {
+    if (isTableMissingError(error)) {
+      throw new Error("La messagerie n'est pas disponible pour le moment.");
+    }
+    throw error;
+  }
 }
 
 export async function processQueuedDirectMessages(
