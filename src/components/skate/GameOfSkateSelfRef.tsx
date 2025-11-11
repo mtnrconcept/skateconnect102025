@@ -27,6 +27,9 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import CountdownAnimation from "./CountdownAnimation";
 
+/* ⬇️ NOUVEAU : hooks utilitaires côté lib pour end sur leave (facultatif mais propre) */
+import { setupEndOnLeave } from "@/lib/skate"; // assure-toi d’avoir exporté cette fonction dans src/lib/skate.ts
+
 type Side = "A" | "B";
 type Match = {
   id: string;
@@ -39,7 +42,7 @@ type Match = {
   winner: Side | null;
   created_at: string;
   accepted_at?: string | null;
-  // Champs optionnels ï¿½ non sï¿½lectionnï¿½s cï¿½tï¿½ SQL pour ï¿½viter les 42703
+  /* ⬇️ IMPORTANT : présents côté SQL pour le countdown */
   starts_at?: string | null;
   countdown_s?: number | null;
 };
@@ -202,7 +205,7 @@ const SectionCard = ({
 }) => (
   <div className={`rounded-2xl border border-white/8 bg-[#16161A]/95 p-6 shadow-lg shadow-black/30 backdrop-blur ${className}`}>
     {title && (
-      <div className="mb-4 flex items-center gap-2 text-base font-semibold text-white/80">
+      <div className="mb-4 flex items-center gap-2 text/base font-semibold text-white/80">
         {icon}
         <span className={accentClassName}>{title}</span>
       </div>
@@ -247,7 +250,7 @@ export default function GameOfSkateSelfRef({
   const [trickName, setTrickName] = useState("Kickflip");
   const [remainingClock, setRemainingClock] = useState("30:00.0");
 
-  // Compte ï¿½ rebours synchronisï¿½ (optionnel)
+  // Compte à rebours synchronisé (optionnel)
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(10);
   const [countdownKey, setCountdownKey] = useState(0);
@@ -515,9 +518,10 @@ export default function GameOfSkateSelfRef({
 
   /* ---------- Chargements initiaux ---------- */
   const fetchMatch = useCallback(async () => {
+    /* ⬇️ IMPORTANT : on sélectionne aussi starts_at et countdown_s pour le countdown */
     const { data, error } = await supabase
       .from("gos_match")
-      .select("id,rider_a,rider_b,turn,letters_a,letters_b,status,winner,created_at,accepted_at")
+      .select("id,rider_a,rider_b,turn,letters_a,letters_b,status,winner,created_at,accepted_at,starts_at,countdown_s")
       .eq("id", matchId)
       .limit(1)
       .maybeSingle();
@@ -542,35 +546,56 @@ export default function GameOfSkateSelfRef({
     setMsgs((data as ChatMessage[]) ?? []);
   }, [matchId]);
 
+  /* ---------- Montage / Abonnements ---------- */
   useEffect(() => {
     let cancelled = false;
-
+  
     (async () => {
       await Promise.all([fetchMatch(), fetchChat()]);
       if (cancelled) return;
-
+  
       setChannelReady(false);
       setRtOnline(false);
-
+  
+      // IMPORTANT: self:true + ack:true pour fiabiliser la diffusion
       const channel = supabase
         .channel(`gos:${matchId}`, {
-          config: { broadcast: { self: false }, presence: { key: me } },
+          config: { broadcast: { self: true, ack: true }, presence: { key: me } },
         })
+        // CHAT: on capte tous les inserts
         .on(
           "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "gos_chat_message",
-            filter: `match_id=eq.${matchId}`,
+          { event: "INSERT", schema: "public", table: "gos_chat_message", filter: `match_id=eq.${matchId}` },
+          (payload) => {
+            const msg = payload.new as ChatMessage;
+            setMsgs((prev) => [...prev, msg]);
+  
+            // Détection locale 'Vainqueur : Rider X' — on garde, mais on la rend NOP en cas d’échec (pas de throw)
+            const txt = (msg?.text ?? "").toString();
+            const m = txt.match(/Vainqueur\s*:\s*Rider\s*(A|B)/i);
+            if (m) {
+              const winner = (m[1].toUpperCase() as "A" | "B");
+              supabase.from("gos_match")
+                .update({ status: "ended", winner })
+                .eq("id", matchId)
+                .then(({ error }) => { if (error) console.warn("[gos] end-on-victory update failed", error); });
+            }
           },
-          (payload) => setMsgs((prev) => [...prev, payload.new as ChatMessage]),
         )
+        // MATCH: on écoute INSERT/UPDATE/DELETE (selon tes triggers)
         .on(
           "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "gos_match", filter: `id=eq.${matchId}` },
-          (payload) => setMatch(payload.new as Match),
+          { event: "*", schema: "public", table: "gos_match", filter: `id=eq.${matchId}` },
+          (payload) => {
+            // payload.eventType: INSERT | UPDATE | DELETE
+            if (payload.eventType === "DELETE") {
+              setMatch((m) => (m && m.id === matchId ? null : m));
+            } else {
+              setMatch(payload.new as Match);
+            }
+          },
         )
+        // WebRTC
         .on("broadcast", { event: WEBRTC_EVENT }, ({ payload }) => {
           void handleIncomingSignal(payload as BroadcastSignal);
         })
@@ -578,22 +603,31 @@ export default function GameOfSkateSelfRef({
           const subscribed = status === "SUBSCRIBED";
           setRtOnline(subscribed);
           setChannelReady(subscribed);
+          // debug
+          // console.debug("[gos] realtime status =", status);
         });
-
+  
       chanRef.current = channel;
     })();
-
+  
+    // End-on-leave (si tu l’utilises)
+    const disposeLeave = typeof window !== "undefined" && (setupEndOnLeave ? setupEndOnLeave(matchId, me) : undefined);
+  
     return () => {
       cancelled = true;
       if (chanRef.current) {
-        supabase.removeChannel(chanRef.current);
+        chanRef.current.unsubscribe();          // ✅ unsubscribe propre
+        supabase.removeChannel(chanRef.current); // ✅ ensuite remove
         chanRef.current = null;
       }
       setChannelReady(false);
       setRtOnline(false);
+      disposeLeave?.();
     };
   }, [fetchChat, fetchMatch, handleIncomingSignal, matchId, me]);
+  
 
+  /* ---------- Timer global 30 min ---------- */
   const timerStartMs = useMemo(() => {
     if (match?.accepted_at) {
       const t = Date.parse(match.accepted_at);
@@ -622,9 +656,10 @@ export default function GameOfSkateSelfRef({
     return () => window.clearInterval(id);
   }, [timerStartMs]);
 
+  /* ---------- Countdown d’amorçage (utilise starts_at s’il est fetch) ---------- */
   useEffect(() => {
     const isActive = match?.status === "active";
-    const startsAt = (match as any)?.starts_at as string | undefined; // runtime-only
+    const startsAt = match?.starts_at ?? undefined;
     if (!isActive || !startsAt) {
       setCountdownActive(false);
       return;
@@ -648,12 +683,13 @@ export default function GameOfSkateSelfRef({
     } else {
       setCountdownActive(false);
     }
-  }, [match?.status, (match as any)?.starts_at, countdownKey]);
+  }, [match?.status, match?.starts_at, countdownKey]);
 
   const handleCountdownComplete = useCallback(() => {
     setCountdownActive(false);
   }, []);
 
+  /* ---------- WebRTC offer initiale ---------- */
   useEffect(() => {
     if (!cameraReady || !channelReady || !isInitiator || hasSentOffer) return;
     (async () => {
@@ -715,11 +751,13 @@ export default function GameOfSkateSelfRef({
   const displayNameA = useMemo(() => {
     if (!match) return "Rider A";
     return riderAName ?? match.rider_a ?? "Rider A";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match, riderAName]);
 
   const displayNameB = useMemo(() => {
     if (!match) return "Rider B";
     return riderBName ?? match.rider_b ?? "Rider B";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match, riderBName]);
 
   const fallbackNameA = useMemo(
@@ -740,11 +778,8 @@ export default function GameOfSkateSelfRef({
       p_payload: payload ?? null,
     });
 
-    // La logique de fallback est supprimï¿½e. Si l'appel RPC ï¿½choue,
-    // nous affichons l'erreur pour faciliter le dï¿½bogage.
     if (tryRpc.error) {
       console.error("[gos] chat rpc error", tryRpc.error);
-      // Optionnel: afficher une notification ï¿½ l'utilisateur
     }
   };
 
@@ -770,7 +805,7 @@ export default function GameOfSkateSelfRef({
 
   const onSetSucceeded = async () => {
     if (!match || !isActiveMatch || isEnded || !myTurn) return;
-    await rpcPost("event", `${iAm} valide son set. Lï¿½adversaire doit copier.`, {
+    await rpcPost("event", `${iAm} valide son set. L’adversaire doit copier.`, {
       actor: iAm,
       type: "set_ok",
     });
@@ -781,16 +816,17 @@ export default function GameOfSkateSelfRef({
     const loser: Side = match.turn === "A" ? "B" : "A";
     const result = await addLetter(loser);
 
-    await rpcPost("event", `Rider ${loser} ï¿½choue la copie ? +1 lettre`, {
+    await rpcPost("event", `Rider ${loser} échoue la copie ? +1 lettre`, {
       loser,
       type: "copy_fail",
     });
 
     if (result?.ended) {
       const winner = loser === "A" ? "B" : "A";
-      await rpcPost("system", `Partie terminï¿½e. Vainqueur : Rider ${winner}`, { winner });
+      /* ⬇️ Important : message conforme au pattern détecté */
+      await rpcPost("system", `Partie terminée. Vainqueur : Rider ${winner}`, { winner });
     } else {
-      await rpcPost("system", `Tour conservï¿½ par Rider ${match.turn}.`, {
+      await rpcPost("system", `Tour conservé par Rider ${match.turn}.`, {
         turn: match.turn,
       });
     }
@@ -814,24 +850,22 @@ export default function GameOfSkateSelfRef({
       if (up.error) console.warn("[gos] switch_turn fallback error", up.error);
     }
 
-    await rpcPost("event", `${iAm} rate son set ? main ï¿½ ${iAm === "A" ? "B" : "A"}`, {
+    await rpcPost("event", `${iAm} rate son set ? main à ${iAm === "A" ? "B" : "A"}`, {
       actor: iAm,
       type: "set_fail",
     });
   };
 
   /* =========================================================
-   *  Rendu MOBILE ï¿½ EXACT comme le mock / aucun scroll
+   *  Rendu MOBILE exact
    * ========================================================= */
   const MobileUI = () => {
-    // lettre active ï¿½ H ï¿½ visuellement
     const activeLetterIndex = 1;
 
     return (
       <div className="md:hidden text-zinc-200 bg-black h-[100dvh] w-full overflow-hidden">
         <div className="mx-auto h-full max-w-[520px] px-4">
-        {/* Grid en 5 rangï¿½es pour figer la hauteur, collï¿½ au header (h-16) */}
-        <div className="grid h-full grid-rows-[64px,1fr,76px,136px,64px] pt-16 gap-0">
+          <div className="grid h-full grid-rows-[64px,1fr,76px,136px,64px] pt-16 gap-0">
             {/* Pastilles SHRED */}
             <div className="flex items-center justify-center gap-4">
               {["S", "H", "R", "E", "D"].map((l, i) => (
@@ -852,7 +886,7 @@ export default function GameOfSkateSelfRef({
               ))}
             </div>
 
-            {/* Vidéo en direct */}
+            {/* Vidéo */}
             <div className="relative rounded-2xl border border-zinc-700 bg-black/80 overflow-hidden">
               <video
                 ref={remoteVideoMobileRef}
@@ -900,7 +934,6 @@ export default function GameOfSkateSelfRef({
                 className="flex-1 h-12 rounded-xl font-semibold inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-lg shadow-emerald-800/30 disabled:opacity-50"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                {/* libellï¿½ sans accent comme le mock */}
                 Trick reussi
               </button>
               <button
@@ -909,15 +942,15 @@ export default function GameOfSkateSelfRef({
                 className="flex-1 h-12 rounded-xl font-semibold inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white shadow-lg shadow-rose-900/40 disabled:opacity-50"
               >
                 <XCircle className="w-5 h-5" />
-                Trick loupï¿½
+                Trick loupé
               </button>
             </div>
 
-            {/* Carte ï¿½Trick ï¿½ faireï¿½ */}
+            {/* Carte “Trick à faire” */}
             <div className="rounded-2xl p-4 bg-zinc-900/70 border border-zinc-700/60 backdrop-blur shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)]">
               <div className="flex items-center justify-between">
                 <h2 className="font-extrabold text-xl text-amber-400 tracking-wide">
-                  Trick ï¿½ faire
+                  Trick à faire
                 </h2>
                 <Sparkles className="w-5 h-5 text-zinc-400" />
               </div>
@@ -926,7 +959,7 @@ export default function GameOfSkateSelfRef({
                 <button
                   type="button"
                   className="shrink-0 w-12 h-12 rounded-xl border border-zinc-700/70 bg-zinc-900/80 grid place-items-center"
-                  aria-label="Retour vidï¿½o"
+                  aria-label="Retour vidéo"
                 >
                   <Play className="w-6 h-6 text-zinc-200" />
                 </button>
@@ -950,10 +983,10 @@ export default function GameOfSkateSelfRef({
                 </button>
               </div>
 
-              <p className="mt-2 text-xs text-zinc-500">retour vidï¿½o</p>
+              <p className="mt-2 text-xs text-zinc-500">retour vidéo</p>
             </div>
 
-            {/* Barre dï¿½icï¿½nes basse (fixe) */}
+            {/* Barre d’icônes basse */}
             <div className="border-t border-zinc-800/80 bg-zinc-900/80 backdrop-blur">
               <div className="mx-auto h-16 max-w-[520px] px-6">
                 <ul className="h-full grid grid-cols-4 items-center text-zinc-300">
@@ -973,7 +1006,7 @@ export default function GameOfSkateSelfRef({
                     </button>
                   </li>
                   <li className="grid place-items-center">
-                    <button className="flex flex-col items-center gap-1 text-xs" aria-label="Plein ï¿½cran">
+                    <button className="flex flex-col items-center gap-1 text-xs" aria-label="Plein écran">
                       <ArrowUpRightSquare className="w-6 h-6" />
                     </button>
                   </li>
@@ -1105,11 +1138,11 @@ export default function GameOfSkateSelfRef({
     </div>
   );
 
-  /* ---------- Variantes de contenus pour le panneau central desktop ---------- */
+  /* ---------- Contenu central ---------- */
   const offlineBadge = !rtOnline ? (
     <span className="ml-2 inline-flex items-center gap-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">
       <WifiOff className="h-3 w-3" />
-      Realtime dï¿½connectï¿½
+      Realtime déconnecté
     </span>
   ) : null;
 
@@ -1117,12 +1150,16 @@ export default function GameOfSkateSelfRef({
   const rightVideoPanel = iAm === "B" ? renderLocalDesktopPanel("B") : renderRemoteDesktopPanel("B");
 
   let centralCardContent: React.ReactNode;
+
+
+ 
+
   if (isPendingMatch) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-4 text-center text-white/70">
         <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Arbitre du jeu</div>
-        <div className="text-lg font-semibold text-white">En attente de lï¿½adversaire</div>
-        <p className="text-xs text-white/50">Ton adversaire doit accepter le dï¿½fi pour dï¿½marrer la partie.</p>
+        <div className="text-lg font-semibold text-white">En attente de l’adversaire</div>
+        <p className="text-xs text-white/50">Ton adversaire doit accepter le défi pour démarrer la partie.</p>
         <div className="mt-2 h-2 w-48 overflow-hidden rounded-full bg-white/10">
           <div className="h-full w-full animate-pulse bg-gradient-to-r from-[#FF6A00]/20 via-[#FF6A00] to-[#FF6A00]/20" />
         </div>
@@ -1131,14 +1168,14 @@ export default function GameOfSkateSelfRef({
   } else if (isCancelled) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-3 text-center text-white/70">
-        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match annulï¿½</div>
-        <p className="text-xs text-white/50">Lï¿½adversaire a dï¿½clinï¿½ lï¿½invitation. Retourne au lobby pour relancer un dï¿½fi.</p>
+        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match annulé</div>
+        <p className="text-xs text-white/50">L’adversaire a décliné l’invitation. Retourne au lobby pour relancer un défi.</p>
       </div>
     );
   } else if (isEnded) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-4 text-center text-white/80">
-        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match terminï¿½</div>
+        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match terminé</div>
         <div className="flex items-center gap-2 text-amber-300">
           <Crown className="h-5 w-5" />
           Vainqueur : Rider {match?.winner ?? "?"}
@@ -1164,7 +1201,7 @@ export default function GameOfSkateSelfRef({
             className="inline-flex items-center gap-2 rounded-lg bg-[#1E8030] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-[#1E8030]/40 transition disabled:opacity-50"
           >
             <CheckCircle2 className="h-4 w-4" />
-            Trick acceptï¿½
+            Trick accepté
           </button>
           <button
             onClick={myTurn ? onSetFailed : onCopyFailed}
@@ -1172,14 +1209,14 @@ export default function GameOfSkateSelfRef({
             className="inline-flex items-center gap-2 rounded-lg bg-[#D32F2F] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-[#D32F2F]/40 transition hover:bg-[#e53e3e] disabled:opacity-50"
           >
             <XCircle className="h-4 w-4" />
-            Trick refusï¿½
+            Trick refusé
           </button>
         </div>
         <p className="mt-4 text-xs text-white/55">
           {myTurn
-            ? "ï¿½ toi de lancer un trick."
+            ? "À toi de lancer un trick."
             : copyTurn
-            ? "Rï¿½plique le trick imposï¿½."
+            ? "Réplique le trick imposé."
             : "En attente du tour suivant."}
         </p>
       </div>
@@ -1192,7 +1229,7 @@ export default function GameOfSkateSelfRef({
   if (!match) {
     return (
       <div className="grid place-items-center rounded-2xl border border-white/10 bg-[#121214] p-10 text-white/60">
-        Chargement du matchï¿½
+        Chargement du match…
       </div>
     );
   }
@@ -1207,10 +1244,10 @@ export default function GameOfSkateSelfRef({
         />
       )}
 
-      {/* MOBILE (mock exact, aucun scroll) */}
+      {/* MOBILE */}
       <MobileUI />
 
-      {/* DESKTOP (ancienne UI conservï¿½e) */}
+      {/* DESKTOP */}
       <div className="hidden md:block">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 text-white">
           <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,0.8fr)_1fr]">
@@ -1235,11 +1272,11 @@ export default function GameOfSkateSelfRef({
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-4">
-              {leftVideoPanel}
+              {iAm === "A" ? renderLocalDesktopPanel("A") : renderRemoteDesktopPanel("A")}
               <LatencyBar label="Latences A" />
             </div>
             <div className="flex flex-col gap-4">
-              {rightVideoPanel}
+              {iAm === "B" ? renderLocalDesktopPanel("B") : renderRemoteDesktopPanel("B")}
               <LatencyBar label="Latences B" />
             </div>
           </div>
@@ -1290,7 +1327,7 @@ export default function GameOfSkateSelfRef({
                       setInput("");
                       await rpcPost("text", trimmed);
                     })()}
-                    placeholder="ï¿½cris un messageï¿½"
+                    placeholder="Écris un message…"
                     className="h-10 flex-1 rounded-lg border border-white/10 bg-black/60 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#FF6A00]"
                   />
                   <button
@@ -1311,13 +1348,13 @@ export default function GameOfSkateSelfRef({
 
             <div className="flex flex-col gap-6">
               <SectionCard
-                title="Choix de la rï¿½gle"
+                title="Choix de la règle"
                 icon={<Settings className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
                 <div className="text-sm text-white/60">
                   <label className="block text-xs uppercase tracking-[0.3em] text-white/40">
-                    Rï¿½gle active
+                    Règle active
                   </label>
                   <select
                     value={ruleChoice}
@@ -1332,7 +1369,7 @@ export default function GameOfSkateSelfRef({
               </SectionCard>
 
               <SectionCard
-                title="Trick ï¿½ faire"
+                title="Trick à faire"
                 icon={<Wand2 className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
@@ -1358,13 +1395,13 @@ export default function GameOfSkateSelfRef({
               </SectionCard>
 
               <SectionCard
-                title="Rï¿½gles du jeu"
+                title="Règles du jeu"
                 icon={<BookOpen className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
                 <p className="text-sm leading-relaxed text-white/70">
-                  Deux riders sï¿½affrontent : le premier impose une figure, lï¿½autre doit la reproduire. Chaque ï¿½chec donne une lettre du mot{" "}
-                  <span className="font-semibold text-white">S.K.A.T.E.</span>. ï¿½ cinq lettres, la partie est perdue. Le dernier rider sans faute gagne ï¿½ style, propretï¿½ et fair-play obligatoires.
+                  Deux riders s’affrontent : le premier impose une figure, l’autre doit la reproduire. Chaque échec donne une lettre du mot{" "}
+                  <span className="font-semibold text-white">S.K.A.T.E.</span>. À cinq lettres, la partie est perdue. Le dernier rider sans faute gagne — style, propreté et fair-play obligatoires.
                 </p>
               </SectionCard>
             </div>
@@ -1374,7 +1411,3 @@ export default function GameOfSkateSelfRef({
     </>
   );
 }
-
-
-
-

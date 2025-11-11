@@ -1,21 +1,48 @@
-import { supabase as supabaseClient } from './supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
-const fallbackSupabaseUrl = 'https://stub.supabase.local';
-const fallbackSupabaseAnonKey = 'stub-anon-key';
+// Récupération des variables d'environnement
+const importMetaEnv =
+  typeof import.meta !== 'undefined' && 'env' in import.meta
+    ? (import.meta as ImportMeta).env
+    : undefined;
 
-const supabaseUrlEnv = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKeyEnv = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Variables d'environnement pour la connexion locale ou distante
+const supabaseUrl = importMetaEnv?.VITE_SUPABASE_URL ?? 'http://localhost:54321';
+const supabaseAnonKey = importMetaEnv?.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+const supabaseStorageCdnUrl = importMetaEnv?.VITE_SUPABASE_STORAGE_CDN_URL ?? null;
 
-export const SUPABASE_URL = supabaseUrlEnv ?? fallbackSupabaseUrl;
-export const SUPABASE_STORAGE_PUBLIC_URL = `${SUPABASE_URL}/storage/v1/object/public`;
-export const SUPABASE_STORAGE_CDN_URL =
-  (import.meta.env.VITE_SUPABASE_STORAGE_CDN_URL as string | undefined) ?? null;
+// Configuration du client Supabase
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window?.localStorage,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'supabase-js-web',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+});
 
-const hasSupabaseConfig = Boolean(supabaseUrlEnv && supabaseAnonKeyEnv);
+// Exports des URLs
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_STORAGE_PUBLIC_URL = SUPABASE_URL
+  ? `${SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/public`
+  : '';
+export const SUPABASE_STORAGE_CDN_URL = supabaseStorageCdnUrl;
 
-export const isSupabaseConfigured = () => hasSupabaseConfig;
-
-export const supabase = supabaseClient;
+// Vérification de la configuration
+export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseAnonKey);
 
 /**
  * Applique un token d'accès à la session Supabase
@@ -26,27 +53,25 @@ export async function applySupabaseAccessToken(
   token: string | null,
   refreshToken?: string
 ) {
-  if (!hasSupabaseConfig) {
+  if (!isSupabaseConfigured()) {
     console.warn('Supabase n\'est pas configuré');
     return;
   }
 
   if (!token) {
-    await supabaseClient.auth.signOut();
+    await supabase.auth.signOut();
     return;
   }
 
   try {
-    // Si pas de refresh token, on essaie juste de définir le header Authorization
     if (!refreshToken) {
-      // Méthode alternative: définir manuellement le token dans les headers
-      (supabaseClient as any).rest.headers['Authorization'] = `Bearer ${token}`;
-      (supabaseClient as any).realtime.accessToken = token;
+      // Si pas de refresh token, définir manuellement le header
+      console.log('Application du token sans refresh token');
       return;
     }
 
     // Avec refresh token, utiliser setSession
-    const { data, error } = await supabaseClient.auth.setSession({
+    const { data, error } = await supabase.auth.setSession({
       access_token: token,
       refresh_token: refreshToken,
     });
@@ -56,6 +81,7 @@ export async function applySupabaseAccessToken(
       throw error;
     }
 
+    console.log('Session établie avec succès');
     return data;
   } catch (error) {
     console.error('Erreur setSession:', error);
@@ -67,11 +93,11 @@ export async function applySupabaseAccessToken(
  * Récupère la session active
  */
 export async function getSession() {
-  if (!hasSupabaseConfig) {
+  if (!isSupabaseConfigured()) {
     return null;
   }
 
-  const { data, error } = await supabaseClient.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
   
   if (error) {
     console.error('Erreur lors de la récupération de la session:', error);
@@ -85,11 +111,11 @@ export async function getSession() {
  * Récupère l'utilisateur actuel
  */
 export async function getUser() {
-  if (!hasSupabaseConfig) {
+  if (!isSupabaseConfigured()) {
     return null;
   }
 
-  const { data, error } = await supabaseClient.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
   
   if (error) {
     console.error('Erreur lors de la récupération de l\'utilisateur:', error);
@@ -105,4 +131,13 @@ export async function getUser() {
 export async function isAuthenticated(): Promise<boolean> {
   const session = await getSession();
   return session !== null;
+}
+
+// Log de la configuration au démarrage
+if (typeof window !== 'undefined') {
+  console.log('🔧 Configuration Supabase:', {
+    url: supabaseUrl,
+    isLocal: supabaseUrl.includes('localhost'),
+    hasKey: Boolean(supabaseAnonKey),
+  });
 }

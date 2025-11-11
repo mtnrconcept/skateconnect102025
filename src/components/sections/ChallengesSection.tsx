@@ -13,7 +13,8 @@ import type { Challenge, ChallengeSubmission, ContentNavigationOptions, Profile 
 import Lobby from '../skate/Lobby';
 import GameOfSkateSelfRef from '../skate/GameOfSkateSelfRef';
 import MatchRoomRemote from '../skate/MatchRoomRemote';
-import { createMatch } from '../../lib/skate';
+import { createMatch, createGOSMatchWithLocal } from '../../lib/skate';
+import { useRouter } from '../../lib/router';
 
 interface ChallengesSectionProps {
   profile: Profile | null;
@@ -22,6 +23,7 @@ interface ChallengesSectionProps {
 }
 
 export default function ChallengesSection({ profile, focusConfig, onFocusHandled }: ChallengesSectionProps) {
+  const { navigate } = useRouter();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [filter, setFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<'daily' | 'community' | 'skate'>('daily');
@@ -38,7 +40,8 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
   const [completedError, setCompletedError] = useState<string | null>(null);
   const [winnersByChallenge, setWinnersByChallenge] = useState<Record<string, ChallengeSubmission[]>>({});
   const lastFocusedIdRef = useRef<string | null>(null);
-  const [skateMatchId, setSkateMatchId] = useState<string | null>(null);
+  const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
+  const [remoteMatchId, setRemoteMatchId] = useState<string | null>(null);
   const [skateMode, setSkateMode] = useState<'live' | 'remote' | null>(null);
 
   useEffect(() => {
@@ -633,8 +636,8 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
 
       {activeTab === 'skate' && (
         <div className="space-y-6" id="skate-mode-panel">
-          {!skateMatchId && (
-          <>
+          {!liveMatchId && !remoteMatchId && (
+            <>
           <div className="bg-dark-800 rounded-xl border border-dark-700 p-6">
             <h3 className="text-2xl font-semibold text-white mb-2">Game of S.K.A.T.E</h3>
             <p className="text-gray-300">Affronte un rider en live (synchrone) ou à distance (asynchrone 24h). Réussis les tricks proposés pour éviter les lettres. Le premier à former <span className="font-bold">S.K.A.T.E</span> perd.</p>
@@ -680,10 +683,25 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
             <Lobby
               currentUserId={profile?.id}
               onCreateMatch={async (opponentId, mode) => {
-                if (!profile?.id) return alert('Connecte-toi pour créer un match');
+                if (!profile?.id) {
+                  alert('Connecte-toi pour créer un match');
+                  return;
+                }
                 try {
-                  const created = await createMatch({ mode, opponent_id: opponentId }, profile.id);
-                  setSkateMatchId(created.id);
+                  if (mode === 'live') {
+                    const inviterName = profile.display_name || profile.username || undefined;
+                    const created = await createGOSMatchWithLocal(opponentId, {
+                      inviterName,
+                      mode: 'live',
+                    });
+                    setLiveMatchId(created.gosMatchId);
+                    setRemoteMatchId(null);
+                    navigate(`/skate/live?room=${encodeURIComponent(created.gosMatchId)}`);
+                  } else {
+                    const created = await createMatch({ mode, opponent_id: opponentId }, profile.id);
+                    setRemoteMatchId(created.id);
+                    setLiveMatchId(null);
+                  }
                   setSkateMode(mode);
                 } catch (e) {
                   console.error(e);
@@ -695,11 +713,11 @@ export default function ChallengesSection({ profile, focusConfig, onFocusHandled
           </>
           )}
 
-          {skateMatchId && skateMode === 'live' && profile?.id && (
-            <GameOfSkateSelfRef matchId={skateMatchId} me={profile.id} />
+          {liveMatchId && skateMode === 'live' && profile?.id && (
+            <GameOfSkateSelfRef matchId={liveMatchId} me={profile.id} />
           )}
-          {skateMatchId && skateMode === 'remote' && (
-            <MatchRoomRemote matchId={skateMatchId} />
+          {remoteMatchId && skateMode === 'remote' && (
+            <MatchRoomRemote matchId={remoteMatchId} />
           )}
         </div>
       )}

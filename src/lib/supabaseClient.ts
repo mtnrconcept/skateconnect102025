@@ -45,9 +45,6 @@ export function getSupabase(): SupabaseClient {
       detectSessionInUrl: true,
       storageKey: STORAGE_KEY,
     },
-    global: {
-      headers: { 'x-shredloc-client': 'web' },
-    },
   });
 
   globalThis.__shredloc_supabase__ = client;

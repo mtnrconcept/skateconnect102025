@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Calendar, MapPin, Users, CheckCircle2, AlertCircle, Share2, Plus, Loader2 } from 'lucide-react';
+import {
+  Calendar,
+  MapPin,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  Share2,
+  Plus,
+  Loader2,
+  ChevronDown,
+} from 'lucide-react';
 import { getStoredEventRegistrations, registerForEvent } from '../../lib/engagement';
 import type { CommunityEvent, Profile } from '../../types';
 import { eventsCatalog } from '../../data/eventsCatalog';
@@ -9,6 +19,118 @@ import { createCommunityEvent, fetchCommunityEvents, COMMUNITY_EVENT_TYPES } fro
 
 interface EventsSectionProps {
   profile?: Profile | null;
+}
+
+interface FictionalEventDetails {
+  agenda: { time: string; title: string; description: string }[];
+  guests: string[];
+  perks: string[];
+  tip: string;
+}
+
+const warmupHighlights = [
+  'Line-check collectif avec reperage des modules techniques.',
+  'Echauffement guide, focus flow et placements de pieds pour les runs.',
+  'Session flat + mini challenges pour debloquer les fake lines.',
+];
+
+const workshopFocus = [
+  'Atelier best trick filme en VX1000 avec feedback immediat.',
+  'Coaching style / lines pour gagner en fluidite sur le park.',
+  'Masterclass DIY pour faconner des curbs et rails mobiles.',
+  'Session budget & dossier pour apprendre a pitcher son projet.',
+];
+
+const jamClosingNotes = [
+  'Jam libre avec DJ local, lights et captation drone.',
+  'Cash-for-tricks spontane anime par la crew media du coin.',
+  'Session photo + wall of fame imprimee sur place.',
+];
+
+const guestRoster = [
+  'Lea Morin (filmer VX)',
+  'Rayan \"Switch\" Delmas',
+  'Nora Piana',
+  'Mateo Kane (DIY wizard)',
+  'Aicha Lemoine',
+  'Joachim Esteve (judge WCS)',
+];
+
+const perkIdeas = [
+  'Pack stickers exclusifs + grip offert',
+  'Shooting photo haute def livre en 48h',
+  'Coaching individuel de 15 min avec un pro',
+  'Acces backstage + boissons locales',
+  'Montage recap envoye a tous les inscrits',
+  'Kit wax + outils pour entretenir ton spot',
+];
+
+const travelTips = [
+  'Arrive un peu plus tot, les spots autour de {city} sont roulables des 8h.',
+  'Pense a prendre de quoi couvrir ton board, la meteo change vite a {city}.',
+  'Les crews locaux adorent partager leurs lines : reste apres la session principale a {city}.',
+  'Check les transports de nuit, plusieurs trams passent encore tard a {city}.',
+];
+
+function buildFictionalDetails(event: CommunityEvent, index: number): FictionalEventDetails {
+  const pick = <Value,>(pool: Value[], offset = 0) => pool[(index + offset) % pool.length];
+  const city = event.location.split(',')[0]?.trim() || event.location;
+
+  const agenda: FictionalEventDetails['agenda'] = [
+    {
+      time: '09h30',
+      title: 'Accueil & warm-up crew',
+      description: pick(warmupHighlights),
+    },
+    {
+      time: event.type === 'Avant-première' ? '21h00' : '12h30',
+      title:
+        event.type === 'Avant-première'
+          ? 'Projection + Q&A avec la team'
+          : event.type === 'Appel à projet' || event.type === 'Appel à sponsor'
+            ? 'Atelier pitch & budget'
+            : 'Session guidee / best trick',
+      description:
+        event.type === 'Contest'
+          ? 'Heats par niveaux, juges locaux, format best line + best trick.'
+          : event.type === 'Rencontre'
+            ? 'Ride libre par crews, partage de spots et prises de vues communes.'
+            : pick(workshopFocus, 1),
+    },
+    {
+      time: '16h30',
+      title: 'Session libre & media zone',
+      description: pick(jamClosingNotes, 2),
+    },
+  ];
+
+  const guests = [
+    pick(guestRoster, 0),
+    pick(guestRoster, 2),
+    pick(guestRoster, 4),
+  ];
+
+  const perksSeed = [
+    event.is_sponsor_event && event.sponsor_name
+      ? `${event.sponsor_name} offre ${pick(perkIdeas, 1).toLowerCase()}`
+      : pick(perkIdeas, 3),
+    pick(perkIdeas, 4),
+    pick(perkIdeas, 5),
+  ];
+
+  return {
+    agenda,
+    guests: Array.from(new Set(guests)),
+    perks: Array.from(new Set(perksSeed)),
+    tip: pick(travelTips, 0).replace('{city}', city),
+  };
+}
+
+function mapFictionalDetails(events: CommunityEvent[]): Record<string, FictionalEventDetails> {
+  return events.reduce<Record<string, FictionalEventDetails>>((accumulator, event, index) => {
+    accumulator[event.id] = buildFictionalDetails(event, index);
+    return accumulator;
+  }, {});
 }
 const typeColors: Record<CommunityEvent['type'], string> = {
   Compétition: 'bg-red-500/10 text-red-300 border-red-500/40',
@@ -30,6 +152,7 @@ export default function EventsSection({ profile }: EventsSectionProps) {
   const [showForm, setShowForm] = useState(false);
   const [isSubmittingEvent, setIsSubmittingEvent] = useState(false);
   const [formMessage, setFormMessage] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const defaultEventType = COMMUNITY_EVENT_TYPES[0];
   interface EventFormValues {
@@ -204,6 +327,14 @@ export default function EventsSection({ profile }: EventsSectionProps) {
   };
 
   const eventsToDisplay = useMemo(() => [...communityEvents, ...eventsCatalog], [communityEvents]);
+  const fictionalDetailsByEventId = useMemo(
+    () => mapFictionalDetails(eventsToDisplay),
+    [eventsToDisplay],
+  );
+
+  const handleToggleDetails = useCallback((eventId: string) => {
+    setExpandedEventId((previous) => (previous === eventId ? null : eventId));
+  }, []);
 
   const handleRegister = async (event: CommunityEvent) => {
     if (!profile?.id) {
@@ -499,12 +630,26 @@ export default function EventsSection({ profile }: EventsSectionProps) {
         {eventsToDisplay.map((event) => {
           const isRegistered = registeredSet.has(event.id);
           const eventFeedback = feedback[event.id];
+          const isExpanded = expandedEventId === event.id;
+          const details = fictionalDetailsByEventId[event.id];
 
           return (
             <article
               key={event.id}
               id={`event-${event.id}`}
-              className="bg-dark-800 border border-dark-700 rounded-2xl overflow-hidden shadow-lg shadow-black/20"
+              className={`bg-dark-800 border border-dark-700 rounded-2xl overflow-hidden shadow-lg shadow-black/20 transition-all duration-300 ease-out cursor-pointer ${
+                isExpanded ? 'border-orange-400/60 shadow-orange-500/20' : ''
+              }`}
+              role="button"
+              tabIndex={0}
+              aria-expanded={isExpanded}
+              onClick={() => handleToggleDetails(event.id)}
+              onKeyDown={(keyboardEvent) => {
+                if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                  keyboardEvent.preventDefault();
+                  handleToggleDetails(event.id);
+                }
+              }}
             >
               <div className="flex flex-col md:flex-row">
                 <div className="md:w-56 bg-gradient-to-b from-orange-500/20 to-orange-500/10 p-6 flex flex-col gap-3">
@@ -529,8 +674,22 @@ export default function EventsSection({ profile }: EventsSectionProps) {
 
                 <div className="flex-1 p-6 md:p-8 flex flex-col gap-4">
                   <div className="flex flex-col gap-3">
-                    <h2 className="text-2xl font-bold text-white leading-snug">{event.title}</h2>
-                    <p className="text-gray-300 leading-relaxed text-sm sm:text-base">{event.description}</p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-2xl font-bold text-white leading-snug">{event.title}</h2>
+                        <p className="text-gray-300 leading-relaxed text-sm sm:text-base">{event.description}</p>
+                      </div>
+                      <span
+                        className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-orange-300"
+                        aria-hidden="true"
+                      >
+                        {isExpanded ? 'Masquer' : 'Voir'} les détails
+                        <ChevronDown
+                          size={16}
+                          className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-4 text-sm text-gray-300">
@@ -547,15 +706,18 @@ export default function EventsSection({ profile }: EventsSectionProps) {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleRegister(event)}
-                      disabled={isRegistered || joiningId === event.id}
-                      className={`inline-flex items-center justify-center px-4 py-2 rounded-full font-semibold transition-colors gap-2 ${
-                        isRegistered
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-orange-500 text-white hover:bg-orange-400'
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={(mouseEvent) => {
+                      mouseEvent.stopPropagation();
+                      void handleRegister(event);
+                    }}
+                    disabled={isRegistered || joiningId === event.id}
+                    className={`inline-flex items-center justify-center px-4 py-2 rounded-full font-semibold transition-colors gap-2 ${
+                      isRegistered
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                        : 'bg-orange-500 text-white hover:bg-orange-400'
                       }`}
                     >
                       {isRegistered ? (
@@ -572,11 +734,14 @@ export default function EventsSection({ profile }: EventsSectionProps) {
                         </>
                       )}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddToCalendar(event)}
-                      className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-dark-600 text-gray-300 hover:border-orange-400 hover:text-white transition-colors gap-2"
-                    >
+                  <button
+                    type="button"
+                    onClick={(mouseEvent) => {
+                      mouseEvent.stopPropagation();
+                      void handleAddToCalendar(event);
+                    }}
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-dark-600 text-gray-300 hover:border-orange-400 hover:text-white transition-colors gap-2"
+                  >
                       <Share2 size={18} />
                       <span>Ajouter à mon agenda</span>
                     </button>
@@ -593,6 +758,58 @@ export default function EventsSection({ profile }: EventsSectionProps) {
                         <AlertCircle size={16} />
                       )}
                       <span>{eventFeedback.message}</span>
+                    </div>
+                  )}
+
+                  {isExpanded && details && (
+                    <div className="mt-4 border-t border-dark-700 pt-6 space-y-6">
+                      <div>
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
+                          Programme fictif
+                        </h3>
+                        <ul className="mt-3 space-y-3">
+                          {details.agenda.map((slot, slotIndex) => (
+                            <li key={`${event.id}-agenda-${slotIndex}`} className="flex gap-4 text-sm text-gray-300">
+                              <span className="text-orange-300 font-semibold shrink-0">{slot.time}</span>
+                              <div>
+                                <p className="text-white font-semibold">{slot.title}</p>
+                                <p className="text-gray-400">{slot.description}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
+                            Guests / mentors
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {details.guests.map((guest) => (
+                              <span
+                                key={`${event.id}-${guest}`}
+                                className="inline-flex items-center rounded-full border border-dark-600 px-3 py-1 text-xs text-gray-200 bg-dark-900"
+                              >
+                                {guest}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-400">Bonus</h4>
+                          <ul className="space-y-2 text-sm text-gray-300">
+                            {details.perks.map((perk, perkIndex) => (
+                              <li key={`${event.id}-perk-${perkIndex}`} className="flex gap-2">
+                                <span className="text-orange-400">•</span>
+                                <span>{perk}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-dark-600 bg-dark-900/60 px-4 py-3 text-sm text-gray-300">
+                        <span className="font-semibold text-orange-300">Astuce locale :</span> {details.tip}
+                      </div>
                     </div>
                   )}
                 </div>

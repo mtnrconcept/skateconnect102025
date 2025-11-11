@@ -9,6 +9,7 @@ import type {
   SkateMatchRow,
   SkateTurnRow,
 } from '../types';
+
 type TurnIndexRow = Pick<SkateTurnRow, 'turn_index'>;
 
 /* ============================================================================
@@ -22,7 +23,6 @@ function assertNonNull<T>(value: T | null, context: string): T {
   }
   return value;
 }
-
 
 if (!SUPABASE_URL) throw new Error('VITE_SUPABASE_URL manquant (env vite) pour appeler gos-match');
 
@@ -216,7 +216,7 @@ export const nextLetters = (current: string) => {
 export const isFinished = (letters: string) => (letters || '').toUpperCase() === 'SKATE';
 
 /* ============================================================================
- * Edge Function gos-match — fetch direct (récupère body d’erreur) + apikey
+ * Edge Function gos-match — fetch direct (récupère body d'erreur) + apikey
  * ========================================================================== */
 function logGosError(context: string, status: number, detail: string, payload?: Record<string, unknown>) {
   const safePayload = payload ? JSON.parse(JSON.stringify(payload)) : undefined;
@@ -305,9 +305,9 @@ export async function attachSkateMatchId(gosMatchId: string, skateMatchId: strin
 }
 
 /**
- * S’assure qu’un gos_match possède un skate_match_id exploitable côté UI.
+ * S'assure qu'un gos_match possède un skate_match_id exploitable côté UI.
  * - Si déjà présent: le retourne
- * - Sinon: crée un skate_matches local, l’attache côté Edge, et retourne son id
+ * - Sinon: crée un skate_matches local, l'attache côté Edge, et retourne son id
  */
 export async function ensureSkateMatchForGOS(gosMatchId: string): Promise<string> {
   const { data: gos, error } = await supabase
@@ -347,12 +347,15 @@ export async function createGOSMatchWithLocal(
   );
 
   // 2) Edge (transporte skate_match_id)
-  const res = await invokeGOS<{ match: { id: string } }>({
-    action: 'create',
-    opponent_id: opponentId,
-    inviter_name: options?.inviterName ?? null,
-    skate_match_id: local.id,
-  });
+  const res = await invokeGOS<{ match: { id: string } }>(Object.assign(
+    {
+      action: 'create',
+      opponent_id: opponentId,
+      inviter_name: options?.inviterName ?? null,
+      skate_match_id: local.id,
+    },
+    {}
+  ));
 
   return { gosMatchId: res.match.id, skateMatchId: local.id };
 }
@@ -378,6 +381,7 @@ export async function declineGOSMatch(matchId: string): Promise<void> {
   await invokeGOS<{ match: unknown }>({ action: 'decline', match_id: matchId });
 }
 
+// ✅ FONCTION CORRIGÉE
 export async function markGOSMatchActive(
   matchId: string,
   countdownSeconds = 5,
@@ -431,24 +435,36 @@ export async function markGOSMatchActive(
   let activationStart = gosMatch.starts_at ?? plannedStart;
   let skateMatchId = (gosMatch.skate_match_id as string | null) ?? null;
 
+  // ✅ CORRECTION : Séparer l'update du select pour éviter l'erreur 400
   if (Object.keys(patch).length > 0) {
-    const { data: updatedRow, error: updateError } = await supabase
+    // 1) D'abord faire l'UPDATE sans select
+    const { error: updateError } = await supabase
       .from('gos_match')
       .update(patch)
-      .eq('id', matchId)
-      .select('skate_match_id, starts_at')
-      .single();
+      .eq('id', matchId);
 
     if (updateError) {
       throw updateError;
     }
 
-    if (updatedRow?.skate_match_id) {
-      skateMatchId = updatedRow.skate_match_id as string;
+    // 2) Ensuite récupérer les données dans une requête séparée
+    const { data: refreshedMatch, error: selectError } = await supabase
+      .from('gos_match')
+      .select('skate_match_id, starts_at')
+      .eq('id', matchId)
+      .single();
+
+    if (selectError) {
+      console.warn('[gos] Unable to refresh match data after update', selectError);
+    } else if (refreshedMatch) {
+      if (refreshedMatch.skate_match_id) {
+        skateMatchId = refreshedMatch.skate_match_id as string;
+      }
+      activationStart = refreshedMatch.starts_at ?? activationStart;
     }
-    activationStart = updatedRow?.starts_at ?? activationStart;
   }
 
+  // Mise à jour du skate_match si présent
   if (skateMatchId) {
     const { error: skateError } = await supabase
       .from('skate_matches')
@@ -492,5 +508,95 @@ export async function gosPostChat(
   });
 }
 
+/* ============================================================================
+ * 🏁 Auto-END RULES (demandé) : 
+ * 1) statut gos_match -> 'ended' si message "Vainqueur : Rider A/B"
+ * 2) statut gos_match -> 'ended' si un rider quitte la salle
+ * ========================================================================== */
 
+/** Met fin au match côté gos_match (best-effort côté client). */
+export async function endGOSMatch(
+  matchId: string,
+  opts?: { winner?: 'A' | 'B'; reason?: 'victory' | 'leave' }
+): Promise<void> {
+  const patch: Record<string, any> = { status: 'ended' };
+  if (opts?.winner === 'A' || opts?.winner === 'B') patch.winner = opts.winner;
 
+  const { error } = await supabase
+    .from('gos_match')
+    .update(patch)
+    .eq('id', matchId);
+
+  if (error) {
+    console.warn('[gos] endGOSMatch failed', error, { matchId, opts });
+  }
+}
+
+/** Abonnement Realtime : si un INSERT gos_chat contient "Vainqueur : Rider A/B" -> on termine le match. */
+export function subscribeVictoryAutoEnd(matchId: string) {
+  const channel = supabase.channel(`gos_chat_victory_${matchId}`).on(
+    'postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'gos_chat', filter: `match_id=eq.${matchId}` },
+    async (payload: any) => {
+      const text = (payload?.new?.text ?? payload?.new?.content ?? '') as string;
+      if (typeof text !== 'string') return;
+
+      if (text.startsWith('Vainqueur : Rider A')) {
+        await endGOSMatch(matchId, { winner: 'A', reason: 'victory' });
+      } else if (text.startsWith('Vainqueur : Rider B')) {
+        await endGOSMatch(matchId, { winner: 'B', reason: 'victory' });
+      }
+    }
+  );
+
+  channel.subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+/**
+ * Termine le match si le rider QUITTE la room (navigation/fermeture).
+ * - Délai 4s pour tolérer un simple refresh ou un switch d’onglet court.
+ * - À appeler dans le composant de la room (montage → retour cleanup au démontage).
+ */
+export function setupEndOnLeave(matchId: string, riderId: string) {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {
+    return () => {};
+  }
+
+  let timeout: number | null = null;
+  let ended = false;
+
+  const triggerEnd = async () => {
+    if (ended) return;
+    ended = true;
+    await endGOSMatch(matchId, { reason: 'leave' });
+  };
+
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden') {
+      // L’onglet passe en arrière-plan → on temporise
+      timeout = window.setTimeout(triggerEnd, 4000);
+    } else {
+      // Retour à l’onglet → annule le end planifié
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+    }
+  };
+
+  const onBeforeUnload = () => {
+    // Tentative best-effort avant fermeture
+    void endGOSMatch(matchId, { reason: 'leave' });
+  };
+
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('beforeunload', onBeforeUnload);
+
+  // Cleanup à appeler lors du démontage du composant room
+  return () => {
+    document.removeEventListener('visibilitychange', onVisibility);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    if (timeout) clearTimeout(timeout);
+  };
+}

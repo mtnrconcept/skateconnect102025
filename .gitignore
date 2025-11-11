@@ -22,3 +22,8 @@ dist-ssr
 *.sln
 *.sw?
 
+.DS_Store
+node_modules/
+dist/
+.env
+*.log
