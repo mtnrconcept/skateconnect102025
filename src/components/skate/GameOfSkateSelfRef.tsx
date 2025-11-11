@@ -1,20 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowUpRightSquare,
   BookOpen,
+  Camera,
+  CameraOff,
   CheckCircle2,
   Crown,
+  Lightbulb,
+  Mail,
   MessageSquare,
+  Mic,
+  MicOff,
+  Play,
+  RefreshCw,
   Send,
   Settings,
   Sparkles,
+  UserPlus,
+  Volume2,
+  VolumeX,
   Wand2,
   WifiOff,
   XCircle,
-  Play,
-  Lightbulb,
-  UserPlus,
-  Mail,
-  ArrowUpRightSquare,
 } from "lucide-react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
@@ -32,7 +39,7 @@ type Match = {
   winner: Side | null;
   created_at: string;
   accepted_at?: string | null;
-  // Champs optionnels � non s�lectionn�s c�t� SQL pour �viter les 42703
+  // Champs optionnels ï¿½ non sï¿½lectionnï¿½s cï¿½tï¿½ SQL pour ï¿½viter les 42703
   starts_at?: string | null;
   countdown_s?: number | null;
 };
@@ -49,6 +56,56 @@ type ChatMessage = {
 };
 
 const LETTERS_WORD = "SKATE";
+const WEBRTC_EVENT = "gos:rtc";
+
+type WebRtcSignal =
+  | { kind: "offer"; sdp: RTCSessionDescriptionInit }
+  | { kind: "answer"; sdp: RTCSessionDescriptionInit }
+  | { kind: "candidate"; candidate: RTCIceCandidateInit }
+  | { kind: "hangup" }
+  | { kind: "restart" };
+
+type BroadcastSignal = WebRtcSignal & {
+  matchId: string;
+  from: string;
+  ts?: number;
+};
+
+const bindStreamToVideo = (
+  video: HTMLVideoElement | null,
+  stream: MediaStream | null,
+  muted: boolean,
+) => {
+  if (!video) return;
+  if (!stream) {
+    video.srcObject = null;
+    return;
+  }
+
+  if (video.srcObject !== stream) {
+    video.srcObject = stream;
+  }
+
+  video.muted = muted;
+  video.playsInline = true;
+
+  const play = () => {
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => undefined);
+    }
+  };
+
+  if (video.readyState >= 2) {
+    play();
+  } else {
+    const handleLoaded = () => {
+      video.removeEventListener("loadeddata", handleLoaded);
+      play();
+    };
+    video.addEventListener("loadeddata", handleLoaded);
+  }
+};
 
 /* ---------- UI Atomes ---------- */
 const Letters = ({ count }: { count: number }) => (
@@ -107,17 +164,6 @@ function ScoreHeader({
           {isActive ? "Actif" : "Passif"}
         </span>
       </div>
-    </div>
-  );
-}
-
-function VideoPane({ label, className = "" }: { label: string; className?: string }) {
-  return (
-    <div
-      className={`flex h-full flex-col rounded-2xl border border-white/5 bg-[#121214] p-5 shadow-inner shadow-black/60 ${className}`}
-    >
-      <div className="flex-1 rounded-xl border border-dashed border-white/10 bg-black/85" />
-      <div className="mt-3 text-center text-sm text-white/60">{label}</div>
     </div>
   );
 }
@@ -201,12 +247,271 @@ export default function GameOfSkateSelfRef({
   const [trickName, setTrickName] = useState("Kickflip");
   const [remainingClock, setRemainingClock] = useState("30:00.0");
 
-  // Compte � rebours synchronis� (optionnel)
+  // Compte ï¿½ rebours synchronisï¿½ (optionnel)
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(10);
   const [countdownKey, setCountdownKey] = useState(0);
 
   const chanRef = useRef<RealtimeChannel | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const localVideoMobileRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoMobileRef = useRef<HTMLVideoElement | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isRequestingCamera, setIsRequestingCamera] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(true);
+  const [remoteAudioMuted, setRemoteAudioMuted] = useState(true);
+  const [remoteConnected, setRemoteConnected] = useState(false);
+  const [channelReady, setChannelReady] = useState(false);
+  const [hasSentOffer, setHasSentOffer] = useState(false);
+  const [isRestartingConnection, setIsRestartingConnection] = useState(false);
+
+  const isInitiator = useMemo(() => (match?.rider_a ?? null) === me, [match?.rider_a, me]);
+
+  const updateLocalVideoElements = useCallback(
+    (stream: MediaStream | null) => {
+      bindStreamToVideo(localVideoRef.current, stream, true);
+      bindStreamToVideo(localVideoMobileRef.current, stream, true);
+    },
+    [],
+  );
+
+  const updateRemoteVideoElements = useCallback(
+    (stream: MediaStream | null) => {
+      bindStreamToVideo(remoteVideoRef.current, stream, remoteAudioMuted);
+      bindStreamToVideo(remoteVideoMobileRef.current, stream, remoteAudioMuted);
+    },
+    [remoteAudioMuted],
+  );
+
+  const sendSignal = useCallback(
+    (payload: WebRtcSignal) => {
+      if (!chanRef.current) return;
+      chanRef.current.send({
+        type: "broadcast",
+        event: WEBRTC_EVENT,
+        payload: {
+          ...payload,
+          matchId,
+          from: me,
+          ts: Date.now(),
+        },
+      });
+    },
+    [matchId, me],
+  );
+
+  const attachTracksToPeer = useCallback((stream: MediaStream) => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    const senders = pc.getSenders();
+    stream.getTracks().forEach((track) => {
+      const existing = senders.find((sender) => sender.track?.kind === track.kind);
+      if (existing && typeof existing.replaceTrack === "function") {
+        existing.replaceTrack(track).catch(() => undefined);
+      } else {
+        try {
+          pc.addTrack(track, stream);
+        } catch (error) {
+          console.warn("[gos] addTrack failed", error);
+        }
+      }
+    });
+  }, []);
+
+  const ensurePeerConnection = useCallback(() => {
+    if (typeof window === "undefined" || typeof RTCPeerConnection === "undefined") {
+      setCameraError("WebRTC non supporté par cet environnement.");
+      return null;
+    }
+    if (pcRef.current) return pcRef.current;
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }],
+    });
+
+    pcRef.current = pc;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendSignal({
+          kind: "candidate",
+          candidate: event.candidate.toJSON ? event.candidate.toJSON() : event.candidate,
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      const stream = event.streams?.[0];
+      if (!stream) return;
+      remoteStreamRef.current = stream;
+      updateRemoteVideoElements(stream);
+      setRemoteConnected(true);
+    };
+
+    pc.onconnectionstatechange = () => {
+      const state = pc.connectionState;
+      if (state === "connected") {
+        setRemoteConnected(true);
+      } else if (state === "failed" || state === "disconnected" || state === "closed") {
+        setRemoteConnected(false);
+      }
+    };
+
+    if (localStreamRef.current) {
+      attachTracksToPeer(localStreamRef.current);
+    }
+
+    return pc;
+  }, [attachTracksToPeer, sendSignal, updateRemoteVideoElements]);
+
+  const stopLocalStream = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    stream.getTracks().forEach((track) => {
+      try {
+        track.stop();
+      } catch {}
+    });
+    localStreamRef.current = null;
+    updateLocalVideoElements(null);
+    setCameraReady(false);
+  }, [updateLocalVideoElements]);
+
+  const teardownPeerConnection = useCallback(() => {
+    if (pcRef.current) {
+      try {
+        pcRef.current.onicecandidate = null;
+        pcRef.current.ontrack = null;
+        pcRef.current.onconnectionstatechange = null;
+        pcRef.current.close();
+      } catch {}
+    }
+    pcRef.current = null;
+    remoteStreamRef.current = null;
+    updateRemoteVideoElements(null);
+    setRemoteConnected(false);
+    setHasSentOffer(false);
+  }, [updateRemoteVideoElements]);
+
+  const requestCameraAccess = useCallback(async (): Promise<MediaStream | null> => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Caméra non supportée par cet appareil.");
+      return null;
+    }
+
+    if (localStreamRef.current) {
+      updateLocalVideoElements(localStreamRef.current);
+      setCameraReady(true);
+      return localStreamRef.current;
+    }
+
+    if (isRequestingCamera) return null;
+    setIsRequestingCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = cameraEnabled;
+      });
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = micEnabled;
+      });
+      updateLocalVideoElements(stream);
+      const pc = ensurePeerConnection();
+      if (pc) {
+        attachTracksToPeer(stream);
+      }
+      setCameraReady(true);
+      setCameraError(null);
+      return stream;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Accès caméra impossible.";
+      setCameraError(message);
+      setCameraReady(false);
+      return null;
+    } finally {
+      setIsRequestingCamera(false);
+    }
+  }, [attachTracksToPeer, cameraEnabled, ensurePeerConnection, isRequestingCamera, micEnabled, updateLocalVideoElements]);
+
+  const startNegotiation = useCallback(async () => {
+    const pc = ensurePeerConnection();
+    if (!pc) return;
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    sendSignal({ kind: "offer", sdp: offer });
+    setHasSentOffer(true);
+  }, [ensurePeerConnection, sendSignal]);
+
+  const restartConnection = useCallback(async () => {
+    if (isRestartingConnection) return;
+    setIsRestartingConnection(true);
+    sendSignal({ kind: "restart" });
+    teardownPeerConnection();
+    setRemoteConnected(false);
+    setHasSentOffer(false);
+    if (!cameraReady) {
+      await requestCameraAccess();
+    }
+    setTimeout(() => setIsRestartingConnection(false), 400);
+  }, [cameraReady, isRestartingConnection, requestCameraAccess, sendSignal, teardownPeerConnection]);
+
+  const handleIncomingSignal = useCallback(
+    async (payload: BroadcastSignal | null) => {
+      if (!payload || payload.matchId !== matchId || payload.from === me) return;
+      try {
+        switch (payload.kind) {
+          case "offer": {
+            await requestCameraAccess();
+            const pc = ensurePeerConnection();
+            if (!pc || !payload.sdp) return;
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            sendSignal({ kind: "answer", sdp: answer });
+            break;
+          }
+          case "answer": {
+            const pc = pcRef.current;
+            if (pc && payload.sdp && pc.signalingState === "have-local-offer") {
+              await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            }
+            break;
+          }
+          case "candidate": {
+            const pc = pcRef.current;
+            if (pc && payload.candidate) {
+              await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            }
+            break;
+          }
+          case "hangup":
+            teardownPeerConnection();
+            break;
+          case "restart":
+            teardownPeerConnection();
+            setHasSentOffer(false);
+            if (isInitiator && cameraReady) {
+              await requestCameraAccess();
+              await startNegotiation();
+            }
+            break;
+          default:
+            break;
+        }
+      } catch (error) {
+        console.warn("[gos] signal handling error", error);
+      }
+    },
+    [cameraReady, ensurePeerConnection, isInitiator, matchId, me, requestCameraAccess, sendSignal, startNegotiation, teardownPeerConnection],
+  );
 
   /* ---------- Chargements initiaux ---------- */
   const fetchMatch = useCallback(async () => {
@@ -238,8 +543,14 @@ export default function GameOfSkateSelfRef({
   }, [matchId]);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       await Promise.all([fetchMatch(), fetchChat()]);
+      if (cancelled) return;
+
+      setChannelReady(false);
+      setRtOnline(false);
 
       const channel = supabase
         .channel(`gos:${matchId}`, {
@@ -260,15 +571,28 @@ export default function GameOfSkateSelfRef({
           { event: "UPDATE", schema: "public", table: "gos_match", filter: `id=eq.${matchId}` },
           (payload) => setMatch(payload.new as Match),
         )
-        .subscribe((status) => setRtOnline(status === "SUBSCRIBED"));
+        .on("broadcast", { event: WEBRTC_EVENT }, ({ payload }) => {
+          void handleIncomingSignal(payload as BroadcastSignal);
+        })
+        .subscribe((status) => {
+          const subscribed = status === "SUBSCRIBED";
+          setRtOnline(subscribed);
+          setChannelReady(subscribed);
+        });
 
       chanRef.current = channel;
     })();
 
     return () => {
-      if (chanRef.current) supabase.removeChannel(chanRef.current);
+      cancelled = true;
+      if (chanRef.current) {
+        supabase.removeChannel(chanRef.current);
+        chanRef.current = null;
+      }
+      setChannelReady(false);
+      setRtOnline(false);
     };
-  }, [fetchChat, fetchMatch, matchId, me]);
+  }, [fetchChat, fetchMatch, handleIncomingSignal, matchId, me]);
 
   const timerStartMs = useMemo(() => {
     if (match?.accepted_at) {
@@ -330,6 +654,54 @@ export default function GameOfSkateSelfRef({
     setCountdownActive(false);
   }, []);
 
+  useEffect(() => {
+    if (!cameraReady || !channelReady || !isInitiator || hasSentOffer) return;
+    (async () => {
+      try {
+        await startNegotiation();
+      } catch (error) {
+        console.warn("[gos] WebRTC offer error", error);
+      }
+    })();
+  }, [cameraReady, channelReady, hasSentOffer, isInitiator, startNegotiation]);
+
+  useEffect(() => {
+    updateRemoteVideoElements(remoteStreamRef.current);
+  }, [remoteAudioMuted, updateRemoteVideoElements]);
+
+  useEffect(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = cameraEnabled;
+    });
+  }, [cameraEnabled]);
+
+  useEffect(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = micEnabled;
+    });
+  }, [micEnabled]);
+
+  useEffect(() => {
+    if (!match?.status) return;
+    if (match.status === "cancelled" || match.status === "ended") {
+      sendSignal({ kind: "hangup" });
+      teardownPeerConnection();
+      stopLocalStream();
+    }
+  }, [match?.status, sendSignal, stopLocalStream, teardownPeerConnection]);
+
+  useEffect(() => {
+    return () => {
+      sendSignal({ kind: "hangup" });
+      teardownPeerConnection();
+      stopLocalStream();
+    };
+  }, [sendSignal, stopLocalStream, teardownPeerConnection]);
+
   const isActiveMatch = match?.status === "active";
   const isPendingMatch = match?.status === "pending";
   const isCancelled = match?.status === "cancelled";
@@ -368,11 +740,11 @@ export default function GameOfSkateSelfRef({
       p_payload: payload ?? null,
     });
 
-    // La logique de fallback est supprim�e. Si l'appel RPC �choue,
-    // nous affichons l'erreur pour faciliter le d�bogage.
+    // La logique de fallback est supprimï¿½e. Si l'appel RPC ï¿½choue,
+    // nous affichons l'erreur pour faciliter le dï¿½bogage.
     if (tryRpc.error) {
       console.error("[gos] chat rpc error", tryRpc.error);
-      // Optionnel: afficher une notification � l'utilisateur
+      // Optionnel: afficher une notification ï¿½ l'utilisateur
     }
   };
 
@@ -398,7 +770,7 @@ export default function GameOfSkateSelfRef({
 
   const onSetSucceeded = async () => {
     if (!match || !isActiveMatch || isEnded || !myTurn) return;
-    await rpcPost("event", `${iAm} valide son set. L�adversaire doit copier.`, {
+    await rpcPost("event", `${iAm} valide son set. Lï¿½adversaire doit copier.`, {
       actor: iAm,
       type: "set_ok",
     });
@@ -409,16 +781,16 @@ export default function GameOfSkateSelfRef({
     const loser: Side = match.turn === "A" ? "B" : "A";
     const result = await addLetter(loser);
 
-    await rpcPost("event", `Rider ${loser} �choue la copie ? +1 lettre`, {
+    await rpcPost("event", `Rider ${loser} ï¿½choue la copie ? +1 lettre`, {
       loser,
       type: "copy_fail",
     });
 
     if (result?.ended) {
       const winner = loser === "A" ? "B" : "A";
-      await rpcPost("system", `Partie termin�e. Vainqueur : Rider ${winner}`, { winner });
+      await rpcPost("system", `Partie terminï¿½e. Vainqueur : Rider ${winner}`, { winner });
     } else {
-      await rpcPost("system", `Tour conserv� par Rider ${match.turn}.`, {
+      await rpcPost("system", `Tour conservï¿½ par Rider ${match.turn}.`, {
         turn: match.turn,
       });
     }
@@ -442,23 +814,23 @@ export default function GameOfSkateSelfRef({
       if (up.error) console.warn("[gos] switch_turn fallback error", up.error);
     }
 
-    await rpcPost("event", `${iAm} rate son set ? main � ${iAm === "A" ? "B" : "A"}`, {
+    await rpcPost("event", `${iAm} rate son set ? main ï¿½ ${iAm === "A" ? "B" : "A"}`, {
       actor: iAm,
       type: "set_fail",
     });
   };
 
   /* =========================================================
-   *  Rendu MOBILE � EXACT comme le mock / aucun scroll
+   *  Rendu MOBILE ï¿½ EXACT comme le mock / aucun scroll
    * ========================================================= */
   const MobileUI = () => {
-    // lettre active � H � visuellement
+    // lettre active ï¿½ H ï¿½ visuellement
     const activeLetterIndex = 1;
 
     return (
       <div className="md:hidden text-zinc-200 bg-black h-[100dvh] w-full overflow-hidden">
         <div className="mx-auto h-full max-w-[520px] px-4">
-        {/* Grid en 5 rang�es pour figer la hauteur, coll� au header (h-16) */}
+        {/* Grid en 5 rangï¿½es pour figer la hauteur, collï¿½ au header (h-16) */}
         <div className="grid h-full grid-rows-[64px,1fr,76px,136px,64px] pt-16 gap-0">
             {/* Pastilles SHRED */}
             <div className="flex items-center justify-center gap-4">
@@ -480,18 +852,44 @@ export default function GameOfSkateSelfRef({
               ))}
             </div>
 
-            {/* Vid�o (remplacer par ton player) */}
-            <div className="relative rounded-2xl border border-zinc-700 bg-zinc-950 overflow-hidden">
-              <div className="absolute inset-0">
-                {/* Place ton flux ici si besoin */}
-                <div className="w-full h-full bg-black grid place-items-center">
-                  <span className="text-zinc-500 text-sm opacity-60">
-                    Flux vid�o / �cran du rider
-                  </span>
+            {/* Vidéo en direct */}
+            <div className="relative rounded-2xl border border-zinc-700 bg-black/80 overflow-hidden">
+              <video
+                ref={remoteVideoMobileRef}
+                autoPlay
+                playsInline
+                className={`h-full w-full object-cover ${remoteConnected ? "" : "opacity-40"}`}
+              />
+              {!remoteConnected && (
+                <div className="absolute inset-0 grid place-items-center bg-black/75 px-6 text-center text-white/70">
+                  <div className="text-sm">
+                    {channelReady ? "En attente du rider adverse..." : "Connexion au canal..."}
+                  </div>
+                  <button
+                    onClick={() => restartConnection()}
+                    className="mt-4 rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold text-white/80"
+                  >
+                    Relancer la connexion
+                  </button>
                 </div>
+              )}
+              <div className="absolute bottom-4 right-4 w-32 rounded-xl border border-white/15 bg-black/70 p-1 shadow-xl">
+                <video
+                  ref={localVideoMobileRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className={`h-20 w-full rounded-lg object-cover ${cameraReady ? "" : "opacity-40"}`}
+                />
+                {!cameraReady && (
+                  <button
+                    onClick={() => requestCameraAccess()}
+                    className="absolute inset-0 grid place-items-center rounded-lg bg-black/60 text-[10px] font-semibold uppercase tracking-widest text-white/80"
+                  >
+                    Activer la cam
+                  </button>
+                )}
               </div>
-              {/* padding bas pour laisser la place aux boutons dans le cadre comme sur l�image */}
-              <div className="pointer-events-none h-full w-full opacity-0">.</div>
             </div>
 
             {/* Boutons vert/rouge */}
@@ -502,7 +900,7 @@ export default function GameOfSkateSelfRef({
                 className="flex-1 h-12 rounded-xl font-semibold inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-lg shadow-emerald-800/30 disabled:opacity-50"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                {/* libell� sans accent comme le mock */}
+                {/* libellï¿½ sans accent comme le mock */}
                 Trick reussi
               </button>
               <button
@@ -511,15 +909,15 @@ export default function GameOfSkateSelfRef({
                 className="flex-1 h-12 rounded-xl font-semibold inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white shadow-lg shadow-rose-900/40 disabled:opacity-50"
               >
                 <XCircle className="w-5 h-5" />
-                Trick loup�
+                Trick loupï¿½
               </button>
             </div>
 
-            {/* Carte �Trick � faire� */}
+            {/* Carte ï¿½Trick ï¿½ faireï¿½ */}
             <div className="rounded-2xl p-4 bg-zinc-900/70 border border-zinc-700/60 backdrop-blur shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)]">
               <div className="flex items-center justify-between">
                 <h2 className="font-extrabold text-xl text-amber-400 tracking-wide">
-                  Trick � faire
+                  Trick ï¿½ faire
                 </h2>
                 <Sparkles className="w-5 h-5 text-zinc-400" />
               </div>
@@ -528,7 +926,7 @@ export default function GameOfSkateSelfRef({
                 <button
                   type="button"
                   className="shrink-0 w-12 h-12 rounded-xl border border-zinc-700/70 bg-zinc-900/80 grid place-items-center"
-                  aria-label="Retour vid�o"
+                  aria-label="Retour vidï¿½o"
                 >
                   <Play className="w-6 h-6 text-zinc-200" />
                 </button>
@@ -552,10 +950,10 @@ export default function GameOfSkateSelfRef({
                 </button>
               </div>
 
-              <p className="mt-2 text-xs text-zinc-500">retour vid�o</p>
+              <p className="mt-2 text-xs text-zinc-500">retour vidï¿½o</p>
             </div>
 
-            {/* Barre d�ic�nes basse (fixe) */}
+            {/* Barre dï¿½icï¿½nes basse (fixe) */}
             <div className="border-t border-zinc-800/80 bg-zinc-900/80 backdrop-blur">
               <div className="mx-auto h-16 max-w-[520px] px-6">
                 <ul className="h-full grid grid-cols-4 items-center text-zinc-300">
@@ -575,7 +973,7 @@ export default function GameOfSkateSelfRef({
                     </button>
                   </li>
                   <li className="grid place-items-center">
-                    <button className="flex flex-col items-center gap-1 text-xs" aria-label="Plein �cran">
+                    <button className="flex flex-col items-center gap-1 text-xs" aria-label="Plein ï¿½cran">
                       <ArrowUpRightSquare className="w-6 h-6" />
                     </button>
                   </li>
@@ -588,21 +986,143 @@ export default function GameOfSkateSelfRef({
     );
   };
 
+  const videoControlButtonClass =
+    "grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-black/60 text-white transition hover:bg-white/10 disabled:opacity-40";
+
+  const renderLocalDesktopPanel = (label: string) => (
+    <div className="relative h-[440px] overflow-hidden rounded-2xl border border-white/5 bg-[#050608]">
+      <video
+        ref={localVideoRef}
+        autoPlay
+        muted
+        playsInline
+        className={`h-full w-full object-cover ${cameraReady ? "" : "opacity-30"}`}
+      />
+      {!cameraReady && (
+        <div className="absolute inset-0 grid place-items-center bg-black/80 px-6 text-center text-white/80">
+          <p className="text-sm font-medium">Active ta caméra pour être visible par ton adversaire.</p>
+          <button
+            onClick={() => requestCameraAccess()}
+            disabled={isRequestingCamera}
+            className="mt-4 rounded-lg bg-[#FF6A00] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+          >
+            {isRequestingCamera ? "Initialisation..." : "Activer ma caméra"}
+          </button>
+          {cameraError && <p className="mt-2 text-xs text-rose-300">{cameraError}</p>}
+        </div>
+      )}
+      <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-white/80">
+        <Camera className="h-3.5 w-3.5" />
+        Flux rider {label} (toi)
+      </div>
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 via-black/30 to-transparent px-4 py-3 text-xs text-white/70">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${cameraReady ? "bg-emerald-400" : "bg-rose-400"}`} />
+          {cameraReady ? "Caméra prête" : "Caméra en attente"}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCameraEnabled((prev) => !prev)}
+            className={videoControlButtonClass}
+            aria-label="Activer/désactiver la caméra"
+          >
+            {cameraEnabled ? <Camera className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMicEnabled((prev) => !prev)}
+            className={videoControlButtonClass}
+            aria-label="Activer/désactiver le micro"
+          >
+            {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => restartConnection()}
+            disabled={isRestartingConnection}
+            className={videoControlButtonClass}
+            aria-label="Relancer la connexion"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRestartingConnection ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderRemoteDesktopPanel = (label: string) => (
+    <div className="relative h-[440px] overflow-hidden rounded-2xl border border-white/5 bg-[#050608]">
+      <video
+        ref={remoteVideoRef}
+        autoPlay
+        playsInline
+        className={`h-full w-full object-cover ${remoteConnected ? "" : "opacity-30"}`}
+      />
+      {!remoteConnected && (
+        <div className="absolute inset-0 grid place-items-center bg-black/80 px-6 text-center text-white/80">
+          <p className="text-sm">
+            {channelReady ? "En attente du flux adverse..." : "Connexion au canal en cours..."}
+          </p>
+          <button
+            onClick={() => restartConnection()}
+            disabled={isRestartingConnection}
+            className="mt-4 rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
+          >
+            Relancer la connexion
+          </button>
+        </div>
+      )}
+      <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-white/80">
+        <Camera className="h-3.5 w-3.5" />
+        Flux rider {label}
+      </div>
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 via-black/30 to-transparent px-4 py-3 text-xs text-white/70">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${remoteConnected ? "bg-emerald-400" : "bg-amber-300"}`} />
+          {remoteConnected ? "Flux connecté" : "Flux en attente"}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRemoteAudioMuted((prev) => !prev)}
+            className={videoControlButtonClass}
+            aria-label="Activer/désactiver l'audio adverse"
+          >
+            {remoteAudioMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => restartConnection()}
+            disabled={isRestartingConnection}
+            className={videoControlButtonClass}
+            aria-label="Relancer la vidéo adverse"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRestartingConnection ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   /* ---------- Variantes de contenus pour le panneau central desktop ---------- */
   const offlineBadge = !rtOnline ? (
     <span className="ml-2 inline-flex items-center gap-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">
       <WifiOff className="h-3 w-3" />
-      Realtime d�connect�
+      Realtime dï¿½connectï¿½
     </span>
   ) : null;
+
+  const leftVideoPanel = iAm === "A" ? renderLocalDesktopPanel("A") : renderRemoteDesktopPanel("A");
+  const rightVideoPanel = iAm === "B" ? renderLocalDesktopPanel("B") : renderRemoteDesktopPanel("B");
 
   let centralCardContent: React.ReactNode;
   if (isPendingMatch) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-4 text-center text-white/70">
         <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Arbitre du jeu</div>
-        <div className="text-lg font-semibold text-white">En attente de l�adversaire</div>
-        <p className="text-xs text-white/50">Ton adversaire doit accepter le d�fi pour d�marrer la partie.</p>
+        <div className="text-lg font-semibold text-white">En attente de lï¿½adversaire</div>
+        <p className="text-xs text-white/50">Ton adversaire doit accepter le dï¿½fi pour dï¿½marrer la partie.</p>
         <div className="mt-2 h-2 w-48 overflow-hidden rounded-full bg-white/10">
           <div className="h-full w-full animate-pulse bg-gradient-to-r from-[#FF6A00]/20 via-[#FF6A00] to-[#FF6A00]/20" />
         </div>
@@ -611,14 +1131,14 @@ export default function GameOfSkateSelfRef({
   } else if (isCancelled) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-3 text-center text-white/70">
-        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match annul�</div>
-        <p className="text-xs text-white/50">L�adversaire a d�clin� l�invitation. Retourne au lobby pour relancer un d�fi.</p>
+        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match annulï¿½</div>
+        <p className="text-xs text-white/50">Lï¿½adversaire a dï¿½clinï¿½ lï¿½invitation. Retourne au lobby pour relancer un dï¿½fi.</p>
       </div>
     );
   } else if (isEnded) {
     centralCardContent = (
       <div className="flex flex-col items-center gap-4 text-center text-white/80">
-        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match termin�</div>
+        <div className="text-sm font-semibold uppercase tracking-[0.5em] text-white/40">Match terminï¿½</div>
         <div className="flex items-center gap-2 text-amber-300">
           <Crown className="h-5 w-5" />
           Vainqueur : Rider {match?.winner ?? "?"}
@@ -644,7 +1164,7 @@ export default function GameOfSkateSelfRef({
             className="inline-flex items-center gap-2 rounded-lg bg-[#1E8030] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-[#1E8030]/40 transition disabled:opacity-50"
           >
             <CheckCircle2 className="h-4 w-4" />
-            Trick accept�
+            Trick acceptï¿½
           </button>
           <button
             onClick={myTurn ? onSetFailed : onCopyFailed}
@@ -652,14 +1172,14 @@ export default function GameOfSkateSelfRef({
             className="inline-flex items-center gap-2 rounded-lg bg-[#D32F2F] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-[#D32F2F]/40 transition hover:bg-[#e53e3e] disabled:opacity-50"
           >
             <XCircle className="h-4 w-4" />
-            Trick refus�
+            Trick refusï¿½
           </button>
         </div>
         <p className="mt-4 text-xs text-white/55">
           {myTurn
-            ? "� toi de lancer un trick."
+            ? "ï¿½ toi de lancer un trick."
             : copyTurn
-            ? "R�plique le trick impos�."
+            ? "Rï¿½plique le trick imposï¿½."
             : "En attente du tour suivant."}
         </p>
       </div>
@@ -672,7 +1192,7 @@ export default function GameOfSkateSelfRef({
   if (!match) {
     return (
       <div className="grid place-items-center rounded-2xl border border-white/10 bg-[#121214] p-10 text-white/60">
-        Chargement du match�
+        Chargement du matchï¿½
       </div>
     );
   }
@@ -690,7 +1210,7 @@ export default function GameOfSkateSelfRef({
       {/* MOBILE (mock exact, aucun scroll) */}
       <MobileUI />
 
-      {/* DESKTOP (ancienne UI conserv�e) */}
+      {/* DESKTOP (ancienne UI conservï¿½e) */}
       <div className="hidden md:block">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 text-white">
           <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,0.8fr)_1fr]">
@@ -715,11 +1235,11 @@ export default function GameOfSkateSelfRef({
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-4">
-              <VideoPane label="Flux vid�o rider A" className="h-[440px]" />
+              {leftVideoPanel}
               <LatencyBar label="Latences A" />
             </div>
             <div className="flex flex-col gap-4">
-              <VideoPane label="Flux vid�o rider B" className="h-[440px]" />
+              {rightVideoPanel}
               <LatencyBar label="Latences B" />
             </div>
           </div>
@@ -770,7 +1290,7 @@ export default function GameOfSkateSelfRef({
                       setInput("");
                       await rpcPost("text", trimmed);
                     })()}
-                    placeholder="�cris un message�"
+                    placeholder="ï¿½cris un messageï¿½"
                     className="h-10 flex-1 rounded-lg border border-white/10 bg-black/60 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#FF6A00]"
                   />
                   <button
@@ -791,13 +1311,13 @@ export default function GameOfSkateSelfRef({
 
             <div className="flex flex-col gap-6">
               <SectionCard
-                title="Choix de la r�gle"
+                title="Choix de la rï¿½gle"
                 icon={<Settings className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
                 <div className="text-sm text-white/60">
                   <label className="block text-xs uppercase tracking-[0.3em] text-white/40">
-                    R�gle active
+                    Rï¿½gle active
                   </label>
                   <select
                     value={ruleChoice}
@@ -812,7 +1332,7 @@ export default function GameOfSkateSelfRef({
               </SectionCard>
 
               <SectionCard
-                title="Trick � faire"
+                title="Trick ï¿½ faire"
                 icon={<Wand2 className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
@@ -838,13 +1358,13 @@ export default function GameOfSkateSelfRef({
               </SectionCard>
 
               <SectionCard
-                title="R�gles du jeu"
+                title="Rï¿½gles du jeu"
                 icon={<BookOpen className="h-5 w-5 text-[#FF6A00]" />}
                 accentClassName="text-[#FFB174]"
               >
                 <p className="text-sm leading-relaxed text-white/70">
-                  Deux riders s�affrontent : le premier impose une figure, l�autre doit la reproduire. Chaque �chec donne une lettre du mot{" "}
-                  <span className="font-semibold text-white">S.K.A.T.E.</span>. � cinq lettres, la partie est perdue. Le dernier rider sans faute gagne � style, propret� et fair-play obligatoires.
+                  Deux riders sï¿½affrontent : le premier impose une figure, lï¿½autre doit la reproduire. Chaque ï¿½chec donne une lettre du mot{" "}
+                  <span className="font-semibold text-white">S.K.A.T.E.</span>. ï¿½ cinq lettres, la partie est perdue. Le dernier rider sans faute gagne ï¿½ style, propretï¿½ et fair-play obligatoires.
                 </p>
               </SectionCard>
             </div>
@@ -854,4 +1374,7 @@ export default function GameOfSkateSelfRef({
     </>
   );
 }
+
+
+
 

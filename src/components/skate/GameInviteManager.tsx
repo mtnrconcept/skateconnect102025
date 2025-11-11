@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Swords, XCircle, Loader2 } from "lucide-react";
 import { useRouter } from "@/lib/router";
 import { supabase } from "@/lib/supabaseClient";
-import { acceptGOSMatch, declineGOSMatch } from "@/lib/skate";
+import { acceptGOSMatch, declineGOSMatch, markGOSMatchActive } from "@/lib/skate";
 
 interface GameInvite {
   matchId: string;               // id du gos_match
@@ -159,7 +159,12 @@ export default function GameInviteManager({ currentUserId }: GameInviteManagerPr
       try {
         if (action === "accept") {
           // Edge Function vérifie que rider_b = auth.uid()
-          await acceptGOSMatch(invite.matchId);
+          try {
+            await acceptGOSMatch(invite.matchId);
+          } catch (edgeError) {
+            console.warn("[gos] accept Edge Function failed, continuing with local update", edgeError);
+          }
+          await markGOSMatchActive(invite.matchId, 5, currentUserId ?? undefined);
         } else {
           await declineGOSMatch(invite.matchId);
         }

@@ -1,5 +1,6 @@
 // src/lib/skate.ts
 import { supabase } from './supabaseClient';
+import { SUPABASE_URL } from './supabase';
 import { withTableFallback } from './postgrest';
 import type {
   MatchMode,
@@ -15,11 +16,15 @@ type TurnIndexRow = Pick<SkateTurnRow, 'turn_index'>;
  * ========================================================================== */
 const nowIso = () => new Date().toISOString();
 
+function assertNonNull<T>(value: T | null, context: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(context);
+  }
+  return value;
+}
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
 if (!SUPABASE_URL) throw new Error('VITE_SUPABASE_URL manquant (env vite) pour appeler gos-match');
-if (!SUPABASE_ANON_KEY) throw new Error('VITE_SUPABASE_ANON_KEY manquant pour header apikey');
 
 /* ============================================================================
  * MOCKS (fallback dev sans schéma)
@@ -47,26 +52,43 @@ export async function createMatch(
     finished_at: null,
   };
 
-  return withTableFallback(
-    supabase.from('skate_matches').insert(row).select('*').single(),
-    () => { mock.matches.push(row); return row; }
+  const insertMatch = async () => {
+    const { data, error } = await supabase.from('skate_matches').insert(row).select('*').single();
+    return { data: data ?? null, error };
+  };
+
+  const inserted = await withTableFallback<SkateMatchRow | null>(
+    insertMatch,
+    () => {
+      mock.matches.push(row);
+      return row;
+    }
   );
+
+  return assertNonNull(inserted, 'La création du match a échoué (skate_matches).');
 }
 
 export async function startMatch(matchId: string): Promise<SkateMatchRow> {
-  return withTableFallback(
-    supabase
+  const activateMatch = async () => {
+    const { data, error } = await supabase
       .from('skate_matches')
       .update({ status: 'active', started_at: nowIso() })
       .eq('id', matchId)
       .select('*')
-      .single(),
+      .single();
+    return { data: data ?? null, error };
+  };
+
+  const started = await withTableFallback<SkateMatchRow | null>(
+    activateMatch,
     () => {
       const m = mock.matches.find((x) => x.id === matchId);
       if (m) { m.status = 'active'; m.started_at = nowIso(); }
-      return m as SkateMatchRow;
+      return m ?? null;
     }
   );
+
+  return assertNonNull(started, 'Impossible de démarrer le match (skate_matches).');
 }
 
 export async function createTurn(params: {
@@ -76,13 +98,18 @@ export async function createTurn(params: {
   difficulty?: number;
   mode: MatchMode;
 }): Promise<SkateTurnRow> {
-  const lastTurns = await withTableFallback<TurnIndexRow[]>(
-    supabase
+  const fetchLastTurn = async () => {
+    const { data, error } = await supabase
       .from('skate_turns')
       .select('turn_index')
       .eq('match_id', params.match_id)
       .order('turn_index', { ascending: false })
-      .limit(1),
+      .limit(1);
+    return { data: data ?? [], error };
+  };
+
+  const lastTurns = await withTableFallback<TurnIndexRow[]>(
+    fetchLastTurn,
     () => {
       const sorted = mock.turns
         .filter((t) => t.match_id === params.match_id)
@@ -109,26 +136,43 @@ export async function createTurn(params: {
     created_at: nowIso(),
   };
 
-  return withTableFallback(
-    supabase.from('skate_turns').insert(row).select('*').single(),
-    () => { mock.turns.push(row); return row; }
+  const insertTurn = async () => {
+    const { data, error } = await supabase.from('skate_turns').insert(row).select('*').single();
+    return { data: data ?? null, error };
+  };
+
+  const inserted = await withTableFallback<SkateTurnRow | null>(
+    insertTurn,
+    () => {
+      mock.turns.push(row);
+      return row;
+    }
   );
+
+  return assertNonNull(inserted, 'Impossible de créer le tour (skate_turns).');
 }
 
 export async function respondTurn(turnId: string, videoUrl: string): Promise<SkateTurnRow> {
-  return withTableFallback(
-    supabase
+  const updateTurn = async () => {
+    const { data, error } = await supabase
       .from('skate_turns')
       .update({ video_b_url: videoUrl, status: 'responded' as TurnStatus })
       .eq('id', turnId)
       .select('*')
-      .single(),
+      .single();
+    return { data: data ?? null, error };
+  };
+
+  const responded = await withTableFallback<SkateTurnRow | null>(
+    updateTurn,
     () => {
       const t = mock.turns.find((x) => x.id === turnId);
       if (t) { t.video_b_url = videoUrl; t.status = 'responded'; }
-      return t as SkateTurnRow;
+      return t ?? null;
     }
   );
+
+  return assertNonNull(responded, 'Impossible de mettre à jour le tour (skate_turns).');
 }
 
 export async function resolveMatch(matchId: string, winnerId: string | null): Promise<SkateMatchRow> {
@@ -137,14 +181,26 @@ export async function resolveMatch(matchId: string, winnerId: string | null): Pr
     finished_at: nowIso(),
     winner: winnerId,
   };
-  return withTableFallback(
-    supabase.from('skate_matches').update(patch).eq('id', matchId).select('*').single(),
+  const finalizeMatch = async () => {
+    const { data, error } = await supabase
+      .from('skate_matches')
+      .update(patch)
+      .eq('id', matchId)
+      .select('*')
+      .single();
+    return { data: data ?? null, error };
+  };
+
+  const resolved = await withTableFallback<SkateMatchRow | null>(
+    finalizeMatch,
     () => {
       const m = mock.matches.find((x) => x.id === matchId);
       if (m) { m.status = 'finished'; m.finished_at = nowIso(); m.winner = winnerId; }
-      return m as SkateMatchRow;
+      return m ?? null;
     }
   );
+
+  return assertNonNull(resolved, 'Impossible de clôturer le match (skate_matches).');
 }
 
 /* ============================================================================
@@ -168,33 +224,54 @@ function logGosError(context: string, status: number, detail: string, payload?: 
   console.error(`[gos-match] ${context} -> ${status} ${detail}`, safePayload);
 }
 
-async function authHeaders(): Promise<Record<string, string>> {
+async function invokeGOS<T>(payload: Record<string, unknown>): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error('gos-match 401: no active session token');
-  return {
-    Authorization: `Bearer ${token}`,
-    apikey: SUPABASE_ANON_KEY,
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-}
-
-async function invokeGOS<T>(payload: Record<string, unknown>): Promise<T> {
-  const headers = await authHeaders();
-  const url = `${SUPABASE_URL}/functions/v1/gos-match`;
-
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
-  const text = await res.text();
-
-  let json: any = null;
-  try { json = text ? JSON.parse(text) : null; } catch { /* texte brut */ }
-
-  if (!res.ok) {
-    const detail = json?.error ?? json?.message ?? (text || res.statusText || 'Edge Function error');
-    try { logGosError((payload?.['action'] as string) || 'unknown', res.status, String(detail), payload); } catch {}
-    throw new Error(`gos-match ${res.status}: ${detail}`);
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
   }
-  return json as T;
+
+  const endpoint = `${SUPABASE_URL}/functions/v1/gos-match`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      /* texte brut */
+    }
+
+    if (!res.ok) {
+      const detail = json?.error ?? json?.message ?? (text || res.statusText || 'Edge Function error');
+      try {
+        logGosError((payload?.['action'] as string) || 'unknown', res.status, String(detail), payload);
+      } catch {}
+      throw new Error(`gos-match ${res.status}: ${detail}`);
+    }
+
+    return json as T;
+  } catch (browserError) {
+    if (typeof window !== 'undefined') {
+      throw browserError instanceof Error ? browserError : new Error('Edge Function invocation failed');
+    }
+
+    const { data, error } = await supabase.functions.invoke<T>('gos-match', {
+      body: payload,
+    });
+    if (error) {
+      throw Object.assign(new Error(error.message ?? 'Edge Function error'), error);
+    }
+    return data as T;
+  }
 }
 
 /* ============================================================================
@@ -301,6 +378,93 @@ export async function declineGOSMatch(matchId: string): Promise<void> {
   await invokeGOS<{ match: unknown }>({ action: 'decline', match_id: matchId });
 }
 
+export async function markGOSMatchActive(
+  matchId: string,
+  countdownSeconds = 5,
+  riderIdOverride?: string,
+): Promise<void> {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError) {
+    throw sessionError;
+  }
+  const effectiveRiderId = riderIdOverride ?? session?.user?.id ?? null;
+
+  const { data: gosMatch, error: fetchError } = await supabase
+    .from('gos_match')
+    .select('id,rider_a,rider_b,status,skate_match_id,accepted_at,starts_at')
+    .eq('id', matchId)
+    .single();
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (!gosMatch) {
+    throw new Error('Match introuvable');
+  }
+
+  if (effectiveRiderId && gosMatch && ![gosMatch.rider_a, gosMatch.rider_b].includes(effectiveRiderId)) {
+    console.warn('[gos] Impossible de marquer le match actif: le rider courant ne participe pas au duel');
+  }
+
+  if (gosMatch.status === 'ended' || gosMatch.status === 'cancelled') {
+    return;
+  }
+
+  const acceptedAt = gosMatch.accepted_at ?? nowIso();
+  const plannedStart = gosMatch.starts_at ?? new Date(Date.now() + Math.max(0, countdownSeconds) * 1000).toISOString();
+
+  const patch: Record<string, string> = {};
+  if (gosMatch.status !== 'active') {
+    patch.status = 'active';
+  }
+  if (!gosMatch.accepted_at) {
+    patch.accepted_at = acceptedAt;
+  }
+  if (!gosMatch.starts_at) {
+    patch.starts_at = plannedStart;
+  }
+
+  let activationStart = gosMatch.starts_at ?? plannedStart;
+  let skateMatchId = (gosMatch.skate_match_id as string | null) ?? null;
+
+  if (Object.keys(patch).length > 0) {
+    const { data: updatedRow, error: updateError } = await supabase
+      .from('gos_match')
+      .update(patch)
+      .eq('id', matchId)
+      .select('skate_match_id, starts_at')
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (updatedRow?.skate_match_id) {
+      skateMatchId = updatedRow.skate_match_id as string;
+    }
+    activationStart = updatedRow?.starts_at ?? activationStart;
+  }
+
+  if (skateMatchId) {
+    const { error: skateError } = await supabase
+      .from('skate_matches')
+      .update({
+        status: 'active',
+        started_at: activationStart,
+      })
+      .eq('id', skateMatchId)
+      .neq('status', 'finished');
+
+    if (skateError && (skateError as any)?.code !== 'PGRST116') {
+      console.warn('[gos] Unable to update skate_matches status', skateError);
+    }
+  }
+}
+
 export async function gosFailSet(matchId: string): Promise<any> {
   const result = await invokeGOS<{ match: any }>({ action: 'set_fail', match_id: matchId });
   return result.match;
@@ -327,3 +491,6 @@ export async function gosPostChat(
     payload: payload ?? null,
   });
 }
+
+
+

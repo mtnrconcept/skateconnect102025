@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
+import { acceptGOSMatch, markGOSMatchActive } from "../../lib/skate";
 import { useRouter } from "../../lib/router";
 import { Bell, Check, X } from "lucide-react";
 
@@ -88,11 +89,12 @@ export default function GameInviteListener({ userId }: GameInviteListenerProps) 
 
   const accept = async (inv: IncomingInvite) => {
     try {
-      // Active le match côté DB (fallback si RPC absent)
-      await supabase
-        .from("gos_match")
-        .update({ status: "active", accepted_at: new Date().toISOString() })
-        .eq("id", inv.gosMatchId);
+      try {
+        await acceptGOSMatch(inv.gosMatchId);
+      } catch (edgeError) {
+        console.warn("[gos] accept Edge Function failed, continuing with local update", edgeError);
+      }
+      await markGOSMatchActive(inv.gosMatchId, 5, userId ?? undefined);
 
       // Redirection vers la salle (utilise le lien fourni)
       const target = resolveRoomTarget(inv.roomUrl, inv.gosMatchId || inv.skateMatchId);

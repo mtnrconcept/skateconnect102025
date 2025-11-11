@@ -270,3 +270,4 @@ Notes:
 - Helpers client: `src/lib/skate.ts` (fallback local si schéma manquant).
 - Hooks utilitaires: `src/hooks/skate.ts` (compte à rebours, base realtime).
 # shred2
+# shredloc-v2
